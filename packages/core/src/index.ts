@@ -1,1 +1,1 @@
-export const typemint = {} as const;
+export * from "./is-record.js";
