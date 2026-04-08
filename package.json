@@ -1,0 +1,8 @@
+{
+  "name": "typemint",
+  "private": true,
+  "packageManager": "pnpm@10.7.1",
+  "devDependencies": {
+    "typescript": "^6.0.2"
+  }
+}
