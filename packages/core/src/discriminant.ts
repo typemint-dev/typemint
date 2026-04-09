@@ -1,5 +1,5 @@
-import { isRecord } from './is-record.js';
-import { PanicException } from './panic-exception.js';
+import { isRecord } from "./is-record.js";
+import { PanicException } from "./panic-exception.js";
 
 /**
  * @example
@@ -25,11 +25,11 @@ export type Discriminant<TKey extends PropertyKey, TVal extends string> = {
  * ```ts
  * const KindDiscriminant = Discriminant('__kind');
  *
- * const racoonDiscriminant = KindDiscriminant.of('racoon');
+ * const raccoonDiscriminant = KindDiscriminant.of('raccoon');
  * const dogDiscriminant = KindDiscriminant.of('dog');
  *
- * const racoon = {
- *   ...racoonDiscriminant,
+ * const raccoon = {
+ *   ...raccoonDiscriminant,
  *   name: 'Bob',
  * } as const;
  *
@@ -38,8 +38,8 @@ export type Discriminant<TKey extends PropertyKey, TVal extends string> = {
  *   name: 'Rex',
  * } as const;
  *
- * const animal = KindDiscriminant.match(racoon, {
- *   racoon: (v) => v.name,
+ * const animal = KindDiscriminant.match(raccoon, {
+ *   raccoon: (v) => v.name,
  *   dog: (v) => v.name,
  * });
  *
@@ -135,7 +135,7 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
    * The `match` function needs to know what are the possible members of
    * the discriminated union which goes into the `match` function. Thus the
    * input has to be typed as the discriminated union. Not as just a member.
-   * (e.g. `Animal`, not `Racoon`);
+   * (e.g. `Animal`, not `raccoon`);
    *
    * @param value - The discriminant instance to match on.
    * @param handlers - The handlers to match the value against.
@@ -149,8 +149,8 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
    * ```ts
    * const KindDiscriminant = Discriminant('__kind');
    *
-   * const racoon = {
-   *   ...KindDiscriminant.of('racoon'),
+   * const raccoon = {
+   *   ...KindDiscriminant.of('raccoon'),
    *   growl: () => 'growl',
    * } as const;
    *
@@ -159,11 +159,11 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
    *   bark: () => 'bark',
    * } as const;
    *
-   * type Animal = typeof racoon | typeof dog;
-   * const input: Animal = racoon as Animal;
+   * type Animal = typeof raccoon | typeof dog;
+   * const input: Animal = raccoon as Animal;
    *
-   * const sound = KindDiscriminant.match(racoon, {
-   *   racoon: (v) => v.growl(),
+   * const sound = KindDiscriminant.match(raccoon, {
+   *   raccoon: (v) => v.growl(),
    *   dog: (v) => v.bark(),
    * });
    *
@@ -197,11 +197,11 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
  * ```ts
  * const KindDiscriminant = Discriminant('__kind');
  *
- * const racoonDiscriminant = KindDiscriminant.of('racoon');
+ * const raccoonDiscriminant = KindDiscriminant.of('raccoon');
  * const dogDiscriminant = KindDiscriminant.of('dog');
  *
- * const racoon = {
- *   ...racoonDiscriminant,
+ * const raccoon = {
+ *   ...raccoonDiscriminant,
  *   name: 'Bob',
  * } as const;
  *
@@ -210,8 +210,8 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
  *   name: 'Rex',
  * } as const;
  *
- * const animal = KindDiscriminant.match(racoon, {
- *   racoon: (v) => v.name,
+ * const animal = KindDiscriminant.match(raccoon, {
+ *   raccoon: (v) => v.name,
  *   dog: (v) => v.name,
  * });
  *
