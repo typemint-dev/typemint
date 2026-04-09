@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { isRecord } from "./is-record.js";
+import { describe, expect, it } from 'vitest';
+import { isRecord } from './is-record.js';
 
-describe("(unit) isRecord", () => {
-  describe("when given a plain object", () => {
-    it("should return true", () => {
+describe('(unit) isRecord', () => {
+  describe('when given a plain object', () => {
+    it('should return true', () => {
       // Arrange
-      const value = { a: 1, b: "two" };
+      const value = { a: 1, b: 'two' };
 
       // Act
       const result = isRecord(value);
@@ -15,8 +15,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given an empty object", () => {
-    it("should return true", () => {
+  describe('when given an empty object', () => {
+    it('should return true', () => {
       // Arrange
       const value = {};
 
@@ -28,8 +28,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given an object created with Object.create(null)", () => {
-    it("should return true", () => {
+  describe('when given an object created with Object.create(null)', () => {
+    it('should return true', () => {
       // Arrange
       const value = Object.create(null);
 
@@ -41,8 +41,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given an object with an inherited prototype", () => {
-    it("should return true", () => {
+  describe('when given an object with an inherited prototype', () => {
+    it('should return true', () => {
       // Arrange
       const value = Object.create({ inherited: true });
 
@@ -54,8 +54,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given a class instance", () => {
-    it("should return true for a Date", () => {
+  describe('when given a class instance', () => {
+    it('should return true for a Date', () => {
       // Arrange
       const value = new Date();
 
@@ -66,7 +66,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(true);
     });
 
-    it("should return true for a Map", () => {
+    it('should return true for a Map', () => {
       // Arrange
       const value = new Map();
 
@@ -77,7 +77,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(true);
     });
 
-    it("should return true for a RegExp", () => {
+    it('should return true for a RegExp', () => {
       // Arrange
       const value = /regex/;
 
@@ -89,8 +89,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given null", () => {
-    it("should return false", () => {
+  describe('when given null', () => {
+    it('should return false', () => {
       // Arrange
       const value = null;
 
@@ -103,8 +103,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given undefined", () => {
-    it("should return false", () => {
+  describe('when given undefined', () => {
+    it('should return false', () => {
       // Arrange
       const value = undefined;
 
@@ -116,8 +116,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given an array", () => {
-    it("should return false for an empty array", () => {
+  describe('when given an array', () => {
+    it('should return false for an empty array', () => {
       // Arrange
       const value: unknown[] = [];
 
@@ -128,7 +128,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a populated array", () => {
+    it('should return false for a populated array', () => {
       // Arrange
       const value = [1, 2, 3];
 
@@ -140,8 +140,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given a primitive", () => {
-    it("should return false for a number", () => {
+  describe('when given a primitive', () => {
+    it('should return false for a number', () => {
       // Arrange
       const value = 42;
 
@@ -152,9 +152,9 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a string", () => {
+    it('should return false for a string', () => {
       // Arrange
-      const value = "string";
+      const value = 'string';
 
       // Act
       const result = isRecord(value);
@@ -163,7 +163,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a boolean", () => {
+    it('should return false for a boolean', () => {
       // Arrange
       const value = true;
 
@@ -174,9 +174,9 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a symbol", () => {
+    it('should return false for a symbol', () => {
       // Arrange
-      const value = Symbol("s");
+      const value = Symbol('s');
 
       // Act
       const result = isRecord(value);
@@ -185,7 +185,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a bigint", () => {
+    it('should return false for a bigint', () => {
       // Arrange
       const value = BigInt(1);
 
@@ -197,8 +197,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given a function", () => {
-    it("should return false for an arrow function", () => {
+  describe('when given a function', () => {
+    it('should return false for an arrow function', () => {
       // Arrange
       const value = () => {};
 
@@ -209,7 +209,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a named function", () => {
+    it('should return false for a named function', () => {
       // Arrange
       const value = function named() {};
 

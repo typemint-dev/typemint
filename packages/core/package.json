@@ -22,6 +22,6 @@
     "format": "oxfmt --write src",
     "format:check": "oxfmt --check src",
     "typecheck": "tsc --noEmit",
-    "precommit:check": "pnpm run typecheck && pnpm run test"
+    "precommit:check": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test"
   }
 }
