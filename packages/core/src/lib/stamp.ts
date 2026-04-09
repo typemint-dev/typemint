@@ -61,7 +61,7 @@ export type StampDescriptor = {
  * detected by another.
  */
 export function Stamp(): StampDescriptor {
-  const stamp: unique symbol = Symbol("Stamp");
+  const stamp: unique symbol = Symbol('Stamp');
 
   const descriptor: StampDescriptor = {
     isStamped(value: object): boolean {
