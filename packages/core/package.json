@@ -19,8 +19,8 @@
     "test": "vitest --run --dir src",
     "test:coverage": "vitest --run --dir src --coverage",
     "lint": "oxlint src",
-    "fmt": "oxfmt --write src",
-    "fmt:check": "oxfmt --check src",
+    "format": "oxfmt --write src",
+    "format:check": "oxfmt --check src",
     "typecheck": "tsc --noEmit",
     "precommit:check": "pnpm run typecheck && pnpm run test"
   }
