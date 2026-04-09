@@ -1,5 +1,11 @@
 # @typemint/core
 
+## 0.3.1
+
+### Patch Changes
+
+- Fix the package dist folder and add a CHANGELOG to the published npm package
+
 ## 0.3.0
 
 ### Minor Changes

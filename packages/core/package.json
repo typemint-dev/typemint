@@ -1,6 +1,6 @@
 {
   "name": "@typemint/core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,12 +21,14 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "browser": "./dist/index.js",
       "import": "./dist/index.js"
     }
   },
   "files": [
     "dist",
-    "docs"
+    "docs",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "pre:build": "rimraf dist",
@@ -38,6 +40,7 @@
     "format": "oxfmt --write src",
     "format:check": "oxfmt --check src",
     "typecheck": "tsc --noEmit",
-    "precommit:check": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test"
+    "precommit:check": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test",
+    "pre:publish": "pnpm run precommit:check"
   }
 }
