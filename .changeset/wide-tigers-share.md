@@ -2,4 +2,4 @@
 "@typemint/core": minor
 ---
 
-Add `asser` and `AssertException` utility.
+Add `assert` and `AssertException` utility.
