@@ -1,7 +1,7 @@
-import { assert } from "./assert.js";
-import { Discriminant } from "./discriminant.js";
+import { assert } from './assert.js';
+import { Discriminant } from './discriminant.js';
 
-const KIND_KEY = "kind";
+const KIND_KEY = 'kind';
 
 export const Kind = Discriminant(KIND_KEY);
 export type KindDescriptor = typeof Kind;
