@@ -5,7 +5,7 @@
 export class AssertException extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'AssertException';
+    this.name = "AssertException";
   }
 }
 
@@ -25,7 +25,25 @@ export function assert(
   message: string | (() => string),
 ): asserts condition {
   if (!condition) {
-    const resolvedMessage = typeof message === 'function' ? message() : message;
+    const resolvedMessage = typeof message === "function" ? message() : message;
     throw new AssertException(resolvedMessage);
   }
+}
+
+/**
+ * Asserts that `value` is neither `null` nor `undefined`. After a successful
+ * call, the compiler narrows `value` to `NonNullable<T>` in the surrounding
+ * scope.
+ *
+ * @param value - The value to check.
+ * @param message - The message to throw if the value is nullish. Can be a
+ *    string or a function that returns a string. Use a lazy message when the
+ *    message is expensive to compute.
+ * @throws {AssertException} If `value` is `null` or `undefined`.
+ */
+export function assertDefined<T>(
+  value: T,
+  message: string | (() => string) = "Expected a defined value",
+): asserts value is NonNullable<T> {
+  assert(value != null, message);
 }
