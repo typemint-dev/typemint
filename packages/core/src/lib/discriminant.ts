@@ -1,5 +1,5 @@
-import { isRecord } from './is-record.js';
-import { PanicException } from './panic-exception.js';
+import { isRecord } from "./is-record.js";
+import { PanicException } from "./panic-exception.js";
 
 /**
  * @example
@@ -181,6 +181,86 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
     value: TRecord,
     handlers: THandlers,
   ): ReturnType<THandlers[TRecord[TKey]]>;
+
+  /**
+   * Like `match`, but handlers are partial and a `fallback` is invoked
+   * for any variant without a matching handler.
+   *
+   * Use at trust boundaries (decoding wire/DB payloads, forward
+   * compatibility with producers that may introduce new variants, or
+   * when you intentionally only care about a subset of variants).
+   * Prefer `match` whenever exhaustiveness is possible so the compiler
+   * catches new variants.
+   *
+   * @param value - The discriminant instance to match on.
+   * @param handlers - A partial set of handlers keyed by discriminant value.
+   * @param fallback - Called when no handler matches the value's discriminant.
+   * @returns - The result of the matched handler or the fallback.
+   */
+  matchOr<
+    TRecord extends Discriminant<TKey, string>,
+    THandlers extends Partial<{
+      [K in TRecord[TKey]]: (
+        value: Extract<TRecord, Discriminant<TKey, K>>,
+      ) => unknown;
+    }>,
+    TFallback,
+  >(
+    value: TRecord,
+    handlers: THandlers,
+    fallback: (value: TRecord) => TFallback,
+  ): ReturnType<NonNullable<THandlers[keyof THandlers]>> | TFallback;
+
+  /**
+   * Like `match`, but instead of throwing when no handler matches, the
+   * `fallback` is invoked. Unlike `matchOr`, handlers are **exhaustive** --
+   * you must provide a handler for every known variant.
+   *
+   * Use when the input is untrusted (e.g. HTTP request payload) but the set
+   * of valid discriminants is known and you want the compiler to enforce
+   * coverage of all known variants while still handling unknown values
+   * gracefully.
+   *
+   * @param value - The discriminant instance to match on.
+   * @param handlers - Exhaustive handlers keyed by discriminant value.
+   * @param fallback - Called when the runtime discriminant does not match any
+   *    known handler.
+   * @returns - The result of the matched handler or the fallback.
+   *
+   * @example
+   *
+   * ```ts
+   * const KindDiscriminant = Discriminant('__kind');
+   *
+   * type Cat = { __kind: 'cat'; meow: () => string };
+   * type Dog = { __kind: 'dog'; bark: () => string };
+   * type Animal = Cat | Dog;
+   *
+   * const input: Animal = JSON.parse(payload);
+   *
+   * const sound = KindDiscriminant.tryMatch(
+   *   input,
+   *   {
+   *     cat: (v) => v.meow(),
+   *     dog: (v) => v.bark(),
+   *   },
+   *   (v) => `unknown animal: ${v.__kind}`,
+   * );
+   * ```
+   */
+  tryMatch<
+    TRecord extends Discriminant<TKey, string>,
+    THandlers extends {
+      [K in TRecord[TKey]]: (
+        value: Extract<TRecord, Discriminant<TKey, K>>,
+      ) => unknown;
+    },
+    TFallback,
+  >(
+    value: TRecord,
+    handlers: THandlers,
+    fallback: (value: TRecord) => TFallback,
+  ): ReturnType<THandlers[TRecord[TKey]]> | TFallback;
 };
 
 /**
@@ -258,6 +338,34 @@ export function Discriminant<TKey extends PropertyKey>(
           `Discriminant match failed: No handler found for discriminant: ` +
             `${String(value[key])}`,
         );
+      }
+
+      return handler(value);
+    },
+
+    matchOr(
+      value: Record<PropertyKey, string>,
+      handlers: Record<string, ((value: any) => any) | undefined>,
+      fallback: (value: any) => any,
+    ) {
+      const handler = handlers[value[key]];
+
+      if (!handler) {
+        return fallback(value);
+      }
+
+      return handler(value);
+    },
+
+    tryMatch(
+      value: Record<PropertyKey, string>,
+      handlers: Record<string, (value: any) => any>,
+      fallback: (value: any) => any,
+    ) {
+      const handler = handlers[value[key]];
+
+      if (!handler) {
+        return fallback(value);
       }
 
       return handler(value);
