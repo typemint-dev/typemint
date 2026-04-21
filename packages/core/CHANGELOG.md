@@ -1,5 +1,12 @@
 # @typemint/core
 
+## 0.4.0
+
+### Minor Changes
+
+- Add flow function
+- Add assertDefined check.
+
 ## 0.3.2
 
 ### Patch Changes
