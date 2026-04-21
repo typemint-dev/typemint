@@ -1,5 +1,12 @@
 # @typemint/core
 
+## 0.5.0
+
+### Minor Changes
+
+- Add Discriminant.tryMatch
+- Add Discriminant.matchOr
+
 ## 0.4.0
 
 ### Minor Changes
