@@ -1,6 +1,6 @@
 {
   "name": "@typemint/result",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -44,6 +44,6 @@
     "pre:publish": "pnpm run precommit:check"
   },
   "dependencies": {
-    "@typemint/core": "^0.4.0"
+    "@typemint/core": "^0.5.0"
   }
 }
