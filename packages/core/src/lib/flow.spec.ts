@@ -20,7 +20,7 @@ describe('(unit) flow', () => {
 
     it('should not execute any operator at composition time', () => {
       // Arrange
-      const op = vi.fn((n: number) => n + 1);
+      const op = vi.fn<(n: number) => number>((n: number) => n + 1);
 
       // Act
       flow(op);
@@ -31,7 +31,7 @@ describe('(unit) flow', () => {
 
     it('should execute the pipeline only when the returned function is called', () => {
       // Arrange
-      const op = vi.fn((n: number) => n + 1);
+      const op = vi.fn<(n: number) => number>((n: number) => n + 1);
       const pipeline = flow(op);
 
       // Act
@@ -59,7 +59,7 @@ describe('(unit) flow', () => {
 
     it('should call the operator exactly once per invocation', () => {
       // Arrange
-      const op = vi.fn((n: number) => n + 1);
+      const op = vi.fn<(n: number) => number>((n: number) => n + 1);
       const pipeline = flow(op);
 
       // Act
@@ -71,7 +71,7 @@ describe('(unit) flow', () => {
 
     it('should call the operator with the original input', () => {
       // Arrange
-      const op = vi.fn((n: number) => n + 1);
+      const op = vi.fn<(n: number) => number>((n: number) => n + 1);
       const pipeline = flow(op);
 
       // Act
@@ -143,9 +143,9 @@ describe('(unit) flow', () => {
 
     it('should call each operator exactly once per invocation', () => {
       // Arrange
-      const a = vi.fn((n: number) => n + 1);
-      const b = vi.fn((n: number) => n * 2);
-      const c = vi.fn((n: number) => `${n}`);
+      const a = vi.fn<(n: number) => number>((n: number) => n + 1);
+      const b = vi.fn<(n: number) => number>((n: number) => n * 2);
+      const c = vi.fn<(n: number) => string>((n: number) => `${n}`);
       const pipeline = flow(a, b, c);
 
       // Act
@@ -216,7 +216,9 @@ describe('(unit) flow', () => {
     it('should pass non-primitive inputs by reference to the first operator', () => {
       // Arrange
       const input = { name: 'Alice' };
-      const op = vi.fn((v: { name: string }) => v);
+      const op = vi.fn<(v: { name: string }) => { name: string }>(
+        (v: { name: string }) => v,
+      );
       const pipeline = flow(op);
 
       // Act
@@ -260,7 +262,7 @@ describe('(unit) flow', () => {
 
     it('should short-circuit the pipeline when an operator throws', () => {
       // Arrange
-      const next = vi.fn((n: number) => n);
+      const next = vi.fn<(n: number) => number>((n: number) => n);
       const pipeline = flow((n: number) => {
         if (n < 0) throw new Error('boom');
         return n;
@@ -421,7 +423,7 @@ describe('(unit) flow', () => {
 
     it('should short-circuit errors across nested flows', () => {
       // Arrange
-      const next = vi.fn((n: number) => n);
+      const next = vi.fn<(n: number) => number>((n: number) => n);
       const inner = flow((n: number) => {
         if (n < 0) throw new Error('boom');
         return n;
