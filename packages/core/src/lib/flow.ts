@@ -1,4 +1,4 @@
-import { PanicException } from "./panic-exception.js";
+import { PanicException } from './panic-exception.js';
 
 /**
  * A single unary step inside a {@link flow} pipeline. It receives the
@@ -203,7 +203,7 @@ export function flow(...fns: readonly AnyFlowOperator[]): AnyFlowOperator {
     // The no operator is a BUG because it should be impossible to call flow
     // with no operators for typescript code.
     throw new PanicException(
-      "flow() requires at least one operator to build a pipeline.",
+      'flow() requires at least one operator to build a pipeline.',
     );
   }
 

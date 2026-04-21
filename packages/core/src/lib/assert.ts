@@ -5,7 +5,7 @@
 export class AssertException extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "AssertException";
+    this.name = 'AssertException';
   }
 }
 
@@ -25,7 +25,7 @@ export function assert(
   message: string | (() => string),
 ): asserts condition {
   if (!condition) {
-    const resolvedMessage = typeof message === "function" ? message() : message;
+    const resolvedMessage = typeof message === 'function' ? message() : message;
     throw new AssertException(resolvedMessage);
   }
 }
@@ -43,7 +43,7 @@ export function assert(
  */
 export function assertDefined<T>(
   value: T,
-  message: string | (() => string) = "Expected a defined value",
+  message: string | (() => string) = 'Expected a defined value',
 ): asserts value is NonNullable<T> {
   assert(value != null, message);
 }
