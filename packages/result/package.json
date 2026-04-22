@@ -10,6 +10,7 @@
     "url": "https://github.com/typemint-dev/typemint.git"
   },
   "author": "Ales Albert Kilbergr <ales.albert@kilbergr.eu>",
+  "description": "Type-safe error handling and optional values for TypeScript.",
   "keywords": [
     "typemint",
     "result",
@@ -41,7 +42,7 @@
     "format:check": "oxfmt --check src",
     "typecheck": "tsc --noEmit",
     "precommit:check": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test",
-    "pre:publish": "pnpm run precommit:check"
+    "prepublishOnly": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test"
   },
   "dependencies": {
     "@typemint/core": "^0.5.0"
