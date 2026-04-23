@@ -37,17 +37,17 @@ With the descriptor in hand, creating tagged objects becomes declarative:
 
 ```typescript
 const raccoon = {
-  ...Kind.of("raccoon"),
+  ...Kind.from("raccoon"),
   growl: () => "growl",
 } as const;
 
 const dog = {
-  ...Kind.of("dog"),
+  ...Kind.from("dog"),
   bark: () => "bark",
 } as const;
 ```
 
-`Kind.of('raccoon')` returns `{ __kind: 'raccoon' }` with its literal type fully preserved. Spreading it in merges the tag
+`Kind.from('raccoon')` returns `{ __kind: 'raccoon' }` with its literal type fully preserved. Spreading it in merges the tag
 with the variant payload -- no manual annotation required. Every variant is constructed through the same descriptor,
 so the key can never drift.
 

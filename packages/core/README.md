@@ -27,8 +27,8 @@ import { Discriminant } from "@typemint/core";
 
 const Kind = Discriminant("kind");
 
-const raccoon = { ...Kind.of("raccoon"), growl: () => "growl" } as const;
-const dog = { ...Kind.of("dog"), bark: () => "bark" } as const;
+const raccoon = { ...Kind.from("raccoon"), growl: () => "growl" } as const;
+const dog = { ...Kind.from("dog"), bark: () => "bark" } as const;
 
 type Animal = typeof raccoon | typeof dog;
 
