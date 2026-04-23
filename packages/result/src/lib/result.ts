@@ -47,7 +47,7 @@ export type ResultHandlers<T, E, U> = {
  * // Ok(Ok(42))
  * ```
  */
-export type OkLike<T> = { kind: 'Ok'; value: T };
+export type OkLike<T> = Kind<'Ok'> & { value: T };
 export const OkLike = {
   /**
    * Structural type-guard for {@link OkLike}. Performs a shallow
@@ -61,7 +61,7 @@ export const OkLike = {
    * ```
    */
   isOfType(value: unknown): value is OkLike<unknown> {
-    return isRecord(value) && value.kind === 'Ok' && 'value' in value;
+    return Kind.isOf(value, 'Ok') && 'value' in value;
   },
 } as const;
 
@@ -316,7 +316,7 @@ export type Ok<T, E> = Kind<'Ok'> & {
  * // Ok(Err("not-found"))
  * ```
  */
-export type ErrLike<E> = { kind: 'Err'; error: E };
+export type ErrLike<E> = Kind<'Err'> & { error: E };
 export const ErrLike = {
   /**
    * Structural type-guard for {@link ErrLike}. Performs a shallow
@@ -329,7 +329,7 @@ export const ErrLike = {
    * ```
    */
   isOfType(value: unknown): value is ErrLike<unknown> {
-    return isRecord(value) && value.kind === 'Err' && 'error' in value;
+    return Kind.isOf(value, 'Err') && 'error' in value;
   },
 } as const;
 
@@ -673,7 +673,7 @@ export const ParseResultError = {
    */
   of(reason: string, received: unknown): ParseResultError {
     return {
-      ...Kind.of('ParseResultError'),
+      ...Kind.from('ParseResultError'),
       reason,
       received,
     };
@@ -689,7 +689,7 @@ export const ParseResultError = {
    * ```
    */
   isOfType(value: unknown): value is ParseResultError {
-    return isRecord(value) && Kind.isOf(value, 'ParseResultError');
+    return Kind.isOf(value, 'ParseResultError');
   },
 } as const;
 // #endregion

@@ -54,7 +54,7 @@ export type OptionHandlers<T, U> = {
  * // Ok(Some(42))
  * ```
  */
-export type SomeLike<T> = { kind: 'Some'; value: T };
+export type SomeLike<T> = Kind<'Some'> & { value: T };
 export const SomeLike = {
   /**
    * Structural type-guard for {@link SomeLike}. Performs a shallow
@@ -68,7 +68,7 @@ export const SomeLike = {
    * ```
    */
   isOfType(value: unknown): value is SomeLike<unknown> {
-    return isRecord(value) && value.kind === 'Some' && 'value' in value;
+    return Kind.isOf(value, 'Some') && 'value' in value;
   },
 } as const;
 // #endregion
@@ -88,7 +88,7 @@ export const SomeLike = {
  * // Ok(None())
  * ```
  */
-export type NoneLike = { kind: 'None' };
+export type NoneLike = Kind<'None'>;
 export const NoneLike = {
   /**
    * Structural type-guard for {@link NoneLike}.
@@ -100,7 +100,7 @@ export const NoneLike = {
    * ```
    */
   isOfType(value: unknown): value is NoneLike {
-    return isRecord(value) && value.kind === 'None';
+    return Kind.isOf(value, 'None');
   },
 } as const;
 // #endregion
@@ -672,7 +672,7 @@ export const ParseOptionError = {
    */
   of(reason: string, received: unknown): ParseOptionError {
     return {
-      ...Kind.of('ParseOptionError'),
+      ...Kind.from('ParseOptionError'),
       reason,
       received,
     };
