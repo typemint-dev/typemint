@@ -52,6 +52,15 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
    */
   readonly key: TKey;
   /**
+   * We reserve the usage of the `of` method for a construction of a type from
+   * a matching shape. Like Dog.of(dogAttrs). The `from` hints more towards some
+   * kind of transformation or extraction. Like KindDiscriminant.from('user').
+   * transform a string into an object with property.
+   *
+   * @deprecated Use `from` instead. The method `of` will be removed in the future.
+   */
+  of<TVal extends string>(discriminant: TVal): Discriminant<TKey, TVal>;
+  /**
    * Create a new discriminant instance with the given discriminant value
    * under the given key.
    *
@@ -62,11 +71,16 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
    * @example
    *
    * ```ts
-   *
+   * const KindDiscriminant = Discriminant('__kind');
+   * const userDiscriminant = KindDiscriminant.from('user');
+   * const user = {
+   *   ...userDiscriminant,
+   *   name: 'John Doe',
+   * } as const;
    *
    * ```
    */
-  of<TVal extends string>(discriminant: TVal): Discriminant<TKey, TVal>;
+  from<TVal extends string>(discriminant: TVal): Discriminant<TKey, TVal>;
   /**
    * Check if the value is of the given discriminant key without checking the
    * value of the discriminant. The value is thus any instance of the
@@ -286,6 +300,10 @@ export function Discriminant<TKey extends PropertyKey>(
     key,
 
     of<TVal extends string>(discriminant: TVal): Discriminant<TKey, TVal> {
+      return { [key]: discriminant } as Discriminant<TKey, TVal>;
+    },
+
+    from<TVal extends string>(discriminant: TVal): Discriminant<TKey, TVal> {
       return { [key]: discriminant } as Discriminant<TKey, TVal>;
     },
 

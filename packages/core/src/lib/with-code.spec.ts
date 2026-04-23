@@ -118,6 +118,34 @@ describe('(unit) WithCode', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // MARK: WithCode.from
+  // ---------------------------------------------------------------------------
+  describe('WithCode.from', () => {
+    it('should create a WithCode instance with the given code', () => {
+      // Arrange
+      const code = 'success';
+
+      // Act
+      const result = WithCode.from(code);
+
+      // Assert
+      expect(result).toEqual({ code });
+      expectTypeOf(result).toEqualTypeOf<{ code: 'success' }>();
+    });
+
+    it('should preserve the literal type of the code', () => {
+      // Arrange
+      const code = 'success';
+
+      // Act
+      const result = WithCode.from(code);
+
+      // Assert
+      expectTypeOf(result).toEqualTypeOf<{ code: 'success' }>();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // MARK: WithCode.isOfType
   // ---------------------------------------------------------------------------
   describe('WithCode.isOfType', () => {

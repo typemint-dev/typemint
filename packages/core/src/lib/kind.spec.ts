@@ -40,6 +40,20 @@ describe('(unit) Kind', () => {
 });
 
 // ---------------------------------------------------------------------------
+// MARK: from
+// ---------------------------------------------------------------------------
+describe('(unit) from', () => {
+  it('should create an object with the "kind" key', () => {
+    // Arrange
+    const result = Kind.from('user');
+
+    // Assert
+    expect(result).toEqual({ kind: 'user' });
+    expectTypeOf(result).toEqualTypeOf<{ kind: 'user' }>();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // MARK: assertKind
 // ---------------------------------------------------------------------------
 describe('(unit) assertKind', () => {

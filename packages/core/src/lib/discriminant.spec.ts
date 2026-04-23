@@ -59,6 +59,27 @@ describe('(unit) Discriminant', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // MARK: from
+  // ---------------------------------------------------------------------------
+  describe('from', () => {
+    it('should create an object with the discriminant key and value', () => {
+      // Arrange
+      const result = TestDisc.from('user');
+
+      // Assert
+      expect(result).toEqual({ __test: 'user' });
+    });
+
+    it('should preserve the literal type of the discriminant value', () => {
+      // Arrange
+      const result = TestDisc.from('user');
+
+      // Assert
+      expectTypeOf(result).toEqualTypeOf<{ __test: 'user' }>();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // MARK: isOfType
   // ---------------------------------------------------------------------------
   describe('isOfType', () => {
