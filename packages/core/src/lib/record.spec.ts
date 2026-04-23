@@ -1,12 +1,12 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
-import { assertRecord, isRecord } from "./record.js";
-import { AssertException } from "./assert.js";
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { assertRecord, isRecord } from './record.js';
+import { AssertException } from './assert.js';
 
-describe("(unit) isRecord", () => {
-  describe("when given a plain object", () => {
-    it("should return true", () => {
+describe('(unit) isRecord', () => {
+  describe('when given a plain object', () => {
+    it('should return true', () => {
       // Arrange
-      const value = { a: 1, b: "two" };
+      const value = { a: 1, b: 'two' };
 
       // Act
       const result = isRecord(value);
@@ -16,8 +16,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given an empty object", () => {
-    it("should return true", () => {
+  describe('when given an empty object', () => {
+    it('should return true', () => {
       // Arrange
       const value = {};
 
@@ -29,8 +29,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given an object created with Object.create(null)", () => {
-    it("should return true", () => {
+  describe('when given an object created with Object.create(null)', () => {
+    it('should return true', () => {
       // Arrange
       const value = Object.create(null);
 
@@ -42,8 +42,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given an object with an inherited prototype", () => {
-    it("should return true", () => {
+  describe('when given an object with an inherited prototype', () => {
+    it('should return true', () => {
       // Arrange
       const value = Object.create({ inherited: true });
 
@@ -55,8 +55,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given a class instance", () => {
-    it("should return true for a Date", () => {
+  describe('when given a class instance', () => {
+    it('should return true for a Date', () => {
       // Arrange
       const value = new Date();
 
@@ -67,7 +67,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(true);
     });
 
-    it("should return true for a Map", () => {
+    it('should return true for a Map', () => {
       // Arrange
       const value = new Map();
 
@@ -78,7 +78,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(true);
     });
 
-    it("should return true for a RegExp", () => {
+    it('should return true for a RegExp', () => {
       // Arrange
       const value = /regex/;
 
@@ -90,8 +90,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given null", () => {
-    it("should return false", () => {
+  describe('when given null', () => {
+    it('should return false', () => {
       // Arrange
       const value = null;
 
@@ -104,8 +104,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given undefined", () => {
-    it("should return false", () => {
+  describe('when given undefined', () => {
+    it('should return false', () => {
       // Arrange
       const value = undefined;
 
@@ -117,8 +117,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given an array", () => {
-    it("should return false for an empty array", () => {
+  describe('when given an array', () => {
+    it('should return false for an empty array', () => {
       // Arrange
       const value: unknown[] = [];
 
@@ -129,7 +129,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a populated array", () => {
+    it('should return false for a populated array', () => {
       // Arrange
       const value = [1, 2, 3];
 
@@ -141,8 +141,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given a primitive", () => {
-    it("should return false for a number", () => {
+  describe('when given a primitive', () => {
+    it('should return false for a number', () => {
       // Arrange
       const value = 42;
 
@@ -153,9 +153,9 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a string", () => {
+    it('should return false for a string', () => {
       // Arrange
-      const value = "string";
+      const value = 'string';
 
       // Act
       const result = isRecord(value);
@@ -164,7 +164,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a boolean", () => {
+    it('should return false for a boolean', () => {
       // Arrange
       const value = true;
 
@@ -175,9 +175,9 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a symbol", () => {
+    it('should return false for a symbol', () => {
       // Arrange
-      const value = Symbol("s");
+      const value = Symbol('s');
 
       // Act
       const result = isRecord(value);
@@ -186,7 +186,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a bigint", () => {
+    it('should return false for a bigint', () => {
       // Arrange
       const value = BigInt(1);
 
@@ -198,8 +198,8 @@ describe("(unit) isRecord", () => {
     });
   });
 
-  describe("when given a function", () => {
-    it("should return false for an arrow function", () => {
+  describe('when given a function', () => {
+    it('should return false for an arrow function', () => {
       // Arrange
       const value = () => {};
 
@@ -210,7 +210,7 @@ describe("(unit) isRecord", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false for a named function", () => {
+    it('should return false for a named function', () => {
       // Arrange
       const value = function named() {};
 
@@ -225,10 +225,10 @@ describe("(unit) isRecord", () => {
   // ---------------------------------------------------------------------------
   // MARK: assertRecord
   // ---------------------------------------------------------------------------
-  describe("assertRecord", () => {
-    it("should not throw if the value is a record", () => {
+  describe('assertRecord', () => {
+    it('should not throw if the value is a record', () => {
       // Arrange
-      const value = { a: 1, b: "two" };
+      const value = { a: 1, b: 'two' };
 
       // Act
       const act = () => assertRecord(value);
@@ -237,9 +237,9 @@ describe("(unit) isRecord", () => {
       expect(act).not.toThrow();
     });
 
-    it("should throw an AssertException if the value is not a record", () => {
+    it('should throw an AssertException if the value is not a record', () => {
       // Arrange
-      const value = "not a record";
+      const value = 'not a record';
 
       // Act
       const act = () => assertRecord(value);
@@ -248,21 +248,21 @@ describe("(unit) isRecord", () => {
       expect(act).toThrow(AssertException);
     });
 
-    it("should throw with the default message if the value is not a record", () => {
+    it('should throw with the default message if the value is not a record', () => {
       // Arrange
-      const value = "not a record";
+      const value = 'not a record';
 
       // Act
       const act = () => assertRecord(value);
 
       // Assert
-      expect(act).toThrow("Expected a record");
+      expect(act).toThrow('Expected a record');
     });
 
-    it("should throw with a custom message if provided", () => {
+    it('should throw with a custom message if provided', () => {
       // Arrange
-      const value = "not a record";
-      const message = "Expected a record";
+      const value = 'not a record';
+      const message = 'Expected a record';
 
       // Act
       const act = () => assertRecord(value, message);
@@ -271,23 +271,23 @@ describe("(unit) isRecord", () => {
       expect(act).toThrow(message);
     });
 
-    it("should throw with a lazy message if provided", () => {
+    it('should throw with a lazy message if provided', () => {
       // Arrange
-      const value = "not a record";
-      const message = () => "Expected a record";
+      const value = 'not a record';
+      const message = () => 'Expected a record';
 
       // Act
       const act = () => assertRecord(value, message);
 
       // Assert
-      expect(act).toThrow("Expected a record");
+      expect(act).toThrow('Expected a record');
     });
 
-    it("should narrow the type to the record type if the value is a record", () => {
+    it('should narrow the type to the record type if the value is a record', () => {
       // Arrange
       const value: unknown | Record<string, unknown> = {
         a: 1,
-        b: "two",
+        b: 'two',
       } as unknown;
 
       // Act

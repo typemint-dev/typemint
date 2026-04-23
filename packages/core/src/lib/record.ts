@@ -1,4 +1,4 @@
-import { assert } from "./assert.js";
+import { assert } from './assert.js';
 
 /**
  * Check if the value is any type of record. Function is a type guard and
@@ -10,12 +10,12 @@ import { assert } from "./assert.js";
 export function isRecord(
   value: unknown,
 ): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export function assertRecord<T extends Record<string, unknown>>(
   value: unknown,
-  message: string | (() => string) = "Expected a record",
+  message: string | (() => string) = 'Expected a record',
 ): asserts value is T {
   assert(isRecord(value), message);
 }
