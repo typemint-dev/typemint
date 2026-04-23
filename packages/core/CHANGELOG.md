@@ -1,5 +1,17 @@
 # @typemint/core
 
+## 0.6.0
+
+### Minor Changes
+
+- Add assertRecord
+- remove Discriminant.getKey in favor of Discriminant.key
+- Add WithCode discriminant
+
+### Patch Changes
+
+- Fix Discriminant.getKey to return key, not value
+
 ## 0.5.0
 
 ### Minor Changes
