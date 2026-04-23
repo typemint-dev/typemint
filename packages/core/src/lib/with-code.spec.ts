@@ -211,7 +211,7 @@ describe("(unit) WithCode", () => {
       const result = WithCode.getKey(value);
 
       // Assert
-      expect(result).toBe("success");
+      expect(result).toBe("code");
     });
 
     it("should preserve the literal type of the key", () => {
