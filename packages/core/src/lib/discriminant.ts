@@ -104,7 +104,7 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
    *   name: 'John Doe',
    * } as const;
    *
-   * const userKey = KindDiscriminant.getKey(User); // 'user'
+   * const userKey = KindDiscriminant.getKey(User); // '__kind'
    * ```
    */
   getKey<TVal extends string>(value: Discriminant<TKey, TVal>): TKey;
