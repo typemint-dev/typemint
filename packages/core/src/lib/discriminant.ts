@@ -1,4 +1,4 @@
-import { isRecord } from './is-record.js';
+import { isRecord } from './record.js';
 import { PanicException } from './panic-exception.js';
 
 /**

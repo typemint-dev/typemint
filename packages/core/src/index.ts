@@ -1,4 +1,4 @@
-export * from './lib/is-record.js';
+export * from './lib/record.js';
 export * from './lib/panic-exception.js';
 export * from './lib/discriminant.js';
 export * from './lib/assert.js';
