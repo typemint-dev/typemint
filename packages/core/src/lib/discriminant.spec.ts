@@ -1,71 +1,71 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import { Discriminant, type DiscriminantDescriptor } from "./discriminant.js";
-import { PanicException } from "./panic-exception.js";
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { Discriminant, type DiscriminantDescriptor } from './discriminant.js';
+import { PanicException } from './panic-exception.js';
 
-const TestDisc = Discriminant("__test");
+const TestDisc = Discriminant('__test');
 
-type User = { __test: "user"; name: string };
-type Admin = { __test: "admin"; level: number };
+type User = { __test: 'user'; name: string };
+type Admin = { __test: 'admin'; level: number };
 type Entity = User | Admin;
 
-describe("(unit) Discriminant", () => {
+describe('(unit) Discriminant', () => {
   // ---------------------------------------------------------------------------
   // MARK: factory
   // ---------------------------------------------------------------------------
-  describe("factory", () => {
-    it("should return a DiscriminantDescriptor", () => {
+  describe('factory', () => {
+    it('should return a DiscriminantDescriptor', () => {
       // Arrange
-      const descriptor = Discriminant("__kind");
+      const descriptor = Discriminant('__kind');
 
       // Act
       // Assert
       expectTypeOf(descriptor).toEqualTypeOf<
-        DiscriminantDescriptor<"__kind">
+        DiscriminantDescriptor<'__kind'>
       >();
     });
 
-    it("should expose the key used to create it", () => {
+    it('should expose the key used to create it', () => {
       // Arrange
-      const descriptor = Discriminant("__kind");
+      const descriptor = Discriminant('__kind');
 
       // Act
       const result = descriptor.key;
 
       // Assert
-      expect(result).toBe("__kind");
+      expect(result).toBe('__kind');
     });
   });
 
   // ---------------------------------------------------------------------------
   // MARK: of
   // ---------------------------------------------------------------------------
-  describe("of", () => {
-    it("should create an object with the discriminant key and value", () => {
+  describe('of', () => {
+    it('should create an object with the discriminant key and value', () => {
       // Arrange
-      const result = TestDisc.of("user");
+      const result = TestDisc.of('user');
 
       // Assert
-      expect(result).toEqual({ __test: "user" });
+      expect(result).toEqual({ __test: 'user' });
     });
 
-    it("should preserve the literal type of the discriminant value", () => {
+    it('should preserve the literal type of the discriminant value', () => {
       // Arrange
-      const result = TestDisc.of("user");
+      const result = TestDisc.of('user');
 
       // Act
       // Assert
-      expectTypeOf(result).toEqualTypeOf<{ __test: "user" }>();
+      expectTypeOf(result).toEqualTypeOf<{ __test: 'user' }>();
     });
   });
 
   // ---------------------------------------------------------------------------
   // MARK: isOfType
   // ---------------------------------------------------------------------------
-  describe("isOfType", () => {
-    describe("when given an object with the discriminant key", () => {
-      it("should return true", () => {
+  describe('isOfType', () => {
+    describe('when given an object with the discriminant key', () => {
+      it('should return true', () => {
         // Arrange
-        const value = { __test: "user", name: "Alice" };
+        const value = { __test: 'user', name: 'Alice' };
 
         // Act
         const result = TestDisc.isOfType(value);
@@ -74,8 +74,8 @@ describe("(unit) Discriminant", () => {
         expect(result).toBe(true);
       });
 
-      it("should narrow the type to Discriminant with string value", () => {
-        const value: unknown = { __test: "user" };
+      it('should narrow the type to Discriminant with string value', () => {
+        const value: unknown = { __test: 'user' };
 
         if (TestDisc.isOfType(value)) {
           expectTypeOf(value).toEqualTypeOf<{ __test: string }>();
@@ -83,10 +83,10 @@ describe("(unit) Discriminant", () => {
       });
     });
 
-    describe("when given an object without the discriminant key", () => {
-      it("should return false", () => {
+    describe('when given an object without the discriminant key', () => {
+      it('should return false', () => {
         // Arrange
-        const value = { other: "value" };
+        const value = { other: 'value' };
 
         // Act
         const result = TestDisc.isOfType(value);
@@ -96,8 +96,8 @@ describe("(unit) Discriminant", () => {
       });
     });
 
-    describe("when given a non-object value", () => {
-      it("should return false for null", () => {
+    describe('when given a non-object value', () => {
+      it('should return false for null', () => {
         // Arrange
         // Act
         const result = TestDisc.isOfType(null);
@@ -106,10 +106,10 @@ describe("(unit) Discriminant", () => {
         expect(result).toBe(false);
       });
 
-      it("should return false for a primitive", () => {
+      it('should return false for a primitive', () => {
         // Arrange
         // Act
-        const result = TestDisc.isOfType("string");
+        const result = TestDisc.isOfType('string');
 
         // Assert
         expect(result).toBe(false);
@@ -120,123 +120,96 @@ describe("(unit) Discriminant", () => {
   // ---------------------------------------------------------------------------
   // MARK: isOf
   // ---------------------------------------------------------------------------
-  describe("isOf", () => {
-    describe("when the value matches the key and discriminant", () => {
-      it("should return true", () => {
+  describe('isOf', () => {
+    describe('when the value matches the key and discriminant', () => {
+      it('should return true', () => {
         // Arrange
-        const value = { __test: "user", name: "Alice" };
+        const value = { __test: 'user', name: 'Alice' };
 
         // Act
-        const result = TestDisc.isOf(value, "user");
+        const result = TestDisc.isOf(value, 'user');
 
         // Assert
         expect(result).toBe(true);
       });
 
-      it("should narrow the type to the specific discriminant", () => {
+      it('should narrow the type to the specific discriminant', () => {
         // Arrange
-        const value: unknown = { __test: "admin" };
+        const value: unknown = { __test: 'admin' };
 
         // Act
-        const isAdmin = TestDisc.isOf(value, "admin");
+        const isAdmin = TestDisc.isOf(value, 'admin');
         // Assert
         if (isAdmin) {
-          expectTypeOf(value).toEqualTypeOf<{ __test: "admin" }>();
+          expectTypeOf(value).toEqualTypeOf<{ __test: 'admin' }>();
         } else {
           expectTypeOf(value).toBeUnknown();
         }
       });
     });
 
-    describe("when the key exists but the value does not match", () => {
-      it("should return false", () => {
+    describe('when the key exists but the value does not match', () => {
+      it('should return false', () => {
         // Arrange
-        const value = { __test: "admin", level: 5 };
+        const value = { __test: 'admin', level: 5 };
 
         // Act
-        const result = TestDisc.isOf(value, "user");
+        const result = TestDisc.isOf(value, 'user');
 
         // Assert
         expect(result).toBe(false);
       });
     });
 
-    describe("when the key does not exist", () => {
-      it("should return false", () => {
+    describe('when the key does not exist', () => {
+      it('should return false', () => {
         // Arrange
-        const value = { other: "value" };
+        const value = { other: 'value' };
 
         // Act
-        const result = TestDisc.isOf(value, "user");
+        const result = TestDisc.isOf(value, 'user');
 
         // Assert
         expect(result).toBe(false);
       });
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // MARK: getKey
-  // ---------------------------------------------------------------------------
-  describe("getKey", () => {
-    it("should return the discriminant value", () => {
-      // Arrange
-      const value = TestDisc.of("user");
-
-      // Act
-      const result = TestDisc.getKey(value);
-
-      // Assert
-      expect(result).toBe("user");
-    });
-
-    it("should preserve the literal type of the discriminant value", () => {
-      // Arrange
-      const value = TestDisc.of("admin");
-
-      // Act
-      const result = TestDisc.getKey(value);
-
-      // Assert
-      expectTypeOf(result).toEqualTypeOf<"__test">();
     });
   });
 
   // ---------------------------------------------------------------------------
   // MARK: getValue
   // ---------------------------------------------------------------------------
-  describe("getValue", () => {
-    it("should return the discriminant value", () => {
+  describe('getValue', () => {
+    it('should return the discriminant value', () => {
       // Arrange
-      const value = TestDisc.of("user");
+      const value = TestDisc.of('user');
 
       // Act
       const result = TestDisc.getValue(value);
 
       // Assert
-      expect(result).toBe("user");
+      expect(result).toBe('user');
     });
 
-    it("should preserve the literal type of the discriminant value", () => {
+    it('should preserve the literal type of the discriminant value', () => {
       // Arrange
-      const value = TestDisc.of("admin");
+      const value = TestDisc.of('admin');
 
       // Act
       const result = TestDisc.getValue(value);
 
       // Assert
-      expectTypeOf(result).toEqualTypeOf<"admin">();
+      expectTypeOf(result).toEqualTypeOf<'admin'>();
     });
   });
 
   // ---------------------------------------------------------------------------
   // MARK: match
   // ---------------------------------------------------------------------------
-  describe("match", () => {
-    describe("when a matching handler exists", () => {
-      it("should call the correct handler for a user", () => {
+  describe('match', () => {
+    describe('when a matching handler exists', () => {
+      it('should call the correct handler for a user', () => {
         // Arrange
-        const value: Entity = { __test: "user", name: "Alice" } as Entity;
+        const value: Entity = { __test: 'user', name: 'Alice' } as Entity;
 
         // Act
         const result = TestDisc.match(value, {
@@ -245,12 +218,12 @@ describe("(unit) Discriminant", () => {
         });
 
         // Assert
-        expect(result).toBe("Alice");
+        expect(result).toBe('Alice');
       });
 
-      it("should call the correct handler for an admin", () => {
+      it('should call the correct handler for an admin', () => {
         // Arrange
-        const value: Entity = { __test: "admin", level: 5 } as Entity;
+        const value: Entity = { __test: 'admin', level: 5 } as Entity;
 
         // Act
         const result = TestDisc.match(value, {
@@ -263,10 +236,10 @@ describe("(unit) Discriminant", () => {
       });
     });
 
-    describe("when inferring return types", () => {
-      it("should infer the union of all handler return types", () => {
+    describe('when inferring return types', () => {
+      it('should infer the union of all handler return types', () => {
         // Arrange
-        const value: Entity = { __test: "user", name: "Alice" } as Entity;
+        const value: Entity = { __test: 'user', name: 'Alice' } as Entity;
 
         // Act
         const result = TestDisc.match(value, {
@@ -278,25 +251,25 @@ describe("(unit) Discriminant", () => {
         expectTypeOf(result).toEqualTypeOf<string | number>();
       });
 
-      it("should infer literal types when handlers return constants", () => {
+      it('should infer literal types when handlers return constants', () => {
         // Arrange
-        const value: Entity = { __test: "user", name: "Alice" } as Entity;
+        const value: Entity = { __test: 'user', name: 'Alice' } as Entity;
 
         // Act
         const result = TestDisc.match(value, {
-          user: () => "is-user" as const,
-          admin: () => "is-admin" as const,
+          user: () => 'is-user' as const,
+          admin: () => 'is-admin' as const,
         });
 
         // Assert
-        expectTypeOf(result).toEqualTypeOf<"is-user" | "is-admin">();
+        expectTypeOf(result).toEqualTypeOf<'is-user' | 'is-admin'>();
       });
     });
 
-    describe("when handler narrows the value type", () => {
-      it("should pass the narrowed User type to the user handler", () => {
+    describe('when handler narrows the value type', () => {
+      it('should pass the narrowed User type to the user handler', () => {
         // Arrange
-        const value: Entity = { __test: "user", name: "Alice" } as Entity;
+        const value: Entity = { __test: 'user', name: 'Alice' } as Entity;
 
         // Act
         TestDisc.match(value, {
@@ -314,10 +287,10 @@ describe("(unit) Discriminant", () => {
       });
     });
 
-    describe("when no matching handler exists", () => {
-      it("should throw a PanicException", () => {
+    describe('when no matching handler exists', () => {
+      it('should throw a PanicException', () => {
         // Arrange
-        const value = { __test: "unknown" } as unknown as Entity;
+        const value = { __test: 'unknown' } as unknown as Entity;
 
         // Act
         const act = () =>
@@ -330,9 +303,9 @@ describe("(unit) Discriminant", () => {
         expect(act).toThrow(PanicException);
       });
 
-      it("should include the unmatched discriminant in the error message", () => {
+      it('should include the unmatched discriminant in the error message', () => {
         // Arrange
-        const value = { __test: "unknown" } as unknown as Entity;
+        const value = { __test: 'unknown' } as unknown as Entity;
 
         // Act
         const act = () =>
@@ -346,19 +319,19 @@ describe("(unit) Discriminant", () => {
       });
     });
 
-    describe("when matching value of two ad hoc created objects", () => {
-      it("should match one of them", () => {
+    describe('when matching value of two ad hoc created objects', () => {
+      it('should match one of them', () => {
         // Arrange
-        const KindDiscriminant = Discriminant("__kind");
+        const KindDiscriminant = Discriminant('__kind');
 
         const raccoon = {
-          ...KindDiscriminant.of("raccoon"),
-          growl: () => "growl",
+          ...KindDiscriminant.of('raccoon'),
+          growl: () => 'growl',
         } as const;
 
         const dog = {
-          ...KindDiscriminant.of("dog"),
-          bark: () => "bark",
+          ...KindDiscriminant.of('dog'),
+          bark: () => 'bark',
         } as const;
 
         type Animal = typeof raccoon | typeof dog;
@@ -371,7 +344,7 @@ describe("(unit) Discriminant", () => {
         });
 
         // Assert
-        expect(result).toBe("growl");
+        expect(result).toBe('growl');
       });
     });
   });
@@ -379,27 +352,27 @@ describe("(unit) Discriminant", () => {
   // ---------------------------------------------------------------------------
   // MARK: matchOr
   // ---------------------------------------------------------------------------
-  describe("matchOr", () => {
-    describe("when a matching handler exists", () => {
-      it("should call the correct handler and return its result", () => {
+  describe('matchOr', () => {
+    describe('when a matching handler exists', () => {
+      it('should call the correct handler and return its result', () => {
         // Arrange
-        const value: Entity = { __test: "user", name: "Alice" } as Entity;
+        const value: Entity = { __test: 'user', name: 'Alice' } as Entity;
 
         // Act
         const result = TestDisc.matchOr(
           value,
           { user: (v) => v.name },
-          () => "fallback",
+          () => 'fallback',
         );
 
         // Assert
-        expect(result).toBe("Alice");
+        expect(result).toBe('Alice');
       });
 
-      it("should not call the fallback when a handler matches", () => {
+      it('should not call the fallback when a handler matches', () => {
         // Arrange
-        const value: Entity = { __test: "admin", level: 7 } as Entity;
-        const fallback = vi.fn<() => string>(() => "fallback");
+        const value: Entity = { __test: 'admin', level: 7 } as Entity;
+        const fallback = vi.fn<() => string>(() => 'fallback');
 
         // Act
         TestDisc.matchOr(value, { admin: (v) => String(v.level) }, fallback);
@@ -409,25 +382,25 @@ describe("(unit) Discriminant", () => {
       });
     });
 
-    describe("when no matching handler exists", () => {
-      it("should call the fallback and return its result", () => {
+    describe('when no matching handler exists', () => {
+      it('should call the fallback and return its result', () => {
         // Arrange
-        const value = { __test: "unknown" } as unknown as Entity;
+        const value = { __test: 'unknown' } as unknown as Entity;
 
         // Act
         const result = TestDisc.matchOr(
           value,
           { user: (v) => v.name },
-          () => "fallback-value",
+          () => 'fallback-value',
         );
 
         // Assert
-        expect(result).toBe("fallback-value");
+        expect(result).toBe('fallback-value');
       });
 
-      it("should pass the original value to the fallback", () => {
+      it('should pass the original value to the fallback', () => {
         // Arrange
-        const value = { __test: "unknown" } as unknown as Entity;
+        const value = { __test: 'unknown' } as unknown as Entity;
 
         // Act
         const result = TestDisc.matchOr(
@@ -437,25 +410,25 @@ describe("(unit) Discriminant", () => {
         );
 
         // Assert
-        expect(result).toEqual({ __test: "unknown" });
+        expect(result).toEqual({ __test: 'unknown' });
       });
 
-      it("should call the fallback when the handler record is empty", () => {
+      it('should call the fallback when the handler record is empty', () => {
         // Arrange
-        const value: Entity = { __test: "user", name: "Alice" } as Entity;
+        const value: Entity = { __test: 'user', name: 'Alice' } as Entity;
 
         // Act
-        const result = TestDisc.matchOr(value, {}, () => "no-handlers");
+        const result = TestDisc.matchOr(value, {}, () => 'no-handlers');
 
         // Assert
-        expect(result).toBe("no-handlers");
+        expect(result).toBe('no-handlers');
       });
     });
 
-    describe("when inferring return types", () => {
-      it("should infer the union of matched handler and fallback return types", () => {
+    describe('when inferring return types', () => {
+      it('should infer the union of matched handler and fallback return types', () => {
         // Arrange
-        const value: Entity = { __test: "user", name: "Alice" } as Entity;
+        const value: Entity = { __test: 'user', name: 'Alice' } as Entity;
 
         // Act
         const result = TestDisc.matchOr(
@@ -473,11 +446,11 @@ describe("(unit) Discriminant", () => {
   // ---------------------------------------------------------------------------
   // MARK: tryMatch
   // ---------------------------------------------------------------------------
-  describe("tryMatch", () => {
-    describe("when a matching handler exists", () => {
-      it("should call the correct handler for a user", () => {
+  describe('tryMatch', () => {
+    describe('when a matching handler exists', () => {
+      it('should call the correct handler for a user', () => {
         // Arrange
-        const value: Entity = { __test: "user", name: "Alice" } as Entity;
+        const value: Entity = { __test: 'user', name: 'Alice' } as Entity;
 
         // Act
         const result = TestDisc.tryMatch(
@@ -486,16 +459,16 @@ describe("(unit) Discriminant", () => {
             user: (v) => v.name,
             admin: (v) => v.level,
           },
-          () => "fallback",
+          () => 'fallback',
         );
 
         // Assert
-        expect(result).toBe("Alice");
+        expect(result).toBe('Alice');
       });
 
-      it("should call the correct handler for an admin", () => {
+      it('should call the correct handler for an admin', () => {
         // Arrange
-        const value: Entity = { __test: "admin", level: 5 } as Entity;
+        const value: Entity = { __test: 'admin', level: 5 } as Entity;
 
         // Act
         const result = TestDisc.tryMatch(
@@ -504,7 +477,7 @@ describe("(unit) Discriminant", () => {
             user: (v) => v.name,
             admin: (v) => v.level,
           },
-          () => "fallback",
+          () => 'fallback',
         );
 
         // Assert
@@ -512,10 +485,10 @@ describe("(unit) Discriminant", () => {
       });
     });
 
-    describe("when no matching handler exists", () => {
-      it("should call the fallback instead of throwing", () => {
+    describe('when no matching handler exists', () => {
+      it('should call the fallback instead of throwing', () => {
         // Arrange
-        const value = { __test: "unknown" } as unknown as Entity;
+        const value = { __test: 'unknown' } as unknown as Entity;
 
         // Act
         const result = TestDisc.tryMatch(
@@ -524,16 +497,16 @@ describe("(unit) Discriminant", () => {
             user: (v) => v.name,
             admin: (v) => v.level,
           },
-          () => "fallback-value",
+          () => 'fallback-value',
         );
 
         // Assert
-        expect(result).toBe("fallback-value");
+        expect(result).toBe('fallback-value');
       });
 
-      it("should pass the original value to the fallback", () => {
+      it('should pass the original value to the fallback', () => {
         // Arrange
-        const value = { __test: "unknown" } as unknown as Entity;
+        const value = { __test: 'unknown' } as unknown as Entity;
 
         // Act
         const result = TestDisc.tryMatch(
@@ -546,14 +519,14 @@ describe("(unit) Discriminant", () => {
         );
 
         // Assert
-        expect(result).toEqual({ __test: "unknown" });
+        expect(result).toEqual({ __test: 'unknown' });
       });
     });
 
-    describe("when inferring return types", () => {
-      it("should infer the union of handler return types and fallback return type", () => {
+    describe('when inferring return types', () => {
+      it('should infer the union of handler return types and fallback return type', () => {
         // Arrange
-        const value: Entity = { __test: "user", name: "Alice" } as Entity;
+        const value: Entity = { __test: 'user', name: 'Alice' } as Entity;
 
         // Act
         const result = TestDisc.tryMatch(
@@ -570,10 +543,10 @@ describe("(unit) Discriminant", () => {
       });
     });
 
-    describe("when handler narrows the value type", () => {
-      it("should pass the narrowed type to each handler", () => {
+    describe('when handler narrows the value type', () => {
+      it('should pass the narrowed type to each handler', () => {
         // Arrange
-        const value: Entity = { __test: "user", name: "Alice" } as Entity;
+        const value: Entity = { __test: 'user', name: 'Alice' } as Entity;
 
         // Act
         TestDisc.tryMatch(

@@ -91,25 +91,6 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
   ): value is Discriminant<TKey, TVal>;
 
   /**
-   * Get the key of the discriminant.
-   *
-   * @param value - The discriminant instance to get the key of.
-   * @returns - The key of the discriminant.
-   * @example
-   *
-   * ```ts
-   * const KindDiscriminant = Discriminant('__kind');
-   * const User = {
-   *   ...KindDiscriminant.of('user'),
-   *   name: 'John Doe',
-   * } as const;
-   *
-   * const userKey = KindDiscriminant.getKey(User); // '__kind'
-   * ```
-   */
-  getKey<TVal extends string>(value: Discriminant<TKey, TVal>): TKey;
-
-  /**
    * Get the value of the discriminant.
    *
    * @param value - The discriminant instance to get the value of.
@@ -317,10 +298,6 @@ export function Discriminant<TKey extends PropertyKey>(
       discriminant: TVal,
     ): value is Discriminant<TKey, TVal> {
       return isRecord(value) && key in value && value[key] === discriminant;
-    },
-
-    getKey<TVal extends string>(value: Discriminant<TKey, TVal>): TKey {
-      return key;
     },
 
     getValue<TVal extends string>(value: Discriminant<TKey, TVal>): TVal {
