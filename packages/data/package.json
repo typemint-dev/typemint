@@ -1,0 +1,53 @@
+{
+  "name": "@typemint/data",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/typemint-dev/typemint.git"
+  },
+  "author": "Ales Albert Kilbergr <ales.albert@kilbergr.eu>",
+  "description": "Type-safe data structures for TypeScript.",
+  "keywords": [
+    "typemint",
+    "data",
+    "literal-union",
+    "typescript",
+    "utilities"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "docs",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "pre:build": "rimraf dist",
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest --run --dir src",
+    "test:coverage": "vitest --run --dir src --coverage",
+    "lint": "oxlint src",
+    "format": "oxfmt --write src",
+    "format:check": "oxfmt --check src",
+    "typecheck": "tsc --noEmit",
+    "precommit:check": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test",
+    "prepublishOnly": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test"
+  },
+  "dependencies": {
+    "@typemint/core": "^0.5.0"
+  }
+}
