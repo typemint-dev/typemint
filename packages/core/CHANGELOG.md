@@ -1,5 +1,12 @@
 # @typemint/core
 
+## 0.7.0
+
+### Minor Changes
+
+- Add WithMessage shape
+- Deprecate Discriminant.of in favor of Discriminant.from
+
 ## 0.6.0
 
 ### Minor Changes
