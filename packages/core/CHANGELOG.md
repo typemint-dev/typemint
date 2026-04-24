@@ -1,5 +1,15 @@
 # @typemint/core
 
+## 0.8.0
+
+### Minor Changes
+
+- Add WithDetail shape
+
+### Patch Changes
+
+- Update README.md
+
 ## 0.7.0
 
 ### Minor Changes
