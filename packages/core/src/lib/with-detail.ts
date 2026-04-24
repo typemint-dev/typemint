@@ -1,4 +1,4 @@
-import { isRecord } from "./record.js";
+import { isRecord } from './record.js';
 
 /**
  * Represents an object that carries structured contextual metadata under a
@@ -45,6 +45,6 @@ export const WithDetail = {
    * or primitive).
    */
   isOfType(value: unknown): value is WithDetail<Record<string, unknown>> {
-    return isRecord(value) && "details" in value && isRecord(value.details);
+    return isRecord(value) && 'details' in value && isRecord(value.details);
   },
 };

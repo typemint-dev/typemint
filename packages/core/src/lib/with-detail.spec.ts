@@ -1,12 +1,12 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
-import { WithDetail } from "./with-detail.js";
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { WithDetail } from './with-detail.js';
 
-describe("(unit) WithDetails", () => {
+describe('(unit) WithDetails', () => {
   // ---------------------------------------------------------------------------
   // MARK: isOfType
   // ---------------------------------------------------------------------------
-  describe("isOfType", () => {
-    it("should return true if the value is a WithDetails", () => {
+  describe('isOfType', () => {
+    it('should return true if the value is a WithDetails', () => {
       // Arrange
       const value = WithDetail.from({});
       // Act
@@ -15,7 +15,7 @@ describe("(unit) WithDetails", () => {
       expect(result).toBe(true);
     });
 
-    it("should return false if the value is not a WithDetails", () => {
+    it('should return false if the value is not a WithDetails', () => {
       // Arrange
       const value = {};
       // Act
@@ -24,7 +24,7 @@ describe("(unit) WithDetails", () => {
       expect(result).toBe(false);
     });
 
-    it("should narrow the type to the WithDetails type if the value is a WithDetails", () => {
+    it('should narrow the type to the WithDetails type if the value is a WithDetails', () => {
       // Arrange
       const value: unknown | WithDetail<Record<string, unknown>> =
         WithDetail.from({});
