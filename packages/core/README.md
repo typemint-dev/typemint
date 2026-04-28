@@ -36,6 +36,7 @@ pnpm add @typemint/core
 | `flow`         | Compose unary operators into a single reusable function, left-to-right.                      |
 | `struct`       | Lift a record of unary operators into a single operator that runs them across record fields. |
 | `tuple`        | Lift a tuple of unary operators into a single operator that runs them across positions.      |
+| `identity`     | Return the input unchanged — a `FlowOperator<T, T>` useful as a default or no-op step.       |
 | `FlowOperator` | Type alias for a single unary step `(value: TInput) => TOutput`.                             |
 
 ### Assertions
@@ -242,6 +243,31 @@ const summarize = flow(
 );
 
 summarize(['  Ada ', -3]); // 'Ada (0)'
+```
+
+---
+
+### `identity`
+
+Returns its argument unchanged. Although trivially simple, `identity` is
+a useful building block for higher-order code: it serves as a no-op slot
+inside conditional pipelines, as a default for an optional transform
+(`config.map ?? identity`), and as an "as-is" callback for APIs that
+take a mapper. It is itself a `FlowOperator<T, T>` and composes
+directly into `flow`, `struct`, and `tuple` without further wrapping.
+Reference identity is preserved: `identity(obj) === obj`.
+
+```typescript
+import { flow, identity } from '@typemint/core';
+
+const transform = (debug: boolean) =>
+  flow(
+    (s: string) => s.trim(),
+    debug ? (s: string) => (console.log(s), s) : identity,
+    (s: string) => s.toUpperCase(),
+  );
+
+transform(false)('  hello  '); // 'HELLO'
 ```
 
 ---
