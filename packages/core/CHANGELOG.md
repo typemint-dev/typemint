@@ -1,5 +1,11 @@
 # @typemint/core
 
+## 0.9.1
+
+### Patch Changes
+
+- Fix missing export
+
 ## 0.9.0
 
 ### Minor Changes
