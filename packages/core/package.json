@@ -45,6 +45,6 @@
     "format:check": "oxfmt --check src",
     "typecheck": "tsc --noEmit",
     "precommit:check": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test",
-    "pre:publish": "pnpm run precommit:check"
+    "prepublishOnly": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test"
   }
 }
