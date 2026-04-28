@@ -207,6 +207,36 @@ function structPartial<TOps extends FlowOperatorRecord>(
 struct.partial = structPartial;
 
 /**
+ * Semantic alias for {@link struct}. Functionally identical — same
+ * input shape, same strictness contract, same runtime behavior; only
+ * the call-site name differs.
+ *
+ * Reach for `struct.required` when you want the parallelism with
+ * {@link struct.partial} to be visible at the call-site, especially
+ * inside a {@link struct.merge}:
+ *
+ * ```ts
+ * const normalize = struct.merge(
+ *   struct.required({ id: (n: number) => n }),
+ *   struct.partial({  age: (n: number) => Math.max(0, n) }),
+ * );
+ * ```
+ *
+ * The plain `struct(...)` form is still the shorter, default spelling
+ * for cases where there's no contrast with `struct.partial`.
+ *
+ * @throws {PanicException} If called with an empty record (forwarded
+ *   from {@link struct}).
+ */
+function structRequired<TOps extends FlowOperatorRecord>(
+  ops: TOps,
+): FlowOperator<StructInput<TOps>, StructOutput<TOps>> {
+  return struct(ops);
+}
+
+struct.required = structRequired;
+
+/**
  * Helper: turn a union of types into their intersection. Used to
  * combine the input/output types of every operator passed to
  * {@link struct.merge} into a single record type.

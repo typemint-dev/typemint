@@ -624,6 +624,106 @@ describe('(unit) struct', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // MARK: struct.required
+  // ---------------------------------------------------------------------------
+  describe('struct.required', () => {
+    it('should expose a `required` property on struct', () => {
+      // Arrange / Act
+      const result = typeof struct.required;
+
+      // Assert
+      expect(result).toBe('function');
+    });
+
+    it('should produce the same result as struct for the same operators', () => {
+      // Arrange
+      const ops = {
+        a: (n: number) => n + 1,
+        b: (s: string) => s.toUpperCase(),
+      };
+      const viaStruct = struct(ops);
+      const viaRequired = struct.required(ops);
+
+      // Act
+      const fromStruct = viaStruct({ a: 1, b: 'x' });
+      const fromRequired = viaRequired({ a: 1, b: 'x' });
+
+      // Assert
+      expect(fromRequired).toEqual(fromStruct);
+    });
+
+    it('should be strict on missing keys (panics like struct)', () => {
+      // Arrange
+      const op = struct.required({
+        a: (n: number) => n + 1,
+        b: (s: string) => s.toUpperCase(),
+      });
+      const broken = { a: 1 } as unknown as { a: number; b: string };
+
+      // Act
+      const act = () => op(broken);
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should produce a prototype-less output record', () => {
+      // Arrange
+      const op = struct.required({ a: (n: number) => n });
+
+      // Act
+      const result = op({ a: 1 });
+
+      // Assert
+      expect(Object.getPrototypeOf(result)).toBeNull();
+    });
+
+    it('should panic on empty operator record', () => {
+      // Arrange
+      const ops = {} as Record<string, (x: unknown) => unknown>;
+
+      // Act
+      const act = () => (struct.required as (_ops: typeof ops) => unknown)(ops);
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should compose with struct.partial inside struct.merge', () => {
+      // Arrange
+      const op = struct.merge(
+        struct.required({ id: (n: number) => n }),
+        struct.partial({ age: (n: number) => Math.max(0, n) }),
+      );
+
+      // Act
+      const withAge = op({ id: 1, age: -3 });
+      const withoutAge = op({ id: 1 });
+
+      // Assert
+      expect(withAge).toEqual({ id: 1, age: 0 });
+      expect(withoutAge).toEqual({ id: 1 });
+    });
+
+    it('should be usable as an operator inside a flow', () => {
+      // Arrange
+      const pipeline = flow(
+        struct.required({
+          name: (s: string) => s.trim(),
+          age: (n: number) => Math.max(0, n),
+        }),
+        (r: { name: string; age: number }) => `${r.name} (${r.age})`,
+      );
+
+      // Act
+      const result = pipeline({ name: '  Ada ', age: -3 });
+
+      // Assert
+      expect(result).toBe('Ada (0)');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // MARK: struct.merge
   // ---------------------------------------------------------------------------
   describe('struct.merge', () => {

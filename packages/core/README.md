@@ -31,15 +31,16 @@ pnpm add @typemint/core
 
 ### Pipelines
 
-| Export           | Purpose                                                                                            |
-| ---------------- | -------------------------------------------------------------------------------------------------- |
-| `flow`           | Compose unary operators into a single reusable function, left-to-right.                            |
-| `struct`         | Lift a record of unary operators into a single operator that runs them across record fields.       |
-| `struct.partial` | `struct` variant where every field is optional — missing input keys are skipped instead of forced. |
-| `struct.merge`   | Combine multiple record-shaped operators into one applied to a shared input.                       |
-| `tuple`          | Lift a tuple of unary operators into a single operator that runs them across positions.            |
-| `identity`       | Return the input unchanged — a `FlowOperator<T, T>` useful as a default or no-op step.             |
-| `FlowOperator`   | Type alias for a single unary step `(value: TInput) => TOutput`.                                   |
+| Export             | Purpose                                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------------- |
+| `flow`             | Compose unary operators into a single reusable function, left-to-right.                               |
+| `struct`           | Lift a record of unary operators into a single operator that runs them across record fields.          |
+| `struct.required`  | Semantic alias for `struct` — same behavior, clearer parallelism with `struct.partial` at call-sites. |
+| `struct.partial`   | `struct` variant where every field is optional — missing input keys are skipped instead of forced.    |
+| `struct.merge`     | Combine multiple record-shaped operators into one applied to a shared input.                          |
+| `tuple`            | Lift a tuple of unary operators into a single operator that runs them across positions.               |
+| `identity`         | Return the input unchanged — a `FlowOperator<T, T>` useful as a default or no-op step.                |
+| `FlowOperator`     | Type alias for a single unary step `(value: TInput) => TOutput`.                                      |
 
 ### Assertions
 
@@ -228,6 +229,33 @@ const summarize = flow(
 
 summarize({ name: '  Ada ', age: -3 }); // 'Ada (0)'
 ```
+
+---
+
+### `struct.required`
+
+Semantic alias for `struct`. Same function, same strictness contract,
+same runtime behavior — only the call-site spelling differs. Reach
+for `struct.required` when you want the parallelism with
+`struct.partial` to be visible at the call-site, especially inside a
+`struct.merge` where a record has both required and optional fields.
+
+```typescript
+import { struct } from '@typemint/core';
+
+const normalize = struct.merge(
+  struct.required({
+    id: (n: number) => n,
+    name: (s: string) => s.trim(),
+  }),
+  struct.partial({
+    age: (n: number) => Math.max(0, n),
+  }),
+);
+```
+
+The plain `struct(...)` form is still the shorter, default spelling
+for cases where there's no contrast with `struct.partial`.
 
 ---
 
