@@ -5,6 +5,7 @@ export * from './lib/assert.js';
 export * from './lib/kind.js';
 export * from './lib/stamp.js';
 export * from './lib/flow.js';
+export * from './lib/struct.js';
 export * from './lib/with-code.js';
 export * from './lib/with-message.js';
 export * from './lib/with-detail.js';

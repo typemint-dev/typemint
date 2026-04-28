@@ -31,10 +31,11 @@ pnpm add @typemint/core
 
 ### Pipelines
 
-| Export         | Purpose                                                                 |
-| -------------- | ----------------------------------------------------------------------- |
-| `flow`         | Compose unary operators into a single reusable function, left-to-right. |
-| `FlowOperator` | Type alias for a single unary step `(value: TInput) => TOutput`.        |
+| Export         | Purpose                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `flow`         | Compose unary operators into a single reusable function, left-to-right.                      |
+| `struct`       | Lift a record of unary operators into a single operator that runs them across record fields. |
+| `FlowOperator` | Type alias for a single unary step `(value: TInput) => TOutput`.                             |
 
 ### Assertions
 
@@ -191,6 +192,31 @@ const toSlug = flow(
 );
 
 toSlug("  Hello World  "); // 'hello-world'
+```
+
+---
+
+### `struct`
+
+Lifts a record of unary operators into a single operator that applies each
+one to the field of the same name on an input record, returning a record of
+the results. Where `flow` composes operators **sequentially** along a single
+value, `struct` applies operators **in parallel** across the keys of a
+record. The returned operator is itself a `FlowOperator` and can be plugged
+into a `flow` as a step.
+
+```typescript
+import { flow, struct } from "@typemint/core";
+
+const summarize = flow(
+  struct({
+    name: (s: string) => s.trim(),
+    age: (n: number) => Math.max(0, n),
+  }),
+  (user) => `${user.name} (${user.age})`,
+);
+
+summarize({ name: "  Ada ", age: -3 }); // 'Ada (0)'
 ```
 
 ---
