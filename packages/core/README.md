@@ -74,15 +74,15 @@ name. The descriptor gives you construction (`from`), type guards (`isOfType`,
 (`match`, `matchOr`, `tryMatch`).
 
 ```typescript
-import { Discriminant } from "@typemint/core";
+import { Discriminant } from '@typemint/core';
 
-const Status = Discriminant("status");
+const Status = Discriminant('status');
 
-type Ok = typeof Status & { status: "ok"; value: number };
-type Fail = typeof Status & { status: "fail"; reason: string };
+type Ok = typeof Status & { status: 'ok'; value: number };
+type Fail = typeof Status & { status: 'fail'; reason: string };
 type Response = Ok | Fail;
 
-const res: Response = { status: "ok", value: 42 };
+const res: Response = { status: 'ok', value: 42 };
 
 const label = Status.match(res, {
   ok: (v) => `value is ${v.value}`,
@@ -99,10 +99,10 @@ A pre-built `Discriminant("kind")` convenience. Reach for `Kind` when `"kind"`
 is your discriminant key so you don't need to create the descriptor yourself.
 
 ```typescript
-import { Kind } from "@typemint/core";
+import { Kind } from '@typemint/core';
 
-const cat = { ...Kind.from("cat"), meow: () => "meow" } as const;
-const dog = { ...Kind.from("dog"), bark: () => "bark" } as const;
+const cat = { ...Kind.from('cat'), meow: () => 'meow' } as const;
+const dog = { ...Kind.from('dog'), bark: () => 'bark' } as const;
 
 type Animal = typeof cat | typeof dog;
 
@@ -120,16 +120,16 @@ Mixin type and namespace for a typed string `code` property. Useful for error
 codes, event types, or any variant tag that lives alongside other fields.
 
 ```typescript
-import { WithCode, WithMessage } from "@typemint/core";
+import { WithCode, WithMessage } from '@typemint/core';
 
-type NotFoundError = WithCode<"NOT_FOUND"> & WithMessage;
+type NotFoundError = WithCode<'NOT_FOUND'> & WithMessage;
 
 const err: NotFoundError = {
-  ...WithCode.from("NOT_FOUND"),
-  ...WithMessage.from("Resource not found."),
+  ...WithCode.from('NOT_FOUND'),
+  ...WithMessage.from('Resource not found.'),
 };
 
-WithCode.isOf(err, "NOT_FOUND"); // true
+WithCode.isOf(err, 'NOT_FOUND'); // true
 ```
 
 ---
@@ -141,12 +141,12 @@ safely extracts a message from an `unknown` value — handy in `catch` blocks
 where the thrown value is untyped.
 
 ```typescript
-import { WithMessage } from "@typemint/core";
+import { WithMessage } from '@typemint/core';
 
 try {
-  JSON.parse("invalid");
+  JSON.parse('invalid');
 } catch (error) {
-  const msg = WithMessage.getOr(error, "An unknown error occurred.");
+  const msg = WithMessage.getOr(error, 'An unknown error occurred.');
   console.error(msg);
 }
 ```
@@ -160,14 +160,14 @@ payload must be a plain object (`Record<string, unknown>`) — use `WithMessage`
 for a bare string and `WithCode` for a string discriminant.
 
 ```typescript
-import { WithCode, WithDetail } from "@typemint/core";
+import { WithCode, WithDetail } from '@typemint/core';
 
-type ValidationError = WithCode<"VALIDATION_ERROR"> &
+type ValidationError = WithCode<'VALIDATION_ERROR'> &
   WithDetail<{ field: string; constraint: string }>;
 
 const err: ValidationError = {
-  ...WithCode.from("VALIDATION_ERROR"),
-  ...WithDetail.from({ field: "email", constraint: "format" }),
+  ...WithCode.from('VALIDATION_ERROR'),
+  ...WithDetail.from({ field: 'email', constraint: 'format' }),
 };
 
 WithDetail.isOfType(err); // true
@@ -183,15 +183,15 @@ a new function. Overloads are provided for arities 1–12 so parameter types are
 inferred without annotations.
 
 ```typescript
-import { flow } from "@typemint/core";
+import { flow } from '@typemint/core';
 
 const toSlug = flow(
   (s: string) => s.toLowerCase(),
   (s) => s.trim(),
-  (s) => s.replace(/\s+/g, "-"),
+  (s) => s.replace(/\s+/g, '-'),
 );
 
-toSlug("  Hello World  "); // 'hello-world'
+toSlug('  Hello World  '); // 'hello-world'
 ```
 
 ---
@@ -206,7 +206,7 @@ record. The returned operator is itself a `FlowOperator` and can be plugged
 into a `flow` as a step.
 
 ```typescript
-import { flow, struct } from "@typemint/core";
+import { flow, struct } from '@typemint/core';
 
 const summarize = flow(
   struct({
@@ -216,7 +216,7 @@ const summarize = flow(
   (user) => `${user.name} (${user.age})`,
 );
 
-summarize({ name: "  Ada ", age: -3 }); // 'Ada (0)'
+summarize({ name: '  Ada ', age: -3 }); // 'Ada (0)'
 ```
 
 ---
@@ -229,15 +229,15 @@ throwing when the value is `null` or `undefined`. Both accept a lazy message
 factory to avoid computing an expensive string on the happy path.
 
 ```typescript
-import { assert, assertDefined } from "@typemint/core";
+import { assert, assertDefined } from '@typemint/core';
 
 function divide(a: number, b: number): number {
-  assert(b !== 0, "Cannot divide by zero.");
+  assert(b !== 0, 'Cannot divide by zero.');
   return a / b;
 }
 
 function getName(user: { name?: string } | null) {
-  assertDefined(user, "User must not be null.");
+  assertDefined(user, 'User must not be null.');
   assertDefined(user.name, () => `User ${JSON.stringify(user)} has no name.`);
   return user.name;
 }
@@ -252,15 +252,15 @@ It returns `false` for `null` and arrays. `assertRecord` is the assertion
 variant — it throws an `AssertException` on failure.
 
 ```typescript
-import { isRecord, assertRecord } from "@typemint/core";
+import { isRecord, assertRecord } from '@typemint/core';
 
 isRecord({ a: 1 }); // true
 isRecord([1, 2]); // false
 isRecord(null); // false
 
 function process(input: unknown) {
-  assertRecord(input, "Expected a plain object.");
-  console.log(input["key"]);
+  assertRecord(input, 'Expected a plain object.');
+  console.log(input['key']);
 }
 ```
 
@@ -273,7 +273,7 @@ a specific constructor. Two `Stamp()` calls always produce independent
 stamps — stamping with one cannot be detected by another.
 
 ```typescript
-import { Stamp } from "@typemint/core";
+import { Stamp } from '@typemint/core';
 
 const UserStamp = Stamp();
 
@@ -281,9 +281,9 @@ function createUser(name: string) {
   return UserStamp.stamp({ name });
 }
 
-const user = createUser("Alice");
+const user = createUser('Alice');
 UserStamp.isStamped(user); // true
-UserStamp.isStamped({ name: "Alice" }); // false — not stamped
+UserStamp.isStamped({ name: 'Alice' }); // false — not stamped
 ```
 
 ---
@@ -296,14 +296,14 @@ a `PanicException` always indicates a bug. Use `PanicException.panic(message)`
 to get a pre-bound throwing function, useful as a one-liner fallback.
 
 ```typescript
-import { PanicException } from "@typemint/core";
+import { PanicException } from '@typemint/core';
 
 function unreachable(value: never): never {
   throw new PanicException(`Unreachable branch reached with: ${String(value)}`);
 }
 
 // As a bound thrower — useful in .catch() or Promise chains:
-fetch("/api").catch(PanicException.panic("Network request failed"));
+fetch('/api').catch(PanicException.panic('Network request failed'));
 ```
 
 ---
