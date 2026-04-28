@@ -1,5 +1,12 @@
 # @typemint/core
 
+## 0.9.0
+
+### Minor Changes
+
+- Add struct() as flow operator
+- Add tuple() as flow operator
+
 ## 0.8.0
 
 ### Minor Changes
