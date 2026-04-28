@@ -35,6 +35,7 @@ pnpm add @typemint/core
 | -------------- | -------------------------------------------------------------------------------------------- |
 | `flow`         | Compose unary operators into a single reusable function, left-to-right.                      |
 | `struct`       | Lift a record of unary operators into a single operator that runs them across record fields. |
+| `tuple`        | Lift a tuple of unary operators into a single operator that runs them across positions.      |
 | `FlowOperator` | Type alias for a single unary step `(value: TInput) => TOutput`.                             |
 
 ### Assertions
@@ -217,6 +218,30 @@ const summarize = flow(
 );
 
 summarize({ name: '  Ada ', age: -3 }); // 'Ada (0)'
+```
+
+---
+
+### `tuple`
+
+Lifts a tuple of unary operators into a single operator that applies each
+one to the element at the same index of an input tuple, returning a tuple
+of the results. Where `flow` composes operators **sequentially** along a
+single value, `tuple` applies operators **in parallel** across the
+positions of a tuple — the positional counterpart to `struct`. Operators
+are passed as a single array argument so call-sites stay visually distinct
+from `flow`. The returned operator is itself a `FlowOperator` and can be
+plugged into a `flow` as a step.
+
+```typescript
+import { flow, tuple } from '@typemint/core';
+
+const summarize = flow(
+  tuple([(s: string) => s.trim(), (n: number) => Math.max(0, n)]),
+  ([name, age]) => `${name} (${age})`,
+);
+
+summarize(['  Ada ', -3]); // 'Ada (0)'
 ```
 
 ---
