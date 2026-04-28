@@ -54,16 +54,21 @@ export type StructOutput<TOps extends FlowOperatorRecord> = {
  *
  * ### Runtime guarantees
  *
- * At least one key is required. Calling `struct({})` raises a
- * {@link PanicException} because an empty struct has no inferrable
- * input or output and almost always indicates a bug.
- *
- * The output record is created with `Object.create(null)` and only
- * the own enumerable keys of `ops` drive iteration, so the result has
- * no prototype and contains exactly the fields named on the operator
- * record. Keys present on the input but absent on `ops` are dropped;
- * keys present on `ops` but absent on the input are passed through as
- * `undefined` to the corresponding operator.
+ * - At least one key is required. Calling `struct({})` raises a
+ *   {@link PanicException} because an empty struct has no inferrable
+ *   input or output and almost always indicates a bug.
+ * - Every key declared on `ops` must be present on the input. If a
+ *   declared key is missing, `struct` raises a {@link PanicException}.
+ *   The check uses `Object.hasOwn`, so a key is "present" if and only
+ *   if it is an own enumerable property — explicitly setting a field
+ *   to `undefined` (e.g. `{ name: undefined }`) counts as present and
+ *   is forwarded to the operator. Use {@link struct.partial} if you
+ *   want missing keys to be skipped instead of panicking.
+ * - The output record is created with `Object.create(null)` and only
+ *   the own enumerable keys of `ops` drive iteration, so the result
+ *   has no prototype and contains exactly the fields named on the
+ *   operator record. Keys present on the input but absent on `ops`
+ *   are dropped.
  *
  * @example
  *
@@ -92,7 +97,9 @@ export type StructOutput<TOps extends FlowOperatorRecord> = {
  * );
  * ```
  *
- * @throws {PanicException} If called with an empty record.
+ * @throws {PanicException} If called with an empty record, or when the
+ *   produced operator is invoked with an input that is missing a key
+ *   declared on `ops`.
  */
 export function struct<TOps extends FlowOperatorRecord>(
   ops: TOps,
@@ -114,8 +121,87 @@ export function struct<TOps extends FlowOperatorRecord>(
     const source = input as Record<string, unknown>;
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i]!;
+      if (!Object.hasOwn(source, key)) {
+        // Missing key is a BUG: `StructInput<TOps>` requires every
+        // declared key to be present, so reaching this branch means
+        // the input was constructed via a type-system bypass (`as
+        // any`, untrusted JSON, etc.). Fail loudly at the boundary
+        // rather than letting the operator throw a confusing
+        // `TypeError` deeper in the stack.
+        throw new PanicException(
+          `struct() input is missing required key '${key}'.`,
+        );
+      }
       out[key] = (ops[key] as AnyFlowOperator)(source[key]);
     }
     return out as StructOutput<TOps>;
   };
 }
+
+/**
+ * Lenient sibling of {@link struct}: build a record-shaped operator
+ * where every field is **optional** on both input and output.
+ *
+ * Where {@link struct} panics on missing input keys, `struct.partial`
+ * **skips** them: the operator under that key is not invoked and the
+ * key is omitted from the output record. Keys that are present on the
+ * input — including those explicitly set to `undefined` — drive their
+ * operator as usual.
+ *
+ * Use `struct.partial` when modelling truly optional fields (e.g.
+ * decoding wire payloads where a field may legitimately not exist),
+ * and prefer plain {@link struct} otherwise so that contract
+ * violations surface at the boundary.
+ *
+ * The returned operator is itself a {@link FlowOperator} and can be
+ * used as a step inside `flow`.
+ *
+ * ### Runtime guarantees
+ *
+ * - At least one key is required. Calling `struct.partial({})` raises
+ *   a {@link PanicException} for the same reason as {@link struct}.
+ * - The output record is created with `Object.create(null)`, has no
+ *   prototype, and contains only the keys for which the input had a
+ *   matching own enumerable property at call time.
+ *
+ * @example
+ *
+ * ```ts
+ * const update = struct.partial({
+ *   name: (s: string) => s.trim(),
+ *   age: (n: number) => Math.max(0, n),
+ * });
+ *
+ * update({ name: '  Ada ' });        // { name: 'Ada' }
+ * update({ age: -3 });               // { age: 0 }
+ * update({ name: '  Ada ', age: 4 }); // { name: 'Ada', age: 4 }
+ * update({});                         // {}
+ * ```
+ *
+ * @throws {PanicException} If called with an empty record.
+ */
+function structPartial<TOps extends FlowOperatorRecord>(
+  ops: TOps,
+): FlowOperator<Partial<StructInput<TOps>>, Partial<StructOutput<TOps>>> {
+  const keys = Object.keys(ops);
+
+  if (keys.length === 0) {
+    throw new PanicException(
+      'struct.partial() requires at least one field to build a record-shaped operator.',
+    );
+  }
+
+  return (input: Partial<StructInput<TOps>>): Partial<StructOutput<TOps>> => {
+    const out = Object.create(null) as Record<string, unknown>;
+    const source = input as Record<string, unknown>;
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]!;
+      if (Object.hasOwn(source, key)) {
+        out[key] = (ops[key] as AnyFlowOperator)(source[key]);
+      }
+    }
+    return out as Partial<StructOutput<TOps>>;
+  };
+}
+
+struct.partial = structPartial;

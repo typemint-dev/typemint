@@ -31,13 +31,14 @@ pnpm add @typemint/core
 
 ### Pipelines
 
-| Export         | Purpose                                                                                      |
-| -------------- | -------------------------------------------------------------------------------------------- |
-| `flow`         | Compose unary operators into a single reusable function, left-to-right.                      |
-| `struct`       | Lift a record of unary operators into a single operator that runs them across record fields. |
-| `tuple`        | Lift a tuple of unary operators into a single operator that runs them across positions.      |
-| `identity`     | Return the input unchanged — a `FlowOperator<T, T>` useful as a default or no-op step.       |
-| `FlowOperator` | Type alias for a single unary step `(value: TInput) => TOutput`.                             |
+| Export           | Purpose                                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------- |
+| `flow`           | Compose unary operators into a single reusable function, left-to-right.                            |
+| `struct`         | Lift a record of unary operators into a single operator that runs them across record fields.       |
+| `struct.partial` | `struct` variant where every field is optional — missing input keys are skipped instead of forced. |
+| `tuple`          | Lift a tuple of unary operators into a single operator that runs them across positions.            |
+| `identity`       | Return the input unchanged — a `FlowOperator<T, T>` useful as a default or no-op step.             |
+| `FlowOperator`   | Type alias for a single unary step `(value: TInput) => TOutput`.                                   |
 
 ### Assertions
 
@@ -207,6 +208,12 @@ value, `struct` applies operators **in parallel** across the keys of a
 record. The returned operator is itself a `FlowOperator` and can be plugged
 into a `flow` as a step.
 
+`struct` is **strict by default**: every key declared on the operator
+record must be present on the input. Missing keys raise a `PanicException`
+because the input type guarantees their presence — a missing key can only
+arrive via a type-system bypass (`as any`, untrusted JSON, etc.) and is
+treated as a bug. For genuinely optional fields use `struct.partial`.
+
 ```typescript
 import { flow, struct } from '@typemint/core';
 
@@ -223,6 +230,36 @@ summarize({ name: '  Ada ', age: -3 }); // 'Ada (0)'
 
 ---
 
+### `struct.partial`
+
+The lenient sibling of `struct`. Builds a record-shaped operator where
+every field is **optional** on both input and output: missing input keys
+are skipped (the matching operator is not invoked and the key is omitted
+from the result), while present keys drive their operator as usual. An
+explicit `undefined` value counts as "present" and is forwarded to the
+operator.
+
+Reach for `struct.partial` when modelling truly optional fields — for
+example, decoding update payloads where the absence of a field means
+"leave alone" — and prefer plain `struct` otherwise so that contract
+violations surface at the boundary.
+
+```typescript
+import { struct } from '@typemint/core';
+
+const update = struct.partial({
+  name: (s: string) => s.trim(),
+  age: (n: number) => Math.max(0, n),
+});
+
+update({ name: '  Ada ' }); //         { name: 'Ada' }
+update({ age: -3 }); //                 { age: 0 }
+update({ name: '  Ada ', age: 4 }); //  { name: 'Ada', age: 4 }
+update({}); //                          {}
+```
+
+---
+
 ### `tuple`
 
 Lifts a tuple of unary operators into a single operator that applies each
@@ -233,6 +270,13 @@ positions of a tuple — the positional counterpart to `struct`. Operators
 are passed as a single array argument so call-sites stay visually distinct
 from `flow`. The returned operator is itself a `FlowOperator` and can be
 plugged into a `flow` as a step.
+
+Like `struct`, `tuple` is **strict on input length**: the input must have
+at least as many elements as there are declared operators. A shorter
+input raises a `PanicException` because the input type guarantees the
+declared arity — a shorter array can only arrive via a type-system
+bypass and is treated as a bug. Extra elements past the declared arity
+are ignored.
 
 ```typescript
 import { flow, tuple } from '@typemint/core';

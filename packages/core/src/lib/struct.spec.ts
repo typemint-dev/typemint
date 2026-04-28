@@ -386,4 +386,240 @@ describe('(unit) struct', () => {
       expect(result).toEqual({ outer: { inner: 2 }, label: 'X' });
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // MARK: missing keys (strict)
+  // ---------------------------------------------------------------------------
+  describe('when the input is missing a declared key', () => {
+    it('should throw a PanicException', () => {
+      // Arrange
+      const op = struct({
+        a: (n: number) => n + 1,
+        b: (s: string) => s.toUpperCase(),
+      });
+      const partialInput = { a: 1 } as unknown as { a: number; b: string };
+
+      // Act
+      const act = () => op(partialInput);
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should mention the missing key name in the error message', () => {
+      // Arrange
+      const op = struct({
+        a: (n: number) => n + 1,
+        b: (s: string) => s.toUpperCase(),
+      });
+      const partialInput = { a: 1 } as unknown as { a: number; b: string };
+
+      // Act
+      const act = () => op(partialInput);
+
+      // Assert
+      expect(act).toThrow(/'b'/);
+    });
+
+    it('should not invoke any operator after the first missing key', () => {
+      // Arrange
+      const a = vi.fn<(n: number) => number>((n: number) => n);
+      const c = vi.fn<(b: boolean) => boolean>((b: boolean) => b);
+      const op = struct({
+        a,
+        b: (s: string) => s,
+        c,
+      });
+      const broken = { a: 1, c: true } as unknown as {
+        a: number;
+        b: string;
+        c: boolean;
+      };
+
+      // Act
+      const act = () => op(broken);
+
+      // Assert
+      expect(act).toThrow(PanicException);
+      expect(a).toHaveBeenCalledTimes(1);
+      expect(c).not.toHaveBeenCalled();
+    });
+
+    it('should treat an explicit `undefined` value as a present key', () => {
+      // Arrange
+      const a = vi.fn<(v: unknown) => unknown>((v: unknown) => v);
+      const op = struct({ a });
+      const input = { a: undefined } as unknown as { a: unknown };
+
+      // Act
+      const result = op(input);
+
+      // Assert
+      expect(a).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual({ a: undefined });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // MARK: struct.partial
+  // ---------------------------------------------------------------------------
+  describe('struct.partial', () => {
+    it('should expose a `partial` property on struct', () => {
+      // Arrange / Act
+      const result = typeof struct.partial;
+
+      // Assert
+      expect(result).toBe('function');
+    });
+
+    it('should return a function', () => {
+      // Arrange
+      const op = (n: number) => n + 1;
+
+      // Act
+      const result = struct.partial({ a: op });
+
+      // Assert
+      expect(typeof result).toBe('function');
+    });
+
+    it('should apply each operator to the matching key when present', () => {
+      // Arrange
+      const op = struct.partial({
+        a: (n: number) => n + 1,
+        b: (s: string) => s.toUpperCase(),
+      });
+
+      // Act
+      const result = op({ a: 1, b: 'x' });
+
+      // Assert
+      expect(result).toEqual({ a: 2, b: 'X' });
+    });
+
+    it('should skip operators whose keys are absent on the input', () => {
+      // Arrange
+      const a = vi.fn<(n: number) => number>((n: number) => n + 1);
+      const b = vi.fn<(s: string) => string>((s: string) => s.toUpperCase());
+      const op = struct.partial({ a, b });
+
+      // Act
+      const result = op({ a: 1 });
+
+      // Assert
+      expect(result).toEqual({ a: 2 });
+      expect(a).toHaveBeenCalledTimes(1);
+      expect(b).not.toHaveBeenCalled();
+    });
+
+    it('should produce an empty record when the input has no declared keys', () => {
+      // Arrange
+      const op = struct.partial({
+        a: (n: number) => n + 1,
+        b: (s: string) => s.toUpperCase(),
+      });
+
+      // Act
+      const result = op({});
+
+      // Assert
+      expect(result).toEqual({});
+    });
+
+    it('should treat an explicit `undefined` value as a present key', () => {
+      // Arrange
+      const a = vi.fn<(v: unknown) => unknown>((v: unknown) => v);
+      const op = struct.partial({ a });
+
+      // Act
+      const result = op({ a: undefined });
+
+      // Assert
+      expect(a).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual({ a: undefined });
+    });
+
+    it('should drop input keys that are not declared on the operator record', () => {
+      // Arrange
+      const op = struct.partial({ a: (n: number) => n });
+      const input = { a: 1, extra: 'ignored' } as unknown as Partial<{
+        a: number;
+      }>;
+
+      // Act
+      const result = op(input) as Record<string, unknown>;
+
+      // Assert
+      expect('extra' in result).toBe(false);
+    });
+
+    it('should produce a prototype-less output record', () => {
+      // Arrange
+      const op = struct.partial({ a: (n: number) => n });
+
+      // Act
+      const result = op({ a: 1 });
+
+      // Assert
+      expect(Object.getPrototypeOf(result)).toBeNull();
+    });
+
+    it('should produce a fresh output record on every invocation', () => {
+      // Arrange
+      const op = struct.partial({ a: (n: number) => n });
+
+      // Act
+      const first = op({ a: 1 });
+      const second = op({ a: 1 });
+
+      // Assert
+      expect(first).not.toBe(second);
+    });
+
+    it('should throw a PanicException when called with an empty record', () => {
+      // Arrange
+      const ops = {} as Record<string, (x: unknown) => unknown>;
+
+      // Act
+      const act = () => (struct.partial as (_ops: typeof ops) => unknown)(ops);
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should propagate errors thrown by an invoked operator', () => {
+      // Arrange
+      const boom = new Error('boom');
+      const op = struct.partial({
+        a: (n: number) => {
+          if (n < 0) throw boom;
+          return n;
+        },
+      });
+
+      // Act
+      const act = () => op({ a: -1 });
+
+      // Assert
+      expect(act).toThrow(boom);
+    });
+
+    it('should be usable as an operator inside a flow', () => {
+      // Arrange
+      const pipeline = flow(
+        struct.partial({
+          name: (s: string) => s.trim(),
+          age: (n: number) => Math.max(0, n),
+        }),
+        (r: Partial<{ name: string; age: number }>) =>
+          `${r.name ?? '<no-name>'}/${r.age ?? 0}`,
+      );
+
+      // Act
+      const result = pipeline({ name: '  Ada  ' });
+
+      // Assert
+      expect(result).toBe('Ada/0');
+    });
+  });
 });
