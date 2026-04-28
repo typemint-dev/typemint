@@ -320,6 +320,71 @@ describe('(unit) tuple', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // MARK: insufficient input length (strict)
+  // ---------------------------------------------------------------------------
+  describe('when the input is shorter than the operator tuple', () => {
+    it('should throw a PanicException', () => {
+      // Arrange
+      const op = tuple([(s: string) => s, (n: number) => n] as const);
+      const broken = ['hi'] as unknown as readonly [string, number];
+
+      // Act
+      const act = () => op(broken);
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should mention both the actual and expected lengths in the message', () => {
+      // Arrange
+      const op = tuple([
+        (s: string) => s,
+        (n: number) => n,
+        (b: boolean) => b,
+      ] as const);
+      const broken = ['hi'] as unknown as readonly [string, number, boolean];
+
+      // Act
+      const act = () => op(broken);
+
+      // Assert
+      expect(act).toThrow(/1 element\(s\)/);
+      expect(act).toThrow(/3 operator\(s\)/);
+    });
+
+    it('should not invoke any operator when the input is too short', () => {
+      // Arrange
+      const a = vi.fn<(s: string) => string>((s: string) => s);
+      const b = vi.fn<(n: number) => number>((n: number) => n);
+      const op = tuple([a, b] as const);
+      const broken = ['hi'] as unknown as readonly [string, number];
+
+      // Act
+      const act = () => op(broken);
+
+      // Assert
+      expect(act).toThrow(PanicException);
+      expect(a).not.toHaveBeenCalled();
+      expect(b).not.toHaveBeenCalled();
+    });
+
+    it('should accept an input strictly longer than the operator tuple (extra elements are ignored)', () => {
+      // Arrange
+      const op = tuple([
+        (s: string) => s.toUpperCase(),
+        (n: number) => n + 1,
+      ] as const);
+      const longer = ['hi', 1, 'extra'] as unknown as readonly [string, number];
+
+      // Act
+      const result = op(longer);
+
+      // Assert
+      expect(result).toEqual(['HI', 2]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // MARK: composition
   // ---------------------------------------------------------------------------
   describe('composing with flow and struct', () => {

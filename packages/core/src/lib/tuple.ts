@@ -62,14 +62,17 @@ export type TupleOutput<TOps extends FlowOperatorTuple> = {
  *
  * ### Runtime guarantees
  *
- * At least one operator is required. Calling `tuple([])` raises a
- * {@link PanicException} because an empty tuple has no inferrable
- * input or output and almost always indicates a bug.
- *
- * The output array is fresh on every invocation and built positionally
- * from the operator tuple. Iteration is driven by `ops.length`, so
- * extra elements on the input are dropped and missing elements are
- * passed through to their operator as `undefined`.
+ * - At least one operator is required. Calling `tuple([])` raises a
+ *   {@link PanicException} because an empty tuple has no inferrable
+ *   input or output and almost always indicates a bug.
+ * - The input array must contain at least as many elements as there
+ *   are declared operators. If it contains fewer, `tuple` raises a
+ *   {@link PanicException}: the produced operator's input type
+ *   guarantees the required arity, so a shorter array can only arrive
+ *   via a type-system bypass and almost always indicates a bug.
+ * - The output array is fresh on every invocation and built
+ *   positionally from the operator tuple. Iteration is driven by
+ *   `ops.length`, so extra elements on the input are dropped.
  *
  * @example
  *
@@ -98,7 +101,9 @@ export type TupleOutput<TOps extends FlowOperatorTuple> = {
  * summarize(['  Ada ', -3]); // 'Ada (0)'
  * ```
  *
- * @throws {PanicException} If called with an empty tuple.
+ * @throws {PanicException} If called with an empty tuple, or when the
+ *   produced operator is invoked with an array shorter than the
+ *   declared operator tuple.
  */
 export function tuple<TOps extends FlowOperatorTuple>(
   ops: TOps,
@@ -117,6 +122,17 @@ export function tuple<TOps extends FlowOperatorTuple>(
 
   return (input: TupleInput<TOps>): TupleOutput<TOps> => {
     const source = input as readonly unknown[];
+    if (source.length < length) {
+      // Insufficient input length is a BUG: `TupleInput<TOps>` is a
+      // fixed-arity tuple, so a shorter array can only arrive via a
+      // type-system bypass (`as any`, untrusted JSON, etc.). Fail
+      // loudly at the boundary rather than silently passing
+      // `undefined` to an operator that does not expect it.
+      throw new PanicException(
+        `tuple() input has ${source.length} element(s), but ${length} ` +
+          `operator(s) were declared.`,
+      );
+    }
     const out = Array.from({ length }, (_, i) =>
       (ops[i] as AnyFlowOperator)(source[i]),
     );
