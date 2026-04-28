@@ -36,6 +36,7 @@ pnpm add @typemint/core
 | `flow`           | Compose unary operators into a single reusable function, left-to-right.                            |
 | `struct`         | Lift a record of unary operators into a single operator that runs them across record fields.       |
 | `struct.partial` | `struct` variant where every field is optional — missing input keys are skipped instead of forced. |
+| `struct.merge`   | Combine multiple record-shaped operators into one applied to a shared input.                       |
 | `tuple`          | Lift a tuple of unary operators into a single operator that runs them across positions.            |
 | `identity`       | Return the input unchanged — a `FlowOperator<T, T>` useful as a default or no-op step.             |
 | `FlowOperator`   | Type alias for a single unary step `(value: TInput) => TOutput`.                                   |
@@ -256,6 +257,46 @@ update({ name: '  Ada ' }); //         { name: 'Ada' }
 update({ age: -3 }); //                 { age: 0 }
 update({ name: '  Ada ', age: 4 }); //  { name: 'Ada', age: 4 }
 update({}); //                          {}
+```
+
+---
+
+### `struct.merge`
+
+Combine multiple record-shaped operators into one. Each contributor
+is applied to the same input record and the results are spread-merged
+into a single output record. This is the natural way to compose a
+strict `struct` with one or more `struct.partial` operators when an
+object has both required and optional fields — declare each portion
+separately, then `struct.merge` them.
+
+The merged operator's input is typed as the **intersection** of every
+contributor's input (so each contributor's strictness contract is
+preserved), and its output is the intersection of every contributor's
+output. Operators are applied **left-to-right**; on overlapping output
+keys, the **rightmost** operator wins (standard spread semantics). The
+output record is prototype-less, matching the convention of `struct`.
+
+```typescript
+import { struct } from '@typemint/core';
+
+const required = struct({
+  id: (n: number) => n,
+  name: (s: string) => s.trim(),
+});
+
+const optional = struct.partial({
+  nickname: (s: string) => s.trim(),
+  age: (n: number) => Math.max(0, n),
+});
+
+const normalize = struct.merge(required, optional);
+
+normalize({ id: 1, name: '  Ada ' });
+// { id: 1, name: 'Ada' }
+
+normalize({ id: 1, name: '  Ada ', nickname: '  Adita ', age: -3 });
+// { id: 1, name: 'Ada', nickname: 'Adita', age: 0 }
 ```
 
 ---

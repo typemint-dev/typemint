@@ -622,4 +622,232 @@ describe('(unit) struct', () => {
       expect(result).toBe('Ada/0');
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // MARK: struct.merge
+  // ---------------------------------------------------------------------------
+  describe('struct.merge', () => {
+    it('should expose a `merge` property on struct', () => {
+      // Arrange / Act
+      const result = typeof struct.merge;
+
+      // Assert
+      expect(result).toBe('function');
+    });
+
+    it('should return a function', () => {
+      // Arrange
+      const op = struct({ a: (n: number) => n });
+
+      // Act
+      const result = struct.merge(op);
+
+      // Assert
+      expect(typeof result).toBe('function');
+    });
+
+    it('should not execute any operator at composition time', () => {
+      // Arrange
+      const inner = vi.fn<(n: number) => number>((n: number) => n + 1);
+
+      // Act
+      struct.merge(struct({ a: inner }));
+
+      // Assert
+      expect(inner).not.toHaveBeenCalled();
+    });
+
+    it('should apply each operator to the same input and merge results', () => {
+      // Arrange
+      const required = struct({
+        id: (n: number) => n,
+        name: (s: string) => s.trim(),
+      });
+      const optional = struct.partial({
+        age: (n: number) => Math.max(0, n),
+      });
+      const op = struct.merge(required, optional);
+
+      // Act
+      const result = op({ id: 1, name: '  Ada ', age: -3 });
+
+      // Assert
+      expect(result).toEqual({ id: 1, name: 'Ada', age: 0 });
+    });
+
+    it('should preserve struct.partial skip semantics inside the merge', () => {
+      // Arrange
+      const op = struct.merge(
+        struct({ id: (n: number) => n }),
+        struct.partial({ age: (n: number) => Math.max(0, n) }),
+      );
+
+      // Act
+      const result = op({ id: 1 });
+
+      // Assert
+      expect(result).toEqual({ id: 1 });
+    });
+
+    it('should accept a single operator and behave like that operator (with prototype-less output)', () => {
+      // Arrange
+      const op = struct.merge(struct({ a: (n: number) => n + 1 }));
+
+      // Act
+      const result = op({ a: 1 });
+
+      // Assert
+      expect(result).toEqual({ a: 2 });
+    });
+
+    it('should accept three or more operators (variadic)', () => {
+      // Arrange
+      const op = struct.merge(
+        struct({ a: (n: number) => n + 1 }),
+        struct({ b: (s: string) => s.toUpperCase() }),
+        struct.partial({ c: (b: boolean) => !b }),
+      );
+
+      // Act
+      const withC = op({ a: 1, b: 'x', c: true });
+      const withoutC = op({ a: 1, b: 'x' });
+
+      // Assert
+      expect(withC).toEqual({ a: 2, b: 'X', c: false });
+      expect(withoutC).toEqual({ a: 2, b: 'X' });
+    });
+
+    it('should apply operators left-to-right', () => {
+      // Arrange
+      const calls: string[] = [];
+      const a = struct({
+        a: (n: number) => {
+          calls.push('a');
+          return n;
+        },
+      });
+      const b = struct({
+        b: (n: number) => {
+          calls.push('b');
+          return n;
+        },
+      });
+      const c = struct({
+        c: (n: number) => {
+          calls.push('c');
+          return n;
+        },
+      });
+
+      // Act
+      struct.merge(a, b, c)({ a: 1, b: 2, c: 3 });
+
+      // Assert
+      expect(calls).toEqual(['a', 'b', 'c']);
+    });
+
+    it('should resolve overlapping keys with rightmost-wins', () => {
+      // Arrange
+      const op = struct.merge(
+        struct({ k: () => 'first' }),
+        struct({ k: () => 'second' }),
+      );
+
+      // Act
+      const result = op({ k: 0 });
+
+      // Assert
+      expect(result).toEqual({ k: 'second' });
+    });
+
+    it('should produce a prototype-less output record', () => {
+      // Arrange
+      const op = struct.merge(struct({ a: (n: number) => n }));
+
+      // Act
+      const result = op({ a: 1 });
+
+      // Assert
+      expect(Object.getPrototypeOf(result)).toBeNull();
+    });
+
+    it('should produce a fresh output record on every invocation', () => {
+      // Arrange
+      const op = struct.merge(struct({ a: (n: number) => n }));
+
+      // Act
+      const first = op({ a: 1 });
+      const second = op({ a: 1 });
+
+      // Assert
+      expect(first).not.toBe(second);
+    });
+
+    it('should propagate panic when a strict contributor is missing a required key', () => {
+      // Arrange
+      const op = struct.merge(
+        struct({ id: (n: number) => n }),
+        struct.partial({ age: (n: number) => n }),
+      );
+      const broken = { age: 1 } as unknown as { id: number; age?: number };
+
+      // Act
+      const act = () => op(broken);
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should not invoke later operators when an earlier one throws', () => {
+      // Arrange
+      const second = vi.fn<(input: { b: number }) => { b: number }>(
+        (input: { b: number }) => input,
+      );
+      const first = struct({
+        a: (n: number) => {
+          if (n < 0) throw new Error('boom');
+          return n;
+        },
+      });
+      const op = struct.merge(first, second);
+
+      // Act
+      const act = () => op({ a: -1, b: 1 });
+
+      // Assert
+      expect(act).toThrow('boom');
+      expect(second).not.toHaveBeenCalled();
+    });
+
+    it('should be usable as an operator inside a flow', () => {
+      // Arrange
+      const pipeline = flow(
+        struct.merge(
+          struct({ name: (s: string) => s.trim() }),
+          struct.partial({ age: (n: number) => Math.max(0, n) }),
+        ),
+        (r: { name: string; age?: number }) => `${r.name}/${r.age ?? 0}`,
+      );
+
+      // Act
+      const withAge = pipeline({ name: '  Ada  ', age: 5 });
+      const withoutAge = pipeline({ name: '  Ada  ' });
+
+      // Assert
+      expect([withAge, withoutAge]).toEqual(['Ada/5', 'Ada/0']);
+    });
+
+    it('should throw a PanicException when called with no operators (type-bypass)', () => {
+      // Arrange
+      const merge = struct.merge as (
+        ..._ops: ReadonlyArray<(x: unknown) => object>
+      ) => unknown;
+
+      // Act
+      const act = () => merge();
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
 });

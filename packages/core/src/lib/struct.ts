@@ -1,4 +1,4 @@
-import { type FlowOperator } from './flow.js';
+import { type FlowOperator, type RecordFlowOperator } from './flow.js';
 import { PanicException } from './panic-exception.js';
 
 /**
@@ -205,3 +205,136 @@ function structPartial<TOps extends FlowOperatorRecord>(
 }
 
 struct.partial = structPartial;
+
+/**
+ * Helper: turn a union of types into their intersection. Used to
+ * combine the input/output types of every operator passed to
+ * {@link struct.merge} into a single record type.
+ *
+ * `(U extends any ? (k: U) => void : never)` distributes over the
+ * union, producing a union of contravariant function positions; TS
+ * then resolves that to the intersection on the parameter side.
+ */
+type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
+  k: infer I,
+) => void
+  ? I
+  : never;
+
+/**
+ * A non-empty tuple of {@link RecordFlowOperator}s, used as the
+ * argument shape for {@link struct.merge}. The tuple constraint
+ * enforces at least one operator at the type level.
+ *
+ * Internal: this list type is specific to merge-style APIs and is
+ * not exported. Future combinators that need a similar shape
+ * should declare their own list type on top of
+ * {@link RecordFlowOperator}.
+ */
+type FlowOperatorList = readonly [RecordFlowOperator, ...RecordFlowOperator[]];
+
+/**
+ * Given a list of operators, the input record type the {@link struct.merge}
+ * operator expects: the intersection of every contributor's input.
+ * Each contributor only reads its own declared keys, so the
+ * intersection captures the "union of declared keys" precisely.
+ */
+export type StructMergeInput<TOps extends FlowOperatorList> =
+  UnionToIntersection<
+    {
+      [K in keyof TOps]: TOps[K] extends FlowOperator<infer TIn, any>
+        ? TIn
+        : never;
+    }[number]
+  >;
+
+/**
+ * Given a list of operators, the output record type the {@link struct.merge}
+ * operator produces: the intersection of every contributor's
+ * output. For disjoint key sets this collapses to a single record
+ * with all keys; for overlapping keys with conflicting types the
+ * intersection narrows (and may collapse to `never` for that key,
+ * which serves as a compile-time hint that the merge is suspect).
+ */
+export type StructMergeOutput<TOps extends FlowOperatorList> =
+  UnionToIntersection<
+    {
+      [K in keyof TOps]: TOps[K] extends FlowOperator<any, infer TOut>
+        ? TOut
+        : never;
+    }[number]
+  >;
+
+/**
+ * Merge multiple record-shaped operators into a single operator
+ * that runs each one against the same input and spread-merges the
+ * results into one record.
+ *
+ * This is the natural way to compose {@link struct} (strict) with
+ * one or more {@link struct.partial} (lenient) operators when an
+ * object has both required and optional fields — declare each
+ * portion separately, then `struct.merge` them. Each contributor
+ * only reads the keys it declares, so the strictness contract of
+ * every contributor is preserved at the boundary.
+ *
+ * The returned operator is itself a {@link FlowOperator} and can
+ * be plugged into a `flow` as a step.
+ *
+ * ### Runtime guarantees
+ *
+ * - At least one operator is required. The type-level constraint
+ *   enforces this; calling through a type-system bypass with no
+ *   operators raises a {@link PanicException}.
+ * - Operators are applied **left-to-right**. If an earlier
+ *   operator throws, later operators are not invoked.
+ * - Overlapping output keys follow standard spread semantics:
+ *   the **rightmost** operator wins.
+ * - The output record is created with `Object.create(null)` and
+ *   has no prototype, matching the convention of {@link struct}.
+ *
+ * @example
+ *
+ * ```ts
+ * const required = struct({
+ *   id: (n: number) => n,
+ *   name: (s: string) => s.trim(),
+ * });
+ *
+ * const optional = struct.partial({
+ *   nickname: (s: string) => s.trim(),
+ *   age: (n: number) => Math.max(0, n),
+ * });
+ *
+ * const normalize = struct.merge(required, optional);
+ *
+ * normalize({ id: 1, name: '  Ada ' });
+ * // { id: 1, name: 'Ada' }
+ *
+ * normalize({ id: 1, name: '  Ada ', nickname: '  Adita ', age: -3 });
+ * // { id: 1, name: 'Ada', nickname: 'Adita', age: 0 }
+ * ```
+ *
+ * @throws {PanicException} If called with no operators.
+ */
+function structMerge<TOps extends FlowOperatorList>(
+  ...ops: TOps
+): FlowOperator<StructMergeInput<TOps>, StructMergeOutput<TOps>> {
+  if (ops.length === 0) {
+    // The empty case is a BUG: the public type already requires
+    // at least one operator, so reaching this branch means the
+    // call was made via a type-system bypass.
+    throw new PanicException('struct.merge() requires at least one operator.');
+  }
+
+  const length = ops.length;
+
+  return (input: StructMergeInput<TOps>): StructMergeOutput<TOps> => {
+    const out = Object.create(null) as Record<string, unknown>;
+    for (let i = 0; i < length; i++) {
+      Object.assign(out, (ops[i] as RecordFlowOperator)(input));
+    }
+    return out as StructMergeOutput<TOps>;
+  };
+}
+
+struct.merge = structMerge;

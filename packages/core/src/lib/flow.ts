@@ -17,6 +17,20 @@ export type FlowOperator<in TInput, out TOutput> = (value: TInput) => TOutput;
 type AnyFlowOperator = FlowOperator<any, any>;
 
 /**
+ * A {@link FlowOperator} whose output is an object — i.e. an
+ * operator that produces a record-shaped value. Inputs are
+ * deliberately unconstrained so that combinators which build on
+ * this category (e.g. `struct.merge`) can intersect the input
+ * types of multiple contributors.
+ *
+ * This is the type-level "category of record-producing operators."
+ * It is the right constraint for any combinator that spread-merges
+ * operator outputs, builds a record-shaped result, or otherwise
+ * relies on the output being a non-primitive value.
+ */
+export type RecordFlowOperator = FlowOperator<any, object>;
+
+/**
  * Recursively walks the operator tuple and extracts the return type of
  * the last operator — i.e. the final output of the pipeline.
  */
