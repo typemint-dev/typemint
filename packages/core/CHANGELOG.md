@@ -1,5 +1,17 @@
 # @typemint/core
 
+## 0.10.0
+
+### Minor Changes
+
+- Add struct.required() method
+- Add struct.merge() method
+- Add struct.partial() method
+
+### Patch Changes
+
+- Make tuple strict about missing tuple members in runtime.
+
 ## 0.9.1
 
 ### Patch Changes
