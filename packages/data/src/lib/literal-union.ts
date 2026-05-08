@@ -195,6 +195,111 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * ```
    */
   isOfType: (value: unknown) => value is T;
+
+  /**
+   * Return the declared members of the union as a non-empty `readonly` tuple,
+   * in the same order they were passed to {@link LiteralUnion}.
+   *
+   * The result is the canonical iterable form of the union — useful anywhere a
+   * runtime list of every member is needed: rendering UI options, seeding a
+   * database, generating documentation, building a parser, validating a CLI
+   * argument, etc.
+   *
+   * **Order is preserved.** The returned tuple matches declaration order, so
+   * callers that depend on order (e.g. dropdown lists, priority sequences)
+   * can rely on it. This is one of the reasons the factory takes a *tuple*
+   * rather than a `Set`: the union itself is unordered, but the descriptor
+   * remembers how it was declared.
+   *
+   * **The result is the same reference on every call.** No allocation
+   * happens at the call site; the descriptor caches the array internally.
+   * The tuple is `readonly` to communicate this — callers must not mutate it.
+   * If you need a mutable copy, spread it: `[...Country.toArray()]`.
+   *
+   * **Type-level guarantee of non-emptiness.** The return type is
+   * `readonly [T, ...T[]]` (a non-empty tuple), so destructuring the first
+   * element is safe without an `undefined` check:
+   *
+   * ```ts
+   * const [first] = Country.toArray(); // first: 'germany' | 'france' | 'usa'
+   * ```
+   *
+   * @returns A non-empty `readonly` tuple of the union's members in
+   *   declaration order. The same reference is returned on every call.
+   *
+   * @example Iterate every member
+   *
+   * ```ts
+   * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   *
+   * for (const country of Country.toArray()) {
+   *   console.log(country); // 'germany', then 'france', then 'usa'
+   * }
+   * ```
+   *
+   * @example Render a `<select>` of options (React)
+   *
+   * ```ts
+   * const Currency = LiteralUnion(['eur', 'usd', 'gbp']);
+   *
+   * <select>
+   *   {Currency.toArray().map((c) => (
+   *     <option key={c} value={c}>{c.toUpperCase()}</option>
+   *   ))}
+   * </select>
+   * ```
+   *
+   * @example Build a Zod (or any schema-lib) enum from the same source of truth
+   *
+   * ```ts
+   * const Role = LiteralUnion(['admin', 'editor', 'viewer']);
+   *
+   * // toArray() preserves the literal types, so z.enum infers correctly.
+   * const RoleSchema = z.enum(Role.toArray());
+   * // RoleSchema: z.ZodEnum<['admin', 'editor', 'viewer']>
+   * ```
+   *
+   * @example Validate a CLI argument with a typed error message
+   *
+   * ```ts
+   * const LogLevel = LiteralUnion(['debug', 'info', 'warn', 'error']);
+   *
+   * function parseLevel(input: string): LogLevel {
+   *   if (!LogLevel.isOfType(input)) {
+   *     throw new Error(
+   *       `Invalid log level "${input}". Expected one of: ` +
+   *       LogLevel.toArray().join(', '),
+   *     );
+   *   }
+   *   return input;
+   * }
+   * ```
+   *
+   * @example Pick a default safely
+   *
+   * ```ts
+   * // The non-empty tuple type guarantees the first element exists —
+   * // no `undefined` check, no `!` assertion.
+   * const [defaultLevel] = LogLevel.toArray();
+   * // defaultLevel: 'debug' | 'info' | 'warn' | 'error'
+   * ```
+   *
+   * @example When you need a mutable copy
+   *
+   * ```ts
+   * // The cached array must not be mutated. Spread to get a fresh one:
+   * const sorted = [...Country.toArray()].sort();
+   * ```
+   *
+   * @example For a `Set`, use {@link toSet} instead
+   *
+   * ```ts
+   * // Don't do: new Set(Country.toArray())
+   * // Do:       Country.toSet()
+   * // The descriptor already maintains a Set internally for `isOfType`.
+   * ```
+   */
+  toArray: () => readonly [T, ...T[]];
 };
 
 export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
@@ -206,11 +311,12 @@ export function LiteralUnion<
   if (literals.length === 0) {
     throw new PanicException('LiteralUnion requires at least one member');
   }
+  const literalsCopy = [...literals] as readonly [T[number], ...T[number][]];
 
-  const memoSet = new Set<LiteralUnionMemberBase>(literals);
+  const memoSet = new Set<LiteralUnionMemberBase>(literalsCopy);
 
   const members: LiteralUnionMembers<LiteralUnionFrom<T>> = Object.create(null);
-  for (const lit of literals) {
+  for (const lit of literalsCopy) {
     members[lit as T[number]] = lit;
   }
 
@@ -219,6 +325,10 @@ export function LiteralUnion<
 
     isOfType(value: unknown): value is T[number] {
       return typeof value === 'string' && memoSet.has(value);
+    },
+
+    toArray(): readonly [T[number], ...T[number][]] {
+      return literalsCopy;
     },
   };
 }

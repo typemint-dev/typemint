@@ -180,4 +180,31 @@ describe('(unit) LiteralUnion', () => {
       }
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: toArray
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('toArray', () => {
+    it('should return the literals as an array', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      const result = union.toArray();
+      // Assert
+      expect(result).toEqual(['a', 'b', 'c']);
+    });
+
+    it('should be immune to unintentional mutation', () => {
+      // Arrange
+      const origValues = ['a', 'b', 'c'] as const;
+      const union = LiteralUnion(origValues);
+      // Act
+      // @ts-expect-error - we're intentionally mutating the original values
+      origValues.push('d');
+
+      const result = union.toArray();
+      // Assert
+      expect(result).toEqual(['a', 'b', 'c']);
+    });
+  });
 });
