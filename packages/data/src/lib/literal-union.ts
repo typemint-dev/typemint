@@ -1,3 +1,5 @@
+import { PanicException } from '@typemint/core';
+
 /**
  * The type of literal union members which the union can be built from.
  *
@@ -107,6 +109,24 @@ export type LiteralUnionFrom<
 > = T[number];
 
 /** converts a literal union into a record of its members. */
-export type LiteralUnionMembers<T extends readonly LiteralUnionMemberBase[]> = {
-  [K in T[number] & string]: K;
+export type LiteralUnionMembers<T extends LiteralUnionMemberBase> = {
+  [K in T]: K;
 };
+
+export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
+  LiteralUnionMembers<T>;
+
+export function LiteralUnion<
+  T extends readonly [LiteralUnionMemberBase, ...LiteralUnionMemberBase[]],
+>(literals: T): LiteralUnionDescriptor<LiteralUnionFrom<T>> {
+  if (literals.length === 0) {
+    throw new PanicException('LiteralUnion requires at least one member');
+  }
+
+  const members: Record<string, string> = Object.create(null);
+  for (const lit of literals) {
+    members[lit] = lit;
+  }
+
+  return members as LiteralUnionDescriptor<LiteralUnionFrom<T>>;
+}

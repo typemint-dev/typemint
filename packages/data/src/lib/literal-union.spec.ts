@@ -1,5 +1,10 @@
-import { describe, expectTypeOf, it } from 'vitest';
-import { type LiteralUnionFrom } from './literal-union.js';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import {
+  LiteralUnion,
+  type LiteralUnionFrom,
+  type LiteralUnionMembers,
+} from './literal-union.js';
+import { PanicException } from '@typemint/core';
 
 describe('(unit) LiteralUnion', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -35,6 +40,55 @@ describe('(unit) LiteralUnion', () => {
       type Tuple = LiteralUnionFrom<typeof tuple>;
       // Assert
       expectTypeOf<Tuple>().toEqualTypeOf<never>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Convert literal union to members
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Convert literal union to members', () => {
+    it('should convert the literal union to a record of its members', () => {
+      // Arrange
+
+      // Act
+      type Members = LiteralUnionMembers<'a' | 'b' | 'c'>;
+      // Assert
+      expectTypeOf<Members>().toEqualTypeOf<{
+        a: 'a';
+        b: 'b';
+        c: 'c';
+      }>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Create literal union
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Create literal union', () => {
+    it('should create a literal union from a tuple of strings', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c'] as const;
+
+      // Act
+      const union = LiteralUnion(literals);
+      // Assert
+      expect(union).toMatchObject({
+        a: 'a',
+        b: 'b',
+        c: 'c',
+      });
+    });
+
+    it('should throw a PanicException if the tuple is empty', () => {
+      // Arrange
+      const literals = [] as const;
+
+      // Act
+      // @ts-expect-error - empty tuple is not a valid literal union
+      const act = () => LiteralUnion(literals);
+
+      // Assert
+      expect(act).toThrow(PanicException);
     });
   });
 });
