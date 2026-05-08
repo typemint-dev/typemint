@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   LiteralUnion,
+  type InferLiteralUnion,
   type LiteralUnionFrom,
   type LiteralUnionMembers,
 } from './literal-union.js';
@@ -40,6 +41,20 @@ describe('(unit) LiteralUnion', () => {
       type Tuple = LiteralUnionFrom<typeof tuple>;
       // Assert
       expectTypeOf<Tuple>().toEqualTypeOf<never>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Infer literal union
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Infer literal union from a literal union', () => {
+    it('should infer the literal union of the given literal union', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      type Union = InferLiteralUnion<typeof union>;
+      // Assert
+      expectTypeOf<Union>().toEqualTypeOf<'a' | 'b' | 'c'>();
     });
   });
 
@@ -89,6 +104,80 @@ describe('(unit) LiteralUnion', () => {
 
       // Assert
       expect(act).toThrow(PanicException);
+    });
+
+    it('should keep the type of the literals when spreading them as members', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c'] as const;
+
+      // Act
+      const union = LiteralUnion(literals);
+      // Assert
+      expectTypeOf(union.a).toEqualTypeOf<'a'>();
+      expectTypeOf(union.b).toEqualTypeOf<'b'>();
+      expectTypeOf(union.c).toEqualTypeOf<'c'>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Literal Union Descriptor methods
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Literal Union Descriptor methods', () => {
+    it('should have the isOfType method', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      // Assert
+      expect(union.isOfType).toBeTypeOf('function');
+      expectTypeOf(union.isOfType).toEqualTypeOf<
+        (value: unknown) => value is 'a' | 'b' | 'c'
+      >();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: isOfType
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('isOfType', () => {
+    it('should return true if the value is a member of the literal union', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c']);
+      // Act
+      const result = union.isOfType('a');
+      // Assert
+      expect(result).toBe(true);
+    });
+
+    it('should return false if the value is not a member of the literal union', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c']);
+      // Act
+      const result = union.isOfType('d');
+      // Assert
+      expect(result).toBe(false);
+    });
+
+    it('should return false if the value is not a string', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c']);
+      // Act
+      const result = union.isOfType(1);
+      // Assert
+      expect(result).toBe(false);
+    });
+
+    it('should narrow the type to the member if the value is a member of the literal union', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+
+      const value: unknown = 'a' as unknown;
+      // Act
+      if (union.isOfType(value)) {
+        // Assert
+        expectTypeOf(value).toEqualTypeOf<'a' | 'b' | 'c'>();
+      } else {
+        expectTypeOf(value).toBeUnknown();
+      }
     });
   });
 });

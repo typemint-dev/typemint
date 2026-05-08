@@ -113,8 +113,92 @@ export type LiteralUnionMembers<T extends LiteralUnionMemberBase> = {
   [K in T]: K;
 };
 
+export type InferLiteralUnion<T> =
+  T extends LiteralUnionDescriptor<infer U> ? U : never;
+
+export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
+  /**
+   * Type guard that narrows an `unknown` value to a member of this literal
+   * union. Returns `true` when `value` is one of the union's declared literals
+   * and `false` otherwise.
+   *
+   * Use this at the boundary of your system — when a value arrives from an
+   * untrusted source (HTTP payload, URL parameter, environment variable,
+   * database column, user input, JSON file, …) and you need to prove it
+   * belongs to the union before treating it as such.
+   *
+   * The check is a `Set`-backed `O(1)` lookup against the declared members.
+   * Equality is strict reference equality on the string value, so the guard
+   * is safe across module boundaries (no `unique symbol` identity pitfalls).
+   *
+   * @param value - The value to test. Accepts `unknown` so it can sit at the
+   *   trust boundary without forcing the caller to pre-cast.
+   * @returns `true` if `value` is a declared member of the union, narrowing
+   *   `value` to the union type in the truthy branch.
+   *
+   * @example Guard at an API boundary
+   *
+   * ```ts
+   * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   *
+   * function handleRequest(body: { country: unknown }) {
+   *   if (!Country.isOfType(body.country)) {
+   *     throw new Error(`Unknown country: ${String(body.country)}`);
+   *   }
+   *   // body.country is now typed as 'germany' | 'france' | 'usa'
+   *   return lookupCountry(body.country);
+   * }
+   * ```
+   *
+   * @example Filter an array of unknowns down to valid members
+   *
+   * ```ts
+   * const Status = LiteralUnion(['active', 'pending', 'archived']);
+   *
+   * const raw: unknown[] = ['active', 42, 'pending', null, 'archived', 'bogus'];
+   * const valid = raw.filter(Status.isOfType);
+   * // valid: ('active' | 'pending' | 'archived')[]
+   * // → ['active', 'pending', 'archived']
+   * ```
+   *
+   * @example Parse an environment variable with a typed fallback
+   *
+   * ```ts
+   * const LogLevel = LiteralUnion(['debug', 'info', 'warn', 'error']);
+   *
+   * const raw = process.env['LOG_LEVEL'];
+   * const level = LogLevel.isOfType(raw) ? raw : 'info';
+   * // level: 'debug' | 'info' | 'warn' | 'error'
+   * ```
+   *
+   * @example Combine with `match` for exhaustive handling
+   *
+   * ```ts
+   * function describe(input: unknown): string {
+   *   if (!Country.isOfType(input)) return 'unknown';
+   *   return Country.match(input, {
+   *     germany: () => 'DE',
+   *     france:  () => 'FR',
+   *     usa:     () => 'US',
+   *   });
+   * }
+   * ```
+   *
+   * @example What it does NOT do — narrow to a single member
+   *
+   * ```ts
+   * // isOfType only proves membership in the union as a whole.
+   * // To narrow to a specific literal, compare directly:
+   * if (Country.isOfType(value) && value === Country.germany) {
+   *   // value is now narrowed to 'germany'
+   * }
+   * ```
+   */
+  isOfType: (value: unknown) => value is T;
+};
+
 export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
-  LiteralUnionMembers<T>;
+  LiteralUnionMembers<T> & LiteralUnionMethods<T>;
 
 export function LiteralUnion<
   T extends readonly [LiteralUnionMemberBase, ...LiteralUnionMemberBase[]],
@@ -123,10 +207,18 @@ export function LiteralUnion<
     throw new PanicException('LiteralUnion requires at least one member');
   }
 
-  const members: Record<string, string> = Object.create(null);
+  const memoSet = new Set<LiteralUnionMemberBase>(literals);
+
+  const members: LiteralUnionMembers<LiteralUnionFrom<T>> = Object.create(null);
   for (const lit of literals) {
-    members[lit] = lit;
+    members[lit as T[number]] = lit;
   }
 
-  return members as LiteralUnionDescriptor<LiteralUnionFrom<T>>;
+  return {
+    ...members,
+
+    isOfType(value: unknown): value is T[number] {
+      return typeof value === 'string' && memoSet.has(value);
+    },
+  };
 }
