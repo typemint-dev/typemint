@@ -300,6 +300,14 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * ```
    */
   toArray: () => readonly [T, ...T[]];
+
+  /**
+   * Return an iterator over the declared members of the union.
+   *
+   * The iterator is a `Symbol.iterator` method that returns an iterator over the
+   * declared members of the union.
+   */
+  [Symbol.iterator]: () => IterableIterator<T[number]>;
 };
 
 export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
@@ -322,6 +330,10 @@ export function LiteralUnion<
 
   return {
     ...members,
+
+    [Symbol.iterator](): IterableIterator<T[number]> {
+      return literalsCopy[Symbol.iterator]();
+    },
 
     isOfType(value: unknown): value is T[number] {
       return typeof value === 'string' && memoSet.has(value);

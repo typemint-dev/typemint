@@ -207,4 +207,28 @@ describe('(unit) LiteralUnion', () => {
       expect(result).toEqual(['a', 'b', 'c']);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Symbol.iterator
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Symbol.iterator', () => {
+    it('should iterate over the literals', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      for (const literal of union) {
+        // Assert
+        expect(literal).toBeOneOf(['a', 'b', 'c']);
+      }
+    });
+
+    it('should spread the literals', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      const result = [...union];
+      // Assert
+      expect(result).toEqual(['a', 'b', 'c']);
+    });
+  });
 });
