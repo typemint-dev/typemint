@@ -308,6 +308,11 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * declared members of the union.
    */
   [Symbol.iterator]: () => IterableIterator<T[number]>;
+
+  /**
+   * The string tag for the literal union.
+   */
+  [Symbol.toStringTag]: 'LiteralUnion';
 };
 
 export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
@@ -334,6 +339,8 @@ export function LiteralUnion<
     [Symbol.iterator](): IterableIterator<T[number]> {
       return literalsCopy[Symbol.iterator]();
     },
+
+    [Symbol.toStringTag]: 'LiteralUnion',
 
     isOfType(value: unknown): value is T[number] {
       return typeof value === 'string' && memoSet.has(value);

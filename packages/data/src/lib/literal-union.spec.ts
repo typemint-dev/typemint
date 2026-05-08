@@ -231,4 +231,18 @@ describe('(unit) LiteralUnion', () => {
       expect(result).toEqual(['a', 'b', 'c']);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Symbol.toStringTag
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Symbol.toStringTag', () => {
+    it('should return the string tag "LiteralUnion" when the union is converted to a string', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      const result = Object.prototype.toString.call(union);
+      // Assert
+      expect(result).toBe('[object LiteralUnion]');
+    });
+  });
 });
