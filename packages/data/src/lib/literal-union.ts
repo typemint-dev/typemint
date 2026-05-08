@@ -302,6 +302,11 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   toArray: () => readonly [T, ...T[]];
 
   /**
+   * The number of members in the union.
+   */
+  size: number;
+
+  /**
    * Return an iterator over the declared members of the union.
    *
    * The iterator is a `Symbol.iterator` method that returns an iterator over the
@@ -335,6 +340,10 @@ export function LiteralUnion<
 
   return {
     ...members,
+
+    get size(): number {
+      return literalsCopy.length;
+    },
 
     [Symbol.iterator](): IterableIterator<T[number]> {
       return literalsCopy[Symbol.iterator]();

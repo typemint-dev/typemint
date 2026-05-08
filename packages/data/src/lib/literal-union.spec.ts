@@ -245,4 +245,19 @@ describe('(unit) LiteralUnion', () => {
       expect(result).toBe('[object LiteralUnion]');
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: size
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('size', () => {
+    it('should return the number of members in the union', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      const result = union.size;
+
+      // Assert
+      expect(result).toBe(3);
+    });
+  });
 });
