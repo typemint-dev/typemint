@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { assert, AssertException, assertDefined } from './assert.js';
+import {
+  assert,
+  AssertException,
+  assertDefined,
+  assertFunction,
+} from './assert.js';
 
 describe('(unit) AssertException', () => {
   // ---------------------------------------------------------------------------
@@ -145,6 +150,38 @@ describe('(unit) assert', () => {
 
       // Assert
       expect(act).toThrow('lazy message');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // MARK: assertFunction
+  // ---------------------------------------------------------------------------
+  describe('assertFunction', () => {
+    it('should not throw if the value is a function', () => {
+      // Arrange
+      const value = () => {};
+      // Act
+      const act = () => assertFunction(value);
+      // Assert
+      expect(act).not.toThrow();
+    });
+
+    it('should throw an AssertException if the value is not a function', () => {
+      // Arrange
+      const value = 'not a function';
+      // Act
+      const act = () => assertFunction(value);
+      // Assert
+      expect(act).toThrow(AssertException);
+    });
+
+    it('should include the provided message in the thrown error', () => {
+      // Arrange
+      const message = 'value must be a function';
+      // Act
+      const act = () => assertFunction(null, message);
+      // Assert
+      expect(act).toThrow('value must be a function');
     });
   });
 });
