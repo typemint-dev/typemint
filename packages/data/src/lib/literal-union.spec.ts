@@ -260,4 +260,201 @@ describe('(unit) LiteralUnion', () => {
       expect(result).toBe(3);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: match
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('match', () => {
+    // MARK: Data-first overload
+    describe('data-first overload', () => {
+      it('should derive the return type from the handlers.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const value = union.a;
+        // Act
+        const result = union.match(value, {
+          a: () => 'A' as const,
+          b: () => 'B' as const,
+          c: () => 'C' as const,
+        });
+        // Assert
+        expectTypeOf(result).toEqualTypeOf<'A' | 'B' | 'C'>();
+      });
+
+      it('should return the result of the handler that matches the value.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const value = union.a;
+        // Act
+        const result = union.match(value, {
+          a: () => 'A' as const,
+          b: () => 'B' as const,
+          c: () => 'C' as const,
+        });
+        // Assert
+        expect(result).toBe('A');
+      });
+
+      it('should throw a runtime error if the value is not a member of the literal union.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const value = 'd' as unknown;
+        // Act
+        const act = () =>
+          union.match(value as any, {
+            a: () => 'A' as const,
+            b: () => 'B' as const,
+            c: () => 'C' as const,
+          });
+
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+
+      it('should throw a compilation error if the handlers are not exhaustive', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const value = union.a;
+        // Assert
+        // @ts-expect-error - missing handler for 'c'
+        union.match(value, {
+          a: () => 'A' as const,
+          b: () => 'B' as const,
+        });
+      });
+
+      it('should throw a runtime error if the handlers are not a function.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const value = union.a;
+        // Act
+        const act = () =>
+          union.match(value, {
+            a: 42 as any,
+            b: () => 'B' as const,
+            c: () => 'C' as const,
+          });
+
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+
+      it('should throw a runtime error if the handler is undefined.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const value = union.a;
+        // Act
+        const act = () =>
+          union.match(value, {
+            a: undefined as any,
+            b: () => 'B' as const,
+            c: () => 'C' as const,
+          });
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+
+      it('should throw a runtime error if the first argument is not a string.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        // Act
+        const act = () =>
+          union.match(null as any, {
+            a: () => 'A' as const,
+            b: () => 'B' as const,
+            c: () => 'C' as const,
+          });
+
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+    });
+
+    // MARK: Data-last overload
+    describe('data-last overload', () => {
+      it('should derive the return type from the handlers.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const value = union.a;
+        // Act
+        const result = union.match({
+          a: () => 'A' as const,
+          b: () => 'B' as const,
+          c: () => 'C' as const,
+        })(value);
+        // Assert
+        expectTypeOf(result).toEqualTypeOf<'A' | 'B' | 'C'>();
+      });
+
+      it('should return the result of the handler that matches the value.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const value = union.a;
+        // Act
+        const result = union.match({
+          a: () => 'A' as const,
+          b: () => 'B' as const,
+          c: () => 'C' as const,
+        })(value);
+
+        // Assert
+        expect(result).toBe('A');
+      });
+
+      it('should throw a runtime error if the value is not a member of the literal union.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const value = 'd' as unknown;
+        // Act
+        const act = () =>
+          union.match({
+            a: () => 'A' as const,
+            b: () => 'B' as const,
+            c: () => 'C' as const,
+          })(value as any);
+
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+
+      it('should throw a runtime error if the handlers are not a function.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+
+        const act = () =>
+          union.match({
+            a: 42 as any,
+            b: () => 'B' as const,
+            c: () => 'C' as const,
+          })(union.a as any);
+
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+
+      it('should throw a runtime error if the handler is undefined.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        // Act
+        const act = () =>
+          union.match({
+            a: undefined as any,
+            b: () => 'B' as const,
+            c: () => 'C' as const,
+          })(union.a as any);
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+
+      it('should throw a runtime error if the first argument is not a non-null object.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        // Act
+        const act = () => union.match(null as any)(union.a);
+
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+    });
+  });
 });

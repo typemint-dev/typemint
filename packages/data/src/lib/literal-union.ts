@@ -116,6 +116,18 @@ export type LiteralUnionMembers<T extends LiteralUnionMemberBase> = {
 export type InferLiteralUnion<T> =
   T extends LiteralUnionDescriptor<infer U> ? U : never;
 
+/**
+ * Exhaustive handler set for {@link LiteralUnionMatchFn}.
+ *
+ * Every member of the union must have a handler. Each handler receives the
+ * narrow literal type for its own key (`(value: 'germany') => U`), not the
+ * full union — so `match` can carry per-branch type refinements through to
+ * the handler body.
+ */
+export type LiteralUnionMatchHandlers<T extends LiteralUnionMemberBase, U> = {
+  readonly [K in T]: (value: K) => U;
+};
+
 export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   /**
    * Type guard that narrows an `unknown` value to a member of this literal
@@ -318,6 +330,134 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * The string tag for the literal union.
    */
   [Symbol.toStringTag]: 'LiteralUnion';
+
+  /**
+   * Exhaustively dispatch on a member of this literal union, returning the
+   * result produced by the matching handler.
+   *
+   * `match` is the canonical way to *do something* with a literal value once
+   * you know which member it is. It pairs with {@link isOfType} for the
+   * "guard at the boundary, dispatch in the body" pattern, and serves as the
+   * value-side counterpart to a {@link Dictionary} (which projects every
+   * member to a fixed value; `match` runs *code* per member).
+   *
+   * **Exhaustiveness is enforced at compile time.** The handlers object is
+   * typed as a {@link LiteralUnionMatchHandlers} mapped record over every
+   * member of the union. Missing a case is a TypeScript error; you cannot
+   * accidentally fall through to a default.
+   *
+   * **Per-branch type narrowing.** Each handler receives the *narrow* literal
+   * type for its own key, not the full union — so the body of the `germany`
+   * handler sees `value: 'germany'`, not `value: 'germany' | 'france' | …`.
+   * This carries through to anything you derive from `value` inside the body.
+   *
+   * **Two calling shapes.**
+   * - **Data-first** (`match(value, handlers)`) — dispatch immediately. Best
+   *   for direct, imperative use.
+   * - **Data-last** (`match(handlers)`) — returns a matcher function awaiting
+   *   the value. Best for `pipe` chains, `Array.prototype.map`, and any
+   *   point-free style.
+   *
+   * **Synchronous only.** This method is sync.
+   *
+   * @typeParam U - The handler return type, inferred from the union of every
+   *   handler's return type. Use `as const` returns to preserve literal
+   *   precision.
+   *
+   * @param value - The member to dispatch on. Must be a declared member of
+   *   the union; TypeScript enforces this at the call site.
+   * @param handlers - An exhaustive map from each member to a handler. Each
+   *   handler receives the narrow literal for its key.
+   * @returns The value produced by the handler that matched `value`.
+   *
+   * @throws {PanicException} If `handlers[value]` is missing or not a
+   *   function. This only fires when callers bypass the type system (e.g.
+   *   via `as any`, untyped JS, JSON-loaded handlers); statically-typed
+   *   call sites cannot reach this branch.
+   *
+   * @example Data-first — direct dispatch
+   *
+   * ```ts
+   * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   *
+   * function alpha2(country: InferLiteralUnion<typeof Country>): string {
+   *   return Country.match(country, {
+   *     germany: () => 'DE',
+   *     france:  () => 'FR',
+   *     usa:     () => 'US',
+   *   });
+   * }
+   * ```
+   *
+   * @example Data-last — pipe / partial application
+   *
+   * ```ts
+   * const Currency = LiteralUnion(['eur', 'usd', 'gbp']);
+   *
+   * const symbol = Currency.match({
+   *   eur: () => '€',
+   *   usd: () => '$',
+   *   gbp: () => '£',
+   * });
+   *
+   * ['eur', 'usd', 'gbp'].map(symbol); // ['€', '$', '£']
+   * ```
+   *
+   * @example Per-branch narrowing in the handler body
+   *
+   * ```ts
+   * const Status = LiteralUnion(['active', 'pending', 'archived']);
+   *
+   * Status.match(s, {
+   *   active:   (v) => `${v.toUpperCase()}!`,    // v: 'active'
+   *   pending:  (v) => `${v} (waiting)`,         // v: 'pending'
+   *   archived: (v) => `archived: ${v}`,         // v: 'archived'
+   * });
+   * ```
+   *
+   * @example Pair with `isOfType` to guard external input
+   *
+   * ```ts
+   * function describe(input: unknown): string {
+   *   if (!Country.isOfType(input)) return 'unknown';
+   *   return Country.match(input, {
+   *     germany: () => 'Deutschland',
+   *     france:  () => 'France',
+   *     usa:     () => 'United States',
+   *   });
+   * }
+   * ```
+   *
+   * @example Exhaustiveness is enforced at compile time
+   *
+   * ```ts
+   * // @ts-expect-error — Property 'usa' is missing in type ...
+   * Country.match(country, {
+   *   germany: () => 'DE',
+   *   france:  () => 'FR',
+   * });
+   * ```
+   */
+  match<U>(value: T, handlers: LiteralUnionMatchHandlers<T, U>): U;
+
+  /**
+   * Data-last form of {@link match}. Returns a matcher function awaiting the
+   * value, suitable for `pipe`, `Array.prototype.map`, and other point-free
+   * use. See the data-first overload above for full documentation.
+   *
+   * @example
+   *
+   * ```ts
+   * const symbol = Currency.match({
+   *   eur: () => '€',
+   *   usd: () => '$',
+   *   gbp: () => '£',
+   * });
+   *
+   * Currency.toArray().map(symbol); // ['€', '$', '£']
+   * ```
+   */
+  match<U>(handlers: LiteralUnionMatchHandlers<T, U>): (value: T) => U;
 };
 
 export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
@@ -338,7 +478,65 @@ export function LiteralUnion<
     members[lit as T[number]] = lit;
   }
 
-  return {
+  function executeMatchHandler<T extends LiteralUnionMemberBase, U>(
+    value: T,
+    handlers: LiteralUnionMatchHandlers<T, U>,
+  ): U {
+    const handler = handlers[value];
+    if (handler === undefined) {
+      throw new PanicException(
+        `LiteralUnion.match: missing handler for "${value}". ` +
+          `Provided handlers: ${literalsCopy.join(', ')}`,
+      );
+    }
+    if (typeof handler !== 'function') {
+      throw new PanicException(
+        `LiteralUnion.match: handler for "${value}" is ${typeof handler}, ` +
+          `expected a function`,
+      );
+    }
+    return handler(value);
+  }
+
+  function match<U>(
+    value: T[number],
+    handlers: LiteralUnionMatchHandlers<T[number], U>,
+  ): U;
+  function match<U>(
+    handlers: LiteralUnionMatchHandlers<T[number], U>,
+  ): (value: T[number]) => U;
+  function match<U>(
+    arg1: T[number] | LiteralUnionMatchHandlers<T[number], U>,
+    arg2?: LiteralUnionMatchHandlers<T[number], U>,
+  ): U | ((value: T[number]) => U) {
+    if (typeof arg2 !== 'undefined') {
+      // Data-first: validate arg1 is a string
+      if (typeof arg1 !== 'string') {
+        throw new PanicException('LiteralUnion.match: value must be a string');
+      }
+      return executeMatchHandler(arg1, arg2);
+    } else {
+      // Data-last: validate arg1 is a non-null object
+      if (typeof arg1 !== 'object' || arg1 === null) {
+        throw new PanicException(
+          'LiteralUnion.match: handlers must be an object',
+        );
+      }
+
+      // Validate exhaustiveness eagerly
+      for (const key of literalsCopy) {
+        if (typeof arg1[key] !== 'function') {
+          throw new PanicException(
+            `LiteralUnion.match: handler for "${key}" is missing or not a function`,
+          );
+        }
+      }
+
+      return (value: T[number]) => executeMatchHandler(value, arg1);
+    }
+  }
+
+  const descriptor: LiteralUnionDescriptor<LiteralUnionFrom<T>> = {
     ...members,
 
     get size(): number {
@@ -358,5 +556,9 @@ export function LiteralUnion<
     toArray(): readonly [T[number], ...T[number][]] {
       return literalsCopy;
     },
+
+    match,
   };
+
+  return descriptor;
 }
