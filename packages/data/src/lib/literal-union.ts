@@ -358,7 +358,12 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    *   the value. Best for `pipe` chains, `Array.prototype.map`, and any
    *   point-free style.
    *
-   * **Synchronous only.** This method is sync.
+   * **Synchronous only.** This method is sync. Handlers may *return*
+   * Promises, in which case the result type is `Promise<U>` and the caller
+   * is responsible for awaiting. There is no `matchAsync` variant — async
+   * dispatch is the caller's concern, not the descriptor's. (If you find
+   * yourself wanting one, the sync `match` already gives you it: just
+   * `await Country.match(value, asyncHandlers)`.)
    *
    * @typeParam U - The handler return type, inferred from the union of every
    *   handler's return type. Use `as const` returns to preserve literal
@@ -436,6 +441,20 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    *   germany: () => 'DE',
    *   france:  () => 'FR',
    * });
+   * ```
+   *
+   * @example Async handlers — caller awaits, no `matchAsync` exists
+   *
+   * ```ts
+   * // U is inferred as Promise<User>; the caller awaits the result.
+   * const user = await Country.match(country, {
+   *   germany: () => fetchUser('de'),
+   *   france:  () => fetchUser('fr'),
+   *   usa:     () => fetchUser('us'),
+   * });
+   *
+   * // There is no matchAsync — sync `match` already handles this case
+   * // because it returns whatever the handler returns, including Promises.
    * ```
    */
   match<U>(value: T, handlers: LiteralUnionMatchHandlers<T, U>): U;
