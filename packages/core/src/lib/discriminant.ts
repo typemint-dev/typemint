@@ -124,6 +124,18 @@ export type DiscriminantDescriptor<TKey extends PropertyKey> = {
   getValue<TVal extends string>(value: Discriminant<TKey, TVal>): TVal;
 
   /**
+   * Check if the value is equal to the discriminant.
+   *
+   * @param value - The value to check.
+   * @param discriminant - The discriminant to check.
+   * @returns - True if the value is equal to the discriminant, false otherwise.
+   */
+  equals<TVal extends string>(
+    value: Discriminant<TKey, TVal>,
+    discriminant: Discriminant<TKey, TVal>,
+  ): boolean;
+
+  /**
    * Match on the value of the discriminant and return the result of the
    * handler that matches the value of the discriminant.
    *
@@ -350,6 +362,13 @@ export function Discriminant<TKey extends PropertyKey>(
       }
 
       return handler(value);
+    },
+
+    equals(
+      value: Record<PropertyKey, string>,
+      discriminant: Record<PropertyKey, string>,
+    ) {
+      return value[key] === discriminant[key];
     },
 
     tryMatch(

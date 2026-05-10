@@ -589,4 +589,33 @@ describe('(unit) Discriminant', () => {
       });
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // MARK: equals
+  // ---------------------------------------------------------------------------
+  describe('equals', () => {
+    it('should return true if the values are equal', () => {
+      // Arrange
+      const value = TestDisc.from('user');
+      const discriminant = TestDisc.from('user');
+
+      // Act
+      const result = TestDisc.equals(value, discriminant);
+
+      // Assert
+      expect(result).toBe(true);
+    });
+
+    it('should return false if the values are not equal', () => {
+      // Arrange
+      const value = TestDisc.from('user');
+      const discriminant = TestDisc.from('admin');
+
+      // Act
+      const result = TestDisc.equals(value, discriminant);
+
+      // Assert
+      expect(result).toBe(false);
+    });
+  });
 });
