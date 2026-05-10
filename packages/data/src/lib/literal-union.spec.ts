@@ -354,6 +354,85 @@ describe('(unit) LiteralUnion', () => {
       // Assert
       expect(result).toEqual(['a', 'b', 'c']);
     });
+
+    it('should return a fresh, independent iterator on every call', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      const iter1 = union[Symbol.iterator]();
+      const iter2 = union[Symbol.iterator]();
+      // Capture identity check + next() results into primitives BEFORE
+      // calling expect() — passing raw iterators to vitest's `expect`
+      // triggers its diff-prep inspector, which silently consumes them.
+      const distinct = iter1 !== iter2;
+      const r1a = iter1.next();
+      const r2a = iter2.next();
+      const r1b = iter1.next();
+      const r2b = iter2.next();
+      // Assert
+      // Each call yields a distinct iterator object — not a shared cursor.
+      expect(distinct).toBe(true);
+      // Advancing one iterator must not advance the other; both restart
+      // from the beginning of the declaration order.
+      expect(r1a).toEqual({ value: 'a', done: false });
+      expect(r2a).toEqual({ value: 'a', done: false });
+      expect(r1b).toEqual({ value: 'b', done: false });
+      expect(r2b).toEqual({ value: 'b', done: false });
+    });
+
+    it('should yield every member from the start on each independent for...of loop', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      const first: string[] = [];
+      const second: string[] = [];
+      // Act
+      for (const literal of union) first.push(literal);
+      for (const literal of union) second.push(literal);
+      // Assert
+      // A second for...of must restart from 'a' — not pick up where the
+      // first loop left off. This pins iterator independence at the
+      // descriptor level, not just the underlying tuple.
+      expect(first).toEqual(['a', 'b', 'c']);
+      expect(second).toEqual(['a', 'b', 'c']);
+    });
+
+    it('should support mixing spread and for...of without state pollution', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      const spread = [...union];
+      const collected: string[] = [];
+      for (const literal of union) collected.push(literal);
+      // Assert
+      expect(spread).toEqual(['a', 'b', 'c']);
+      expect(collected).toEqual(['a', 'b', 'c']);
+    });
+
+    it('should support nested for...of loops over the same descriptor', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      const pairs: [string, string][] = [];
+      // Act
+      for (const outer of union) {
+        for (const inner of union) {
+          pairs.push([outer, inner]);
+        }
+      }
+      // Assert — 3 × 3 cartesian product proves the inner loop is not
+      // sharing state with the outer loop.
+      expect(pairs).toHaveLength(9);
+      expect(pairs).toEqual([
+        ['a', 'a'],
+        ['a', 'b'],
+        ['a', 'c'],
+        ['b', 'a'],
+        ['b', 'b'],
+        ['b', 'c'],
+        ['c', 'a'],
+        ['c', 'b'],
+        ['c', 'c'],
+      ]);
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
