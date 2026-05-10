@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   LiteralUnion,
   type InferLiteralUnion,
+  type LiteralUnionDescriptor,
   type LiteralUnionFrom,
   type LiteralUnionMembers,
 } from './literal-union.js';
@@ -162,6 +163,73 @@ describe('(unit) LiteralUnion', () => {
       const act = () => LiteralUnion(literals);
       // Assert
       expect(act).toThrow(PanicException);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Reserved descriptor key collisions (type-level)
+  // ─────────────────────────────────────────────────────────────────────────────
+  // The descriptor type is the intersection of LiteralUnionMembers (string
+  // values keyed by member name) and LiteralUnionMethods (functions, getter,
+  // symbol keys, …). When a member name collides with a reserved method,
+  // what TypeScript does at the type level depends on the *kind* of the
+  // colliding method:
+  //
+  // - `size` (typed as `number`) — `'size' & number` reduces to `never`. The
+  //   type system catches the collision on its own; any access to
+  //   `descriptor.size` becomes statically uncallable.
+  // - `isOfType`, `toArray`, `match`, `matchResult` (function-typed) — the
+  //   intersection `'<name>' & (...) => ...` does *not* collapse. TypeScript
+  //   keeps the hybrid alive: the key is simultaneously assignable to the
+  //   string literal *and* callable as the function. No value can satisfy
+  //   both at runtime, but the type system happily permits both usages.
+  //
+  // The asymmetry is the reason the factory needs an explicit runtime guard:
+  // for function-typed methods, the type system alone does not catch the
+  // collision. These tests pin both behaviors so a future TS change (or a
+  // method-type change in `LiteralUnionMethods`) cannot drift silently.
+  describe('Reserved descriptor key collisions (type-level)', () => {
+    it('should collapse the descriptor key to never when "size" collides', () => {
+      // Arrange — primitive-vs-primitive intersection collapses to `never`.
+      type Descriptor = LiteralUnionDescriptor<'a' | 'size'>;
+      // Act + Assert
+      expectTypeOf<Descriptor['size']>().toBeNever();
+    });
+
+    it('should keep the descriptor key as a hybrid (NOT never) when "isOfType" collides', () => {
+      // Arrange — string-literal-vs-function intersection survives. The
+      // runtime guard is what protects users here, not the type system.
+      type Descriptor = LiteralUnionDescriptor<'a' | 'isOfType'>;
+      // Act + Assert
+      expectTypeOf<Descriptor['isOfType']>().not.toBeNever();
+    });
+
+    it('should keep the descriptor key as a hybrid (NOT never) when "toArray" collides', () => {
+      // Arrange
+      type Descriptor = LiteralUnionDescriptor<'a' | 'toArray'>;
+      // Act + Assert
+      expectTypeOf<Descriptor['toArray']>().not.toBeNever();
+    });
+
+    it('should keep the descriptor key as a hybrid (NOT never) when "match" collides', () => {
+      // Arrange
+      type Descriptor = LiteralUnionDescriptor<'a' | 'match'>;
+      // Act + Assert
+      expectTypeOf<Descriptor['match']>().not.toBeNever();
+    });
+
+    it('should keep the descriptor key as a hybrid (NOT never) when "matchResult" collides', () => {
+      // Arrange
+      type Descriptor = LiteralUnionDescriptor<'a' | 'matchResult'>;
+      // Act + Assert
+      expectTypeOf<Descriptor['matchResult']>().not.toBeNever();
+    });
+
+    it('should keep non-colliding members usable as their literal string value', () => {
+      // Arrange
+      type Descriptor = LiteralUnionDescriptor<'a' | 'isOfType'>;
+      // Act + Assert
+      expectTypeOf<Descriptor['a']>().toEqualTypeOf<'a'>();
     });
   });
 
@@ -443,6 +511,28 @@ describe('(unit) LiteralUnion', () => {
         const act = () => union.match(union.a, null as any);
         // Assert
         expect(act).toThrow(PanicException);
+      });
+
+      it('should narrow each handler to the member type', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        // Act
+        const result = union.match(union.a, {
+          a: (v) => {
+            expectTypeOf(v).toEqualTypeOf<'a'>();
+            return 'A' as const;
+          },
+          b: (v) => {
+            expectTypeOf(v).toEqualTypeOf<'b'>();
+            return 'B' as const;
+          },
+          c: (v) => {
+            expectTypeOf(v).toEqualTypeOf<'c'>();
+            return 'C' as const;
+          },
+        });
+        // Assert
+        expect(result).toBe('A');
       });
     });
 

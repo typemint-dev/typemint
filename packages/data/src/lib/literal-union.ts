@@ -399,8 +399,9 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    *
    * ```ts
    * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   * type Country = InferLiteralUnion<typeof Country>;
    *
-   * function alpha2(country: InferLiteralUnion<typeof Country>): string {
+   * function alpha2(country: Country): string {
    *   return Country.match(country, {
    *     germany: () => 'DE',
    *     france:  () => 'FR',
@@ -557,6 +558,7 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    *
    * ```ts
    * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   * type Country = InferLiteralUnion<typeof Country>;
    *
    * declare function parseCountry(input: unknown): Result<Country, ParseError>;
    * declare function lookupCapital(c: Country): Result<string, NotFoundError>;
@@ -736,7 +738,7 @@ export function LiteralUnion<
 
   const members: LiteralUnionMembers<LiteralUnionFrom<T>> = Object.create(null);
   for (const lit of literalsCopy) {
-    members[lit as T[number]] = lit;
+    members[lit] = lit;
   }
 
   function resolveHandler<U>(
