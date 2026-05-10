@@ -6,6 +6,7 @@ import {
   type LiteralUnionMembers,
 } from './literal-union.js';
 import { PanicException } from '@typemint/core';
+import { Result } from '@typemint/result';
 
 describe('(unit) LiteralUnion', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -222,6 +223,16 @@ describe('(unit) LiteralUnion', () => {
       }
     });
 
+    it('should keep the type of the literals', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      for (const literal of union) {
+        // Assert
+        expectTypeOf(literal).toEqualTypeOf<'a' | 'b' | 'c'>();
+      }
+    });
+
     it('should spread the literals', () => {
       // Arrange
       const union = LiteralUnion(['a', 'b', 'c'] as const);
@@ -368,6 +379,17 @@ describe('(unit) LiteralUnion', () => {
         // Assert
         expect(act).toThrow(PanicException);
       });
+
+      it('should throw a runtime error if the handlers object is empty.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        // Act
+        // @ts-expect-error - forcing an empty handlers object to get a PanicException
+        //
+        const act = () => union.match({})(union.a);
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
     });
 
     // MARK: Data-last overload
@@ -452,6 +474,206 @@ describe('(unit) LiteralUnion', () => {
         // Act
         const act = () => union.match(null as any)(union.a);
 
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+
+      it('should throw a runtime error if the handlers object is empty.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        // Act
+        // @ts-expect-error - forcing an empty handlers object to get a PanicException
+        //
+        const act = () => union.match({})(union.a);
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: matchResult
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('matchResult', () => {
+    // MARK: Data-first overload
+    describe('data-first overload', () => {
+      it('should return the result of the handler that matches the value.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Ok('a' as const);
+        // Act
+        const matchedResult = union.matchResult(result, {
+          a: () => Result.Ok('A'),
+          b: () => Result.Ok('B'),
+          c: () => Result.Ok('C'),
+        });
+        // Assert
+        expect(matchedResult).toEqual(Result.Ok('A'));
+      });
+
+      it('should infer the return type from the handlers.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Ok('a' as const);
+        // Act
+        const matchedResult = union.matchResult(result, {
+          a: () => Result.Ok('A' as const),
+          b: () => Result.Ok('B' as const),
+          c: () => Result.Ok('C' as const),
+        });
+
+        // Assert
+        expectTypeOf(matchedResult).toEqualTypeOf<
+          Result<'A' | 'B' | 'C', never>
+        >();
+      });
+
+      it('should return an error if the handler returns an error.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Ok('a' as const);
+        // Act
+        const matchedResult = union.matchResult(result, {
+          a: () => Result.Err('Error'),
+          b: () => Result.Ok('B'),
+          c: () => Result.Ok('C'),
+        });
+        // Assert
+        expect(matchedResult).toEqual(Result.Err('Error'));
+      });
+
+      it('should return an error if the result is an error.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Err('Error');
+        // Act
+        const matchedResult = union.matchResult(result, {
+          a: () => Result.Ok('A'),
+          b: () => Result.Ok('B'),
+          c: () => Result.Ok('C'),
+        });
+        // Assert
+        expect(matchedResult).toEqual(Result.Err('Error'));
+      });
+
+      it('should accumulate the error types if the handlers return different error types.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Ok('a' as const);
+        // Act
+        const matchedResult = union.matchResult(result, {
+          a: () => Result.Err('ErrorA' as const),
+          b: () => Result.Err('ErrorB' as const),
+          c: () => Result.Err('ErrorC' as const),
+        });
+
+        // Assert
+        expectTypeOf(matchedResult).toEqualTypeOf<
+          Result<never, 'ErrorA' | 'ErrorB' | 'ErrorC'>
+        >();
+      });
+
+      it('should throw a runtime error if the handlers object is empty.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Ok('a' as const);
+        // Act
+        // @ts-expect-error - forcing an empty handlers object to get a PanicException
+        //
+        const act = () => union.matchResult(result, {});
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+    });
+
+    // MARK: Data-last overload
+    describe('data-last overload', () => {
+      it('should return the result of the handler that matches the value.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Ok('a' as const);
+        // Act
+        const matchedResult = union.matchResult({
+          a: () => Result.Ok('A'),
+          b: () => Result.Ok('B'),
+          c: () => Result.Ok('C'),
+        })(result);
+        // Assert
+        expect(matchedResult).toEqual(Result.Ok('A'));
+      });
+
+      it('should infer the return type from the handlers.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Ok('a' as const);
+        // Act
+        const matchedResult = union.matchResult({
+          a: () => Result.Ok('A' as const),
+          b: () => Result.Ok('B' as const),
+          c: () => Result.Ok('C' as const),
+        })(result);
+
+        // Assert
+        expectTypeOf(matchedResult).toEqualTypeOf<
+          Result<'A' | 'B' | 'C', never>
+        >();
+      });
+
+      it('should return an error if the handler returns an error.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Ok('a' as const);
+        // Act
+        const matchedResult = union.matchResult({
+          a: () => Result.Err('Error'),
+          b: () => Result.Ok('B'),
+          c: () => Result.Ok('C'),
+        })(result);
+
+        // Assert
+        expect(matchedResult).toEqual(Result.Err('Error'));
+      });
+
+      it('should return an error if the result is an error.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Err('Error');
+        // Act
+        const matchedResult = union.matchResult({
+          a: () => Result.Ok('A'),
+          b: () => Result.Ok('B'),
+          c: () => Result.Ok('C'),
+        })(result);
+
+        // Assert
+        expect(matchedResult).toEqual(Result.Err('Error'));
+      });
+
+      it('should accumulate the error types if the handlers return different error types.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Ok('a' as const);
+        // Act
+        const matchedResult = union.matchResult({
+          a: () => Result.Err('ErrorA' as const),
+          b: () => Result.Err('ErrorB' as const),
+          c: () => Result.Err('ErrorC' as const),
+        })(result);
+
+        // Assert
+        expectTypeOf(matchedResult).toEqualTypeOf<
+          Result<never, 'ErrorA' | 'ErrorB' | 'ErrorC'>
+        >();
+      });
+
+      it('should throw a runtime error if the handlers object is empty.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const result = Result.Ok('a' as const);
+        // Act
+        // @ts-expect-error - forcing an empty handlers object to get a PanicException
+        //
+        const act = () => union.matchResult({})(result);
         // Assert
         expect(act).toThrow(PanicException);
       });

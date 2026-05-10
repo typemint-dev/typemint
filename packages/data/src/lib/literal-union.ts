@@ -1,4 +1,5 @@
 import { PanicException } from '@typemint/core';
+import { Result } from '@typemint/result';
 
 /**
  * The type of literal union members which the union can be built from.
@@ -126,6 +127,20 @@ export type InferLiteralUnion<T> =
  */
 export type LiteralUnionMatchHandlers<T extends LiteralUnionMemberBase, U> = {
   readonly [K in T]: (value: K) => U;
+};
+
+/**
+ * Exhaustive handler set for {@link LiteralUnionDescriptor.matchResult}.
+ *
+ * Each handler receives the narrow literal for its key and returns a
+ * {@link Result} carrying the success type `A` and error type `E`.
+ */
+export type LiteralUnionResultHandlers<
+  T extends LiteralUnionMemberBase,
+  A,
+  E,
+> = {
+  readonly [K in T]: (value: K) => Result<A, E>;
 };
 
 export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
@@ -324,7 +339,7 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * The iterator is a `Symbol.iterator` method that returns an iterator over the
    * declared members of the union.
    */
-  [Symbol.iterator]: () => IterableIterator<T[number]>;
+  [Symbol.iterator]: () => IterableIterator<T>;
 
   /**
    * The string tag for the literal union.
@@ -477,6 +492,219 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * ```
    */
   match<U>(handlers: LiteralUnionMatchHandlers<T, U>): (value: T) => U;
+
+  /**
+   * Exhaustively dispatch on the success value of a {@link Result}, returning
+   * a new `Result` whose error channel composes the input's error type with
+   * the handlers' error type.
+   *
+   * `matchResult` is the {@link Result}-aware companion to {@link match}: it
+   * lifts the dispatch into the `Result` monad, so callers can thread a
+   * possibly-failed value through a literal-union dispatch without manually
+   * destructuring `Ok`/`Err` at every step. It is implemented in terms of
+   * `Result.andThen`, which means:
+   *
+   * - **`Err` short-circuits.** If the input is `Err(e)`, no handler is
+   *   invoked; the error propagates unchanged through the output. The exact
+   *   `Err` instance is preserved (no re-allocation), so reference identity
+   *   and any attached metadata survive.
+   * - **`Ok` dispatches.** If the input is `Ok(v)`, the handler matching
+   *   `v`'s narrow literal runs and its returned `Result<A, E2>` becomes
+   *   the output.
+   * - **Errors compose.** The output's error type is `E1 | E2` — the union
+   *   of "the input could already be failed" and "any handler can fail."
+   *
+   * **Exhaustiveness is enforced at compile time.** Every member of the
+   * literal union must have a handler; missing one is a TypeScript error,
+   * just like {@link match}. Per-handler narrowing also carries through, so
+   * the `germany` handler sees `value: 'germany'`, not the wide union.
+   *
+   * **Two calling shapes** (mirroring {@link match}):
+   * - **Data-first** — `descriptor.matchResult(result, handlers)`. Best for
+   *   direct, imperative use.
+   * - **Data-last** — `descriptor.matchResult(handlers)` returns a matcher
+   *   `<E1>(result: Result<T, E1>) => Result<A, E1 | E2>` suitable for
+   *   pipelines, `.map` over arrays of `Result`s, and `pipe`-style chaining.
+   *   In data-last form the handlers are validated eagerly at matcher
+   *   creation; missing or non-function handlers throw immediately rather
+   *   than at the eventual call site.
+   *
+   * **Synchronous only.** Like {@link match}, this method dispatches
+   * synchronously. Handlers may *return* `Result<Promise<A>, E>` if you need
+   * async work, but there is no `matchResultAsync` — sync `matchResult`
+   * already passes through whatever the handler returns. See {@link match}
+   * for the broader rationale.
+   *
+   * @typeParam A - The handler success type, inferred from the union of every
+   *   handler's `Ok` payload. Use `as const` returns to preserve literal
+   *   precision.
+   * @typeParam E1 - The input `Result`'s error type. Propagated unchanged
+   *   when the input is `Err`.
+   * @typeParam E2 - The handler error type, inferred from the union of every
+   *   handler's `Err` payload.
+   *
+   * @param result - The `Result` whose `Ok` value will be dispatched on. If
+   *   `Err`, the error short-circuits and no handler is invoked.
+   * @param handlers - An exhaustive map from each member to a handler that
+   *   returns `Result<A, E2>`. Each handler receives the narrow literal for
+   *   its key.
+   * @returns `Result<A, E1 | E2>` — the input's error or the dispatched
+   *   handler's `Result`.
+   *
+   * @throws {PanicException} If `handlers` is missing a member's entry or
+   *   that entry is not a function. Statically-typed call sites cannot reach
+   *   this branch; it only fires when callers bypass the type system (e.g.
+   *   `as any`, JSON-loaded handlers, untyped JS).
+   *
+   * @example Data-first — guard at a parser boundary
+   *
+   * ```ts
+   * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   *
+   * declare function parseCountry(input: unknown): Result<Country, ParseError>;
+   * declare function lookupCapital(c: Country): Result<string, NotFoundError>;
+   *
+   * const capital = Country.matchResult(parseCountry(rawInput), {
+   *   germany: () => lookupCapital('germany'),
+   *   france:  () => lookupCapital('france'),
+   *   usa:     () => lookupCapital('usa'),
+   * });
+   * // capital: Result<string, ParseError | NotFoundError>
+   * ```
+   *
+   * @example Data-last — partial application for `Array.prototype.map`
+   *
+   * ```ts
+   * const Currency = LiteralUnion(['eur', 'usd', 'gbp'] as const);
+   *
+   * const toSymbol = Currency.matchResult({
+   *   eur: () => Result.Ok('€' as const),
+   *   usd: () => Result.Ok('$' as const),
+   *   gbp: () => Result.Ok('£' as const),
+   * });
+   * // toSymbol: <E>(r: Result<Currency, E>) => Result<'€' | '$' | '£', E>
+   *
+   * const inputs: Result<Currency, ParseError>[] = [...];
+   * const symbols = inputs.map(toSymbol);
+   * // symbols: Result<'€' | '$' | '£', ParseError>[]
+   * ```
+   *
+   * @example Per-branch type narrowing in handler bodies
+   *
+   * ```ts
+   * Country.matchResult(parseCountry(input), {
+   *   germany: (v) => Result.Ok(`code:${v.toUpperCase()}`), // v: 'germany'
+   *   france:  (v) => Result.Ok(`code:${v.toUpperCase()}`), // v: 'france'
+   *   usa:     (v) => Result.Ok(`code:${v.toUpperCase()}`), // v: 'usa'
+   * });
+   * ```
+   *
+   * @example Error short-circuits — the original `Err` is preserved
+   *
+   * ```ts
+   * const err = Result.Err({ kind: 'ParseError', input: 'xyz' } as const);
+   *
+   * const result = Country.matchResult(err, {
+   *   germany: () => Result.Ok('DE'),
+   *   france:  () => Result.Ok('FR'),
+   *   usa:     () => Result.Ok('US'),
+   * });
+   *
+   * result === err; // true — same reference, no re-allocation
+   * ```
+   *
+   * @example Error types compose into the output
+   *
+   * ```ts
+   * declare const r: Result<Country, ParseError>;
+   *
+   * const x = Country.matchResult(r, {
+   *   germany: () => Result.Ok('Berlin' as const),                    // never fails
+   *   france:  () => Result.Err({ kind: 'NotFound' as const }),       // adds NotFoundError
+   *   usa:     () => Result.Ok('Washington' as const),                // never fails
+   * });
+   * // x: Result<'Berlin' | 'Washington', ParseError | { kind: 'NotFound' }>
+   * ```
+   *
+   * @example Exhaustiveness is enforced at compile time
+   *
+   * ```ts
+   * // @ts-expect-error — Property 'usa' is missing in type ...
+   * Country.matchResult(parseCountry(input), {
+   *   germany: () => Result.Ok('DE'),
+   *   france:  () => Result.Ok('FR'),
+   * });
+   * ```
+   *
+   * @example Compose with {@link match} — sync-then-Result pipeline
+   *
+   * ```ts
+   * function classify(input: unknown): Result<string, ParseError> {
+   *   return Country.matchResult(parseCountry(input), {
+   *     germany: () => Result.Ok(Country.match('germany', {
+   *       germany: () => 'EU',
+   *       france:  () => 'EU',
+   *       usa:     () => 'NA',
+   *     })),
+   *     france:  () => Result.Ok('EU'),
+   *     usa:     () => Result.Ok('NA'),
+   *   });
+   * }
+   * ```
+   *
+   * @example Equivalence with manual `andThen` composition
+   *
+   * ```ts
+   * // These two expressions are interchangeable; matchResult is the
+   * // ergonomic form when the inner step is exactly a literal-union match.
+   *
+   * const a = Country.matchResult(parseCountry(input), {
+   *   germany: () => lookupCapital('germany'),
+   *   france:  () => lookupCapital('france'),
+   *   usa:     () => lookupCapital('usa'),
+   * });
+   *
+   * const b = parseCountry(input).andThen((country) =>
+   *   Country.match(country, {
+   *     germany: () => lookupCapital('germany'),
+   *     france:  () => lookupCapital('france'),
+   *     usa:     () => lookupCapital('usa'),
+   *   }),
+   * );
+   * ```
+   */
+  matchResult<A, E1, E2>(
+    result: Result<T, E1>,
+    handlers: LiteralUnionResultHandlers<T, A, E2>,
+  ): Result<A, E1 | E2>;
+
+  /**
+   * Data-last form of {@link matchResult}. Returns a matcher function
+   * `<E1>(result: Result<T, E1>) => Result<A, E1 | E2>` suitable for
+   * pipelines, `Array.prototype.map`, and `pipe`-style chaining.
+   *
+   * Handlers are validated eagerly at matcher-creation time — missing or
+   * non-function handlers throw a {@link PanicException} immediately rather
+   * than deferring the failure to the eventual call site.
+   *
+   * See the data-first overload above for full documentation.
+   *
+   * @example
+   *
+   * ```ts
+   * const toCapital = Country.matchResult({
+   *   germany: () => lookupCapital('germany'),
+   *   france:  () => lookupCapital('france'),
+   *   usa:     () => lookupCapital('usa'),
+   * });
+   *
+   * const capitals = parsedInputs.map(toCapital);
+   * // capitals: Result<string, ParseError | NotFoundError>[]
+   * ```
+   */
+  matchResult<A, E2>(
+    handlers: LiteralUnionResultHandlers<T, A, E2>,
+  ): <E1>(result: Result<T, E1>) => Result<A, E1 | E2>;
 };
 
 export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
@@ -497,15 +725,23 @@ export function LiteralUnion<
     members[lit as T[number]] = lit;
   }
 
-  function executeMatchHandler<T extends LiteralUnionMemberBase, U>(
-    value: T,
-    handlers: LiteralUnionMatchHandlers<T, U>,
-  ): U {
+  function resolveHandler<U>(
+    value: LiteralUnionMemberBase,
+    handlers: LiteralUnionMatchHandlers<LiteralUnionMemberBase, U>,
+  ): (value: LiteralUnionMemberBase) => U {
     const handler = handlers[value];
+
+    if (Object.keys(handlers).length === 0) {
+      throw new PanicException(
+        `LiteralUnion.match: handlers must be an exhaustive map from each ` +
+          `member to a handler. There has been no handlers provided.`,
+      );
+    }
+
     if (handler === undefined) {
       throw new PanicException(
         `LiteralUnion.match: missing handler for "${value}". ` +
-          `Provided handlers: ${literalsCopy.join(', ')}`,
+          `Provided handlers: ${Object.keys(handlers).join(', ')}`,
       );
     }
     if (typeof handler !== 'function') {
@@ -514,9 +750,11 @@ export function LiteralUnion<
           `expected a function`,
       );
     }
-    return handler(value);
+
+    return handler;
   }
 
+  // MARK: Match function
   function match<U>(
     value: T[number],
     handlers: LiteralUnionMatchHandlers<T[number], U>,
@@ -530,10 +768,15 @@ export function LiteralUnion<
   ): U | ((value: T[number]) => U) {
     if (typeof arg2 !== 'undefined') {
       // Data-first: validate arg1 is a string
-      if (typeof arg1 !== 'string') {
+      const value = arg1;
+      const handlers = arg2;
+
+      if (typeof value !== 'string') {
         throw new PanicException('LiteralUnion.match: value must be a string');
       }
-      return executeMatchHandler(arg1, arg2);
+      const handler = resolveHandler<U>(value, handlers);
+
+      return handler(value);
     } else {
       // Data-last: validate arg1 is a non-null object
       if (typeof arg1 !== 'object' || arg1 === null) {
@@ -541,18 +784,43 @@ export function LiteralUnion<
           'LiteralUnion.match: handlers must be an object',
         );
       }
+      const handlers = arg1;
 
-      // Validate exhaustiveness eagerly
-      for (const key of literalsCopy) {
-        if (typeof arg1[key] !== 'function') {
-          throw new PanicException(
-            `LiteralUnion.match: handler for "${key}" is missing or not a function`,
-          );
-        }
-      }
+      return (value: T[number]) => {
+        const handler = resolveHandler(value, handlers);
 
-      return (value: T[number]) => executeMatchHandler(value, arg1);
+        return handler(value);
+      };
     }
+  }
+
+  // MARK: match result
+  function matchResult<A, E1, E2>(
+    result: Result<T[number], E1>,
+    handlers: LiteralUnionResultHandlers<T[number], A, E2>,
+  ): Result<A, E1 | E2>;
+  function matchResult<A, E2>(
+    handlers: LiteralUnionResultHandlers<T[number], A, E2>,
+  ): <E1>(result: Result<T[number], E1>) => Result<A, E1 | E2>;
+  function matchResult<A, E1, E2>(
+    ...args:
+      | [Result<T[number], E1>, LiteralUnionResultHandlers<T[number], A, E2>]
+      | [LiteralUnionResultHandlers<T[number], A, E2>]
+  ):
+    | Result<A, E1 | E2>
+    | (<E>(result: Result<T[number], E>) => Result<A, E | E2>) {
+    // Data-first
+    if (args.length === 2) {
+      const [result, handlers] = args;
+
+      return result.andThen(match(handlers));
+    }
+    // Data-last
+    const [handlers] = args;
+    const dispatch = match(handlers);
+
+    return <E>(result: Result<T[number], E>): Result<A, E | E2> =>
+      result.andThen(dispatch);
   }
 
   const descriptor: LiteralUnionDescriptor<LiteralUnionFrom<T>> = {
@@ -577,6 +845,7 @@ export function LiteralUnion<
     },
 
     match,
+    matchResult,
   };
 
   return descriptor;
