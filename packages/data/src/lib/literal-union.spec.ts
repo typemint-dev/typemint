@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   LiteralUnion,
   type InferLiteralUnion,
@@ -6,7 +6,7 @@ import {
   type LiteralUnionMembers,
 } from './literal-union.js';
 import { PanicException } from '@typemint/core';
-import { Result } from '@typemint/result';
+import { assertErr, assertOk, Result } from '@typemint/result';
 
 describe('(unit) LiteralUnion', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -571,7 +571,8 @@ describe('(unit) LiteralUnion', () => {
           c: () => Result.Ok('C'),
         });
         // Assert
-        expect(matchedResult).toEqual(Result.Ok('A'));
+        assertOk(matchedResult);
+        expect(matchedResult.value).toEqual('A');
       });
 
       it('should infer the return type from the handlers.', () => {
@@ -602,7 +603,8 @@ describe('(unit) LiteralUnion', () => {
           c: () => Result.Ok('C'),
         });
         // Assert
-        expect(matchedResult).toEqual(Result.Err('Error'));
+        assertErr(matchedResult);
+        expect(matchedResult.error).toEqual('Error');
       });
 
       it('should return an error if the result is an error.', () => {
@@ -616,7 +618,8 @@ describe('(unit) LiteralUnion', () => {
           c: () => Result.Ok('C'),
         });
         // Assert
-        expect(matchedResult).toEqual(Result.Err('Error'));
+        assertErr(matchedResult);
+        expect(matchedResult.error).toEqual('Error');
       });
 
       it('should accumulate the error types if the handlers return different error types.', () => {
@@ -647,6 +650,17 @@ describe('(unit) LiteralUnion', () => {
         // Assert
         expect(act).toThrow(PanicException);
       });
+
+      it('does not invoke any handler when the input is Err', () => {
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        const a = vi.fn<() => Result<'A', never>>(() => Result.Ok('A'));
+        const b = vi.fn<() => Result<'B', never>>(() => Result.Ok('B'));
+        const c = vi.fn<() => Result<'C', never>>(() => Result.Ok('C'));
+        union.matchResult(Result.Err('boom'), { a, b, c });
+        expect(a).not.toHaveBeenCalled();
+        expect(b).not.toHaveBeenCalled();
+        expect(c).not.toHaveBeenCalled();
+      });
     });
 
     // MARK: Data-last overload
@@ -662,7 +676,8 @@ describe('(unit) LiteralUnion', () => {
           c: () => Result.Ok('C'),
         })(result);
         // Assert
-        expect(matchedResult).toEqual(Result.Ok('A'));
+        assertOk(matchedResult);
+        expect(matchedResult.value).toEqual('A');
       });
 
       it('should infer the return type from the handlers.', () => {
@@ -694,7 +709,8 @@ describe('(unit) LiteralUnion', () => {
         })(result);
 
         // Assert
-        expect(matchedResult).toEqual(Result.Err('Error'));
+        assertErr(matchedResult);
+        expect(matchedResult.error).toEqual('Error');
       });
 
       it('should return an error if the result is an error.', () => {
@@ -709,7 +725,8 @@ describe('(unit) LiteralUnion', () => {
         })(result);
 
         // Assert
-        expect(matchedResult).toEqual(Result.Err('Error'));
+        assertErr(matchedResult);
+        expect(matchedResult.error).toEqual('Error');
       });
 
       it('should accumulate the error types if the handlers return different error types.', () => {

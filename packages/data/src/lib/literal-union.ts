@@ -836,30 +836,35 @@ export function LiteralUnion<
       result.andThen(dispatch);
   }
 
-  const descriptor: LiteralUnionDescriptor<LiteralUnionFrom<T>> = {
-    ...members,
+  function isOfType(value: unknown): value is T[number] {
+    return typeof value === 'string' && memoSet.has(value);
+  }
 
-    get size(): number {
-      return literalsCopy.length;
+  function toArray(): readonly [T[number], ...T[number][]] {
+    return literalsCopy;
+  }
+
+  // Use Object.assign to create the descriptor object to avoid
+  // prototype pollution. (No __proto__ or constructor pollution.)
+  const descriptor: LiteralUnionDescriptor<LiteralUnionFrom<T>> = Object.assign(
+    Object.create(null),
+    members,
+    {
+      /* methods */
+      get size(): number {
+        return literalsCopy.length;
+      },
+
+      [Symbol.iterator](): IterableIterator<T[number]> {
+        return literalsCopy[Symbol.iterator]();
+      },
+      [Symbol.toStringTag]: 'LiteralUnion',
+      isOfType,
+      toArray,
+      match,
+      matchResult,
     },
-
-    [Symbol.iterator](): IterableIterator<T[number]> {
-      return literalsCopy[Symbol.iterator]();
-    },
-
-    [Symbol.toStringTag]: 'LiteralUnion',
-
-    isOfType(value: unknown): value is T[number] {
-      return typeof value === 'string' && memoSet.has(value);
-    },
-
-    toArray(): readonly [T[number], ...T[number][]] {
-      return literalsCopy;
-    },
-
-    match,
-    matchResult,
-  };
+  );
 
   return descriptor;
 }
