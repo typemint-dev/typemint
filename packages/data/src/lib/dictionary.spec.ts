@@ -1,8 +1,9 @@
-import { describe, expectTypeOf, it } from 'vitest';
-import type {
-  DictionaryDescriptor,
-  InferDictionaryKeys,
-  InferDictionaryValues,
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import {
+  Dictionary,
+  type DictionaryDescriptor,
+  type InferDictionaryKeys,
+  type InferDictionaryValues,
 } from './dictionary.js';
 
 describe('(unit) Dictionary', () => {
@@ -51,6 +52,35 @@ describe('(unit) Dictionary', () => {
         readonly b: 2;
         readonly c: 3;
       }>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Dictionary factory
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Dictionary factory', () => {
+    it('should create a dictionary descriptor from a record', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      const descriptor = Dictionary(record);
+      // Assert
+      expectTypeOf<typeof descriptor>().toEqualTypeOf<
+        DictionaryDescriptor<typeof record>
+      >();
+    });
+
+    it('should expose the keys of the given record', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      const descriptor = Dictionary(record);
+      // Assert
+      expect(descriptor.a).toBe(1);
+      expect(descriptor.b).toBe(2);
+      expect(descriptor.c).toBe(3);
     });
   });
 });

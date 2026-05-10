@@ -14,3 +14,9 @@ export type DictionaryMembers<T extends DictionarySource<unknown>> = {
 
 export type DictionaryDescriptor<T extends DictionarySource<unknown>> =
   DictionaryMembers<T>;
+
+export function Dictionary<T extends DictionarySource<unknown>>(
+  source: T,
+): DictionaryDescriptor<T> {
+  return source as DictionaryDescriptor<T>;
+}
