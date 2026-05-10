@@ -118,6 +118,51 @@ describe('(unit) LiteralUnion', () => {
       expectTypeOf(union.b).toEqualTypeOf<'b'>();
       expectTypeOf(union.c).toEqualTypeOf<'c'>();
     });
+
+    it('should throw a PanicException if the member name collides with a reserved descriptor key "isOfType"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'isOfType'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException if the member name collides with a reserved descriptor key "toArray"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'toArray'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException if the member name collides with a reserved descriptor key "size"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'size'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException if the member name collides with a reserved descriptor key "match"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'match'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException if the member name collides with a reserved descriptor key "matchResult"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'matchResult'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

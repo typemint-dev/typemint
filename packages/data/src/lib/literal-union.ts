@@ -707,13 +707,30 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
 export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
   LiteralUnionMembers<T> & LiteralUnionMethods<T>;
 
+const reservedKeys = new Set([
+  'isOfType',
+  'toArray',
+  'size',
+  'match',
+  'matchResult',
+]);
+
 export function LiteralUnion<
   T extends readonly [LiteralUnionMemberBase, ...LiteralUnionMemberBase[]],
 >(literals: T): LiteralUnionDescriptor<LiteralUnionFrom<T>> {
   if (literals.length === 0) {
     throw new PanicException('LiteralUnion requires at least one member');
   }
+
   const literalsCopy = [...literals] as readonly [T[number], ...T[number][]];
+
+  for (const lit of literalsCopy) {
+    if (reservedKeys.has(lit))
+      throw new PanicException(
+        `LiteralUnion: member name "${lit}" collides with a reserved ` +
+          `descriptor key`,
+      );
+  }
 
   const memoSet = new Set<LiteralUnionMemberBase>(literalsCopy);
 
