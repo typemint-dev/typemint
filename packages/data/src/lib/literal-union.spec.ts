@@ -320,6 +320,41 @@ describe('(unit) LiteralUnion', () => {
       // Assert
       expect(result).toEqual(['a', 'b', 'c']);
     });
+
+    it('returns the same reference on every call', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+
+      // Act
+      const result1 = union.toArray();
+      const result2 = union.toArray();
+
+      // Assert
+      expect(result1).toBe(result2);
+    });
+
+    it('returns a frozen array', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+
+      // Act
+      const result = union.toArray();
+
+      // Assert
+      expect(Object.isFrozen(result)).toBe(true);
+    });
+    it('rejects mutation attempts at runtime', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+
+      // Act
+      const arr = union.toArray() as unknown as string[];
+
+      // Assert
+      // Strict mode (ESM, which vitest uses) throws on mutation of frozen arrays.
+      expect(() => arr.push('d')).toThrow(TypeError);
+      expect(() => arr.sort()).toThrow(TypeError);
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

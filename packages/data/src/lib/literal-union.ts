@@ -724,7 +724,10 @@ export function LiteralUnion<
     throw new PanicException('LiteralUnion requires at least one member');
   }
 
-  const literalsCopy = [...literals] as readonly [T[number], ...T[number][]];
+  const literalsCopy = Object.freeze([...literals] as readonly [
+    T[number],
+    ...T[number][],
+  ]);
 
   for (const lit of literalsCopy) {
     if (reservedKeys.has(lit))
