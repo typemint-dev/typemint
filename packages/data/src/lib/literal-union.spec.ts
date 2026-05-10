@@ -390,6 +390,15 @@ describe('(unit) LiteralUnion', () => {
         // Assert
         expect(act).toThrow(PanicException);
       });
+
+      it('should throw a runtime error if the handlers object is not an object.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        // Act
+        const act = () => union.match(union.a, null as any);
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
     });
 
     // MARK: Data-last overload
@@ -485,6 +494,15 @@ describe('(unit) LiteralUnion', () => {
         // @ts-expect-error - forcing an empty handlers object to get a PanicException
         //
         const act = () => union.match({})(union.a);
+        // Assert
+        expect(act).toThrow(PanicException);
+      });
+
+      it('should throw a runtime error if the handlers object is not an object.', () => {
+        // Arrange
+        const union = LiteralUnion(['a', 'b', 'c'] as const);
+        // Act
+        const act = () => union.match(null as any)(union.a);
         // Assert
         expect(act).toThrow(PanicException);
       });

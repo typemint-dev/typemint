@@ -525,9 +525,6 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * - **Data-last** — `descriptor.matchResult(handlers)` returns a matcher
    *   `<E1>(result: Result<T, E1>) => Result<A, E1 | E2>` suitable for
    *   pipelines, `.map` over arrays of `Result`s, and `pipe`-style chaining.
-   *   In data-last form the handlers are validated eagerly at matcher
-   *   creation; missing or non-function handlers throw immediately rather
-   *   than at the eventual call site.
    *
    * **Synchronous only.** Like {@link match}, this method dispatches
    * synchronously. Handlers may *return* `Result<Promise<A>, E>` if you need
@@ -729,14 +726,13 @@ export function LiteralUnion<
     value: LiteralUnionMemberBase,
     handlers: LiteralUnionMatchHandlers<LiteralUnionMemberBase, U>,
   ): (value: LiteralUnionMemberBase) => U {
-    const handler = handlers[value];
-
-    if (Object.keys(handlers).length === 0) {
+    if (typeof handlers !== 'object' || handlers === null) {
       throw new PanicException(
-        `LiteralUnion.match: handlers must be an exhaustive map from each ` +
-          `member to a handler. There has been no handlers provided.`,
+        `LiteralUnion.match: handlers must be an object`,
       );
     }
+
+    const handler = handlers[value];
 
     if (handler === undefined) {
       throw new PanicException(
