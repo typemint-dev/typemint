@@ -1,5 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest';
 import type {
+  DictionaryDescriptor,
   InferDictionaryKeys,
   InferDictionaryValues,
 } from './dictionary.js';
@@ -31,6 +32,25 @@ describe('(unit) Dictionary', () => {
       type Values = InferDictionaryValues<typeof record>;
       // Assert
       expectTypeOf<Values>().toEqualTypeOf<1 | 2 | 3>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Dictionary descriptor
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Dictionary descriptor', () => {
+    it('should be a record with the keys of the given record', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      type Descriptor = DictionaryDescriptor<typeof record>;
+      // Assert
+      expectTypeOf<Descriptor>().toEqualTypeOf<{
+        readonly a: 1;
+        readonly b: 2;
+        readonly c: 3;
+      }>();
     });
   });
 });

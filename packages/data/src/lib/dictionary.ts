@@ -7,3 +7,10 @@ export type InferDictionaryKeys<T extends DictionarySource<unknown>> = keyof T &
 
 export type InferDictionaryValues<T extends DictionarySource<unknown>> =
   T[keyof T & string];
+
+export type DictionaryMembers<T extends DictionarySource<unknown>> = {
+  readonly [K in InferDictionaryKeys<T>]: T[K];
+};
+
+export type DictionaryDescriptor<T extends DictionarySource<unknown>> =
+  DictionaryMembers<T>;
