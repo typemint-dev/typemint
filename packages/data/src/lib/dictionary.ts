@@ -29,13 +29,15 @@ export function Dictionary<T extends DictionarySource<unknown>>(
     throw new PanicException('Dictionary requires at least one key');
   }
 
+  function keys(): readonly InferDictionaryKeys<T>[] {
+    return memoKeys;
+  }
+
   const descriptor: DictionaryDescriptor<T> = Object.assign(
     Object.create(null),
     source,
     {
-      keys(): readonly InferDictionaryKeys<T>[] {
-        return memoKeys;
-      },
+      keys,
     } as DictionaryMethods<T>,
   );
 
