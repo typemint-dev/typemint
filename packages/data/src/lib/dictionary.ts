@@ -17,6 +17,7 @@ export type DictionaryMembers<T extends DictionarySource<unknown>> = {
 export type DictionaryMethods<T extends DictionarySource<unknown>> = {
   keys(): readonly InferDictionaryKeys<T>[];
   values(): readonly InferDictionaryValues<T>[];
+  size: number;
 };
 
 export type DictionaryDescriptor<T extends DictionarySource<unknown>> =
@@ -49,6 +50,10 @@ export function Dictionary<T extends DictionarySource<unknown>>(
     {
       keys,
       values,
+
+      get size(): number {
+        return memoKeys.length;
+      },
     } as DictionaryMethods<T>,
   );
 

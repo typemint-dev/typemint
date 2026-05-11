@@ -228,4 +228,19 @@ describe('(unit) Dictionary', () => {
       expectTypeOf<typeof values>().toEqualTypeOf<readonly (1 | 2 | 3)[]>();
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Dictionary size
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Dictionary size', () => {
+    it('should return the number of keys in the given record', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      const descriptor = Dictionary(record);
+      // Assert
+      expect(descriptor.size).toBe(3);
+    });
+  });
 });
