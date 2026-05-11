@@ -32,7 +32,7 @@ export function Dictionary<T extends DictionarySource<unknown>>(
     throw new PanicException('Dictionary requires at least one key');
   }
   const memoValues: readonly InferDictionaryValues<T>[] = Object.freeze(
-    Object.values(source) as InferDictionaryValues<T>[],
+    Object.freeze(memoKeys.map((key) => source[key])),
   );
 
   function keys(): readonly InferDictionaryKeys<T>[] {
