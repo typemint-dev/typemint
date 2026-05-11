@@ -16,6 +16,7 @@ export type DictionaryMembers<T extends DictionarySource<unknown>> = {
 
 export type DictionaryMethods<T extends DictionarySource<unknown>> = {
   keys(): readonly InferDictionaryKeys<T>[];
+  values(): readonly InferDictionaryValues<T>[];
 };
 
 export type DictionaryDescriptor<T extends DictionarySource<unknown>> =
@@ -24,13 +25,22 @@ export type DictionaryDescriptor<T extends DictionarySource<unknown>> =
 export function Dictionary<T extends DictionarySource<unknown>>(
   source: T,
 ): DictionaryDescriptor<T> {
-  const memoKeys = Object.freeze(Object.keys(source));
+  const memoKeys: readonly InferDictionaryKeys<T>[] = Object.freeze(
+    Object.keys(source),
+  );
   if (memoKeys.length === 0) {
     throw new PanicException('Dictionary requires at least one key');
   }
+  const memoValues: readonly InferDictionaryValues<T>[] = Object.freeze(
+    Object.values(source) as InferDictionaryValues<T>[],
+  );
 
   function keys(): readonly InferDictionaryKeys<T>[] {
     return memoKeys;
+  }
+
+  function values(): readonly InferDictionaryValues<T>[] {
+    return memoValues;
   }
 
   const descriptor: DictionaryDescriptor<T> = Object.assign(
@@ -38,6 +48,7 @@ export function Dictionary<T extends DictionarySource<unknown>>(
     source,
     {
       keys,
+      values,
     } as DictionaryMethods<T>,
   );
 

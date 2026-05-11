@@ -63,7 +63,19 @@ describe('(unit) Dictionary', () => {
       const descriptor = Dictionary(record);
       // Assert
       expectTypeOf<(typeof descriptor)['keys']>().toEqualTypeOf<
-        () => readonly InferDictionaryKeys<typeof record>[]
+        () => readonly ('a' | 'b' | 'c')[]
+      >();
+    });
+
+    it('should expose the accessor for the values of the given record', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      const descriptor = Dictionary(record);
+      // Assert
+      expectTypeOf<(typeof descriptor)['values']>().toEqualTypeOf<
+        () => readonly InferDictionaryValues<typeof record>[]
       >();
     });
   });
@@ -149,6 +161,71 @@ describe('(unit) Dictionary', () => {
       const descriptor = Dictionary(record);
       // Assert
       expect(descriptor.keys()).toBe(descriptor.keys());
+    });
+
+    it('should infer the keys of the given record into a union type', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      const keys = Dictionary(record).keys();
+      // Assert
+      expectTypeOf<typeof keys>().toExtend<readonly ('a' | 'b' | 'c')[]>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Dictionary values
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Dictionary values', () => {
+    it('should expose the values of the given record', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      const descriptor = Dictionary(record);
+      // Assert
+      expect(descriptor.values()).toEqual([1, 2, 3]);
+    });
+
+    it('should return the values of the given record in the order of the given record', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      const descriptor = Dictionary(record);
+      // Assert
+      expect(descriptor.values()).toEqual([1, 2, 3]);
+    });
+
+    it('should return a frozen array of the values of the given record', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      const descriptor = Dictionary(record);
+      // Assert
+      expect(Object.isFrozen(descriptor.values())).toBe(true);
+    });
+
+    it('should return the same reference on every call', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      const descriptor = Dictionary(record);
+      // Assert
+      expect(descriptor.values()).toBe(descriptor.values());
+    });
+
+    it('should infer the values of the given record into a union type', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+
+      // Act
+      const values = Dictionary(record).values();
+      // Assert
+      expectTypeOf<typeof values>().toEqualTypeOf<readonly (1 | 2 | 3)[]>();
     });
   });
 });
