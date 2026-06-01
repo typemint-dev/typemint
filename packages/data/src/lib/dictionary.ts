@@ -90,7 +90,7 @@ export function Dictionary<T extends DictionarySource<unknown>>(
   }
 
   function isOfType(value: unknown): value is T[keyof T] {
-    return typeof value === 'string' && memoKeys.includes(value);
+    return memoValues.includes(value as InferDictionaryValues<T>);
   }
 
   const descriptor: DictionaryDescriptor<T> = Object.assign(
