@@ -118,6 +118,42 @@ describe('(unit) Dictionary', () => {
       // Assert
       expect(act).toThrow(PanicException);
     });
+
+    it('should throw a PanicException if the given record has a key that collides with a reserved descriptor key "isOfType"', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3, isOfType: 'isOfType' } as const;
+      // Act
+      const act = () => Dictionary(record);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException if the given record has a key that collides with a reserved descriptor key "keys"', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3, keys: 'keys' } as const;
+      // Act
+      const act = () => Dictionary(record);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException if the given record has a key that collides with a reserved descriptor key "values"', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3, values: 'values' } as const;
+      // Act
+      const act = () => Dictionary(record);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException if the given record has a key that collides with a reserved descriptor key "entries"', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3, entries: 'entries' } as const;
+      // Act
+      const act = () => Dictionary(record);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

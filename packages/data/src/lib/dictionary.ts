@@ -59,6 +59,8 @@ export type DictionaryMethods<T extends DictionarySource<unknown>> = {
 export type DictionaryDescriptor<T extends DictionarySource<unknown>> =
   DictionaryMembers<T> & DictionaryMethods<T>;
 
+const reservedKeys = new Set(['isOfType', 'keys', 'values', 'entries', 'size']);
+
 export function Dictionary<T extends DictionarySource<unknown>>(
   source: T,
 ): DictionaryDescriptor<T> {
@@ -67,6 +69,14 @@ export function Dictionary<T extends DictionarySource<unknown>>(
   );
   if (memoKeys.length === 0) {
     throw new PanicException('Dictionary requires at least one key');
+  }
+
+  for (const key of memoKeys) {
+    if (reservedKeys.has(key)) {
+      throw new PanicException(
+        `Dictionary: key "${key}" collides with a reserved descriptor key`,
+      );
+    }
   }
 
   function keys(): readonly InferDictionaryKeys<T>[] {
