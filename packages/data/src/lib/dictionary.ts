@@ -23,6 +23,7 @@ export type DictionaryMethods<T extends DictionarySource<unknown>> = {
   values(): readonly InferDictionaryValues<T>[];
   entries(): readonly DictionaryEntry<T>[];
   [Symbol.iterator](): IterableIterator<DictionaryEntry<T>>;
+  [Symbol.toStringTag]: 'Dictionary';
   size: number;
 };
 
@@ -102,6 +103,7 @@ export function Dictionary<T extends DictionarySource<unknown>>(
       [Symbol.iterator](): IterableIterator<DictionaryEntry<T>> {
         return memoEntries[Symbol.iterator]();
       },
+      [Symbol.toStringTag]: 'Dictionary',
     } as DictionaryMethods<T>,
   );
 

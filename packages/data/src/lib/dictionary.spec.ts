@@ -316,4 +316,18 @@ describe('(unit) Dictionary', () => {
       >();
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Dictionary Symbol.toStringTag
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Dictionary Symbol.toStringTag', () => {
+    it('should return the string tag "Dictionary" when the dictionary is converted to a string', () => {
+      // Arrange
+      const descriptor = Dictionary({ a: 1, b: 2, c: 3 } as const);
+      // Assert
+      expect(Object.prototype.toString.call(descriptor)).toBe(
+        '[object Dictionary]',
+      );
+    });
+  });
 });
