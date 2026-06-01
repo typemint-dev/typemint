@@ -26,6 +26,34 @@ export type DictionaryMethods<T extends DictionarySource<unknown>> = {
   size: number;
 };
 
+/**
+ * ## Composition and Matching
+ *
+ * Use LiteralUnion to handle the dispatch of keys and matching them.
+ *
+ * @example
+ *
+ * ```ts
+ * const codes = Dictionary({ germany: 'DE', france: 'FR', usa: 'US' });
+ * const Country = LiteralUnion(codes.keys());
+ *
+ * // Pure data lookup
+ * codes.germany;                           // 'DE'
+ * // Pure dispatch
+ * Country.match(c, {
+ *   germany: () => '🇩🇪',
+ *   france:  () => '🇫🇷',
+ *   usa:     () => '🇺🇸',
+ * });
+ *
+ * // Dispatch that uses the projected value
+ * Country.match(c, {
+ *   germany: (k) => `${k}: ${codes[k]}`,   // closes over codes
+ *   france:  (k) => `${k}: ${codes[k]}`,
+ *   usa:     (k) => `${k}: ${codes[k]}`,
+ * });
+ * ```
+ */
 export type DictionaryDescriptor<T extends DictionarySource<unknown>> =
   DictionaryMembers<T> & DictionaryMethods<T>;
 
