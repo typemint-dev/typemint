@@ -22,6 +22,7 @@ export type DictionaryMethods<T extends DictionarySource<unknown>> = {
   keys(): readonly InferDictionaryKeys<T>[];
   values(): readonly InferDictionaryValues<T>[];
   entries(): readonly DictionaryEntry<T>[];
+  isOfType(value: unknown): value is T[keyof T & string];
   [Symbol.iterator](): IterableIterator<DictionaryEntry<T>>;
   [Symbol.toStringTag]: 'Dictionary';
   size: number;
@@ -88,6 +89,10 @@ export function Dictionary<T extends DictionarySource<unknown>>(
     return memoEntries;
   }
 
+  function isOfType(value: unknown): value is T[keyof T] {
+    return typeof value === 'string' && memoKeys.includes(value);
+  }
+
   const descriptor: DictionaryDescriptor<T> = Object.assign(
     Object.create(null),
     source,
@@ -95,6 +100,7 @@ export function Dictionary<T extends DictionarySource<unknown>>(
       keys,
       values,
       entries,
+      isOfType,
 
       get size(): number {
         return memoKeys.length;

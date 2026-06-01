@@ -173,6 +173,16 @@ describe('(unit) Dictionary', () => {
       // Assert
       expectTypeOf<typeof keys>().toExtend<readonly ('a' | 'b' | 'c')[]>();
     });
+
+    it('should have the isOfType method', () => {
+      // Arrange
+      const descriptor = Dictionary({ a: 1, b: 2, c: 3 } as const);
+      // Assert
+      expect(descriptor.isOfType).toBeTypeOf('function');
+      expectTypeOf<typeof descriptor.isOfType>().toEqualTypeOf<
+        (value: unknown) => value is 1 | 2 | 3
+      >();
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -328,6 +338,38 @@ describe('(unit) Dictionary', () => {
       expect(Object.prototype.toString.call(descriptor)).toBe(
         '[object Dictionary]',
       );
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Dictionary isOfType
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Dictionary isOfType', () => {
+    it('should return true if the value is a key of the given record', () => {
+      // Arrange
+      const descriptor = Dictionary({ a: 1, b: 2, c: 3 } as const);
+      // Assert
+      expect(descriptor.isOfType(1)).toBe(true);
+    });
+
+    it('should return false if the value is not a key of the given record', () => {
+      // Arrange
+      const descriptor = Dictionary({ a: 1, b: 2, c: 3 } as const);
+      // Assert
+      expect(descriptor.isOfType(4)).toBe(false);
+    });
+
+    it('should narrow the type to the key if the value is a key of the given record', () => {
+      // Arrange
+      const descriptor = Dictionary({ a: 1, b: 2, c: 3 } as const);
+      // Act
+      const value: unknown = 1 as unknown;
+      // Assert
+      if (descriptor.isOfType(value)) {
+        expectTypeOf<typeof value>().toEqualTypeOf<1 | 2 | 3>();
+      } else {
+        expectTypeOf<typeof value>().toBeUnknown();
+      }
     });
   });
 });
