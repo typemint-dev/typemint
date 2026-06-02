@@ -6,7 +6,7 @@ import {
   type InferDictionaryKeys,
   type InferDictionaryValues,
 } from './dictionary.js';
-import { PanicException } from '@typemint/core';
+import { PanicException, type NonEmptyReadonlyArray } from '@typemint/core';
 
 describe('(unit) Dictionary', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -62,9 +62,10 @@ describe('(unit) Dictionary', () => {
 
       // Act
       const descriptor = Dictionary(record);
+      type GetKeys = (typeof descriptor)['keys'];
       // Assert
-      expectTypeOf<(typeof descriptor)['keys']>().toEqualTypeOf<
-        () => readonly ('a' | 'b' | 'c')[]
+      expectTypeOf<GetKeys>().toEqualTypeOf<
+        () => NonEmptyReadonlyArray<'a' | 'b' | 'c'>
       >();
     });
 
@@ -74,9 +75,10 @@ describe('(unit) Dictionary', () => {
 
       // Act
       const descriptor = Dictionary(record);
+      type GetValues = (typeof descriptor)['values'];
       // Assert
-      expectTypeOf<(typeof descriptor)['values']>().toEqualTypeOf<
-        () => readonly InferDictionaryValues<typeof record>[]
+      expectTypeOf<GetValues>().toEqualTypeOf<
+        () => NonEmptyReadonlyArray<InferDictionaryValues<typeof record>>
       >();
     });
   });
@@ -271,8 +273,11 @@ describe('(unit) Dictionary', () => {
 
       // Act
       const values = Dictionary(record).values();
+      type Values = typeof values;
       // Assert
-      expectTypeOf<typeof values>().toEqualTypeOf<readonly (1 | 2 | 3)[]>();
+      expectTypeOf<Values>().toEqualTypeOf<
+        NonEmptyReadonlyArray<InferDictionaryValues<typeof record>>
+      >();
     });
   });
 
@@ -352,13 +357,16 @@ describe('(unit) Dictionary', () => {
       const descriptor = Dictionary({ a: 1, b: 2, c: 3 } as const);
       // Act
       const entries = descriptor.entries();
+      type Entries = typeof entries;
       // Assert
-      expectTypeOf<typeof entries>().toEqualTypeOf<
-        readonly DictionaryEntry<{
-          readonly a: 1;
-          readonly b: 2;
-          readonly c: 3;
-        }>[]
+      expectTypeOf<Entries>().toEqualTypeOf<
+        NonEmptyReadonlyArray<
+          DictionaryEntry<{
+            readonly a: 1;
+            readonly b: 2;
+            readonly c: 3;
+          }>
+        >
       >();
     });
   });

@@ -1,4 +1,8 @@
-import { PanicException } from '@typemint/core';
+import {
+  PanicException,
+  isNonEmptyArray,
+  NonEmptyReadonlyArray,
+} from '@typemint/core';
 
 export type DictionaryKeyBase = string;
 
@@ -19,9 +23,9 @@ export type DictionaryMembers<T extends DictionarySource<unknown>> = {
 };
 
 export type DictionaryMethods<T extends DictionarySource<unknown>> = {
-  keys(): readonly InferDictionaryKeys<T>[];
-  values(): readonly InferDictionaryValues<T>[];
-  entries(): readonly DictionaryEntry<T>[];
+  keys(): NonEmptyReadonlyArray<InferDictionaryKeys<T>>;
+  values(): NonEmptyReadonlyArray<InferDictionaryValues<T>>;
+  entries(): NonEmptyReadonlyArray<DictionaryEntry<T>>;
   isOfType(value: unknown): value is T[keyof T & string];
   [Symbol.iterator](): IterableIterator<DictionaryEntry<T>>;
   [Symbol.toStringTag]: 'Dictionary';
@@ -61,13 +65,14 @@ export type DictionaryDescriptor<T extends DictionarySource<unknown>> =
 
 const reservedKeys = new Set(['isOfType', 'keys', 'values', 'entries', 'size']);
 
-export function Dictionary<T extends DictionarySource<unknown>>(
+function memoizeKeys<T extends DictionarySource<unknown>>(
   source: T,
-): DictionaryDescriptor<T> {
+): NonEmptyReadonlyArray<InferDictionaryKeys<T>> {
   const memoKeys: readonly InferDictionaryKeys<T>[] = Object.freeze(
     Object.keys(source),
   );
-  if (memoKeys.length === 0) {
+
+  if (!isNonEmptyArray(memoKeys)) {
     throw new PanicException('Dictionary requires at least one key');
   }
 
@@ -79,23 +84,33 @@ export function Dictionary<T extends DictionarySource<unknown>>(
     }
   }
 
-  function keys(): readonly InferDictionaryKeys<T>[] {
+  return memoKeys;
+}
+
+export function Dictionary<T extends DictionarySource<unknown>>(
+  source: T,
+): DictionaryDescriptor<T> {
+  const memoKeys = memoizeKeys(source);
+
+  function keys(): NonEmptyReadonlyArray<InferDictionaryKeys<T>> {
     return memoKeys;
   }
 
-  const memoValues: readonly InferDictionaryValues<T>[] = Object.freeze(
-    Object.freeze(memoKeys.map((key) => source[key])),
-  );
-  function values(): readonly InferDictionaryValues<T>[] {
+  const memoValues: NonEmptyReadonlyArray<InferDictionaryValues<T>> =
+    Object.freeze(memoKeys.map((key) => source[key])) as NonEmptyReadonlyArray<
+      InferDictionaryValues<T>
+    >;
+
+  function values(): NonEmptyReadonlyArray<InferDictionaryValues<T>> {
     return memoValues;
   }
 
-  const memoEntries: readonly DictionaryEntry<T>[] = Object.freeze(
+  const memoEntries: NonEmptyReadonlyArray<DictionaryEntry<T>> = Object.freeze(
     memoKeys.map(
       (key) => Object.freeze([key, source[key]]) as DictionaryEntry<T>,
     ),
-  );
-  function entries(): readonly DictionaryEntry<T>[] {
+  ) as NonEmptyReadonlyArray<DictionaryEntry<T>>;
+  function entries(): NonEmptyReadonlyArray<DictionaryEntry<T>> {
     return memoEntries;
   }
 
