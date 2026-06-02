@@ -1,5 +1,11 @@
 # @typemint/core
 
+## 0.14.0
+
+### Minor Changes
+
+- Add NonEmptyArray alias
+
 ## 0.13.0
 
 ### Minor Changes
