@@ -718,7 +718,7 @@ const reservedKeys = new Set([
 ]);
 
 export function LiteralUnion<
-  T extends readonly [LiteralUnionMemberBase, ...LiteralUnionMemberBase[]],
+  const T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
 >(literals: T): LiteralUnionDescriptor<LiteralUnionFrom<T>> {
   if (literals.length === 0) {
     throw new PanicException('LiteralUnion requires at least one member');
