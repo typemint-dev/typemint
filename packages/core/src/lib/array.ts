@@ -53,5 +53,54 @@ export function assertNonEmptyArray<T>(
   arr: readonly T[],
   message: string | (() => string) = 'Expected a non-empty array',
 ): asserts arr is readonly [T, ...T[]] {
-  assert(arr.length > 0, message);
+  assert(isNonEmptyArray(arr), message);
+}
+
+/**
+ * Type guard that checks whether `arr` contains at least one element. When it
+ * returns `true`, the compiler narrows `arr` to a non-empty tuple, so
+ * positional access such as `arr[0]` is known to be present and APIs that
+ * require a non-empty array accept it without further casting.
+ *
+ * The narrowed type preserves the mutability of the input: a mutable `T[]`
+ * narrows to `[T, ...T[]]`, while a `readonly T[]` narrows to
+ * `readonly [T, ...T[]]`.
+ *
+ * Use this at branch points where emptiness is a legitimate, expected case you
+ * want to handle inline — prefer {@link assertNonEmptyArray} when emptiness is
+ * an invariant violation that should throw.
+ *
+ * @param arr - The array to check.
+ * @returns `true` if `arr` has at least one element, narrowing it to a
+ *   non-empty tuple; `false` otherwise.
+ *
+ * @example Guard before reading the head
+ *
+ * ```ts
+ * function firstOrNull<T>(items: T[]): T | null {
+ *   if (isNonEmptyArray(items)) {
+ *     // items is now [T, ...T[]]
+ *     return items[0];
+ *   }
+ *   return null;
+ * }
+ * ```
+ *
+ * @example Works on readonly arrays
+ *
+ * ```ts
+ * function headOrNull<T>(items: readonly T[]): T | null {
+ *   // items narrows to readonly [T, ...T[]] inside the branch
+ *   return isNonEmptyArray(items) ? items[0] : null;
+ * }
+ * ```
+ */
+export function isNonEmptyArray<T>(
+  arr: readonly T[],
+): arr is readonly [T, ...T[]];
+export function isNonEmptyArray<T>(arr: T[]): arr is [T, ...T[]];
+export function isNonEmptyArray<T>(
+  arr: readonly T[],
+): arr is readonly [T, ...T[]] {
+  return arr.length > 0;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertNonEmptyArray } from './array.js';
+import { assertNonEmptyArray, isNonEmptyArray } from './array.js';
 import { AssertException } from './assert.js';
 
 describe('(unit) array', () => {
@@ -59,6 +59,53 @@ describe('(unit) array', () => {
       const act = () => assertNonEmptyArray([], message);
       // Assert
       expect(act).toThrow('lazy message');
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // MARK: isNonEmptyArray
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('isNonEmptyArray', () => {
+    it('should return true if the array has one element', () => {
+      // Arrange
+      const arr = [1];
+      // Assert
+      expect(isNonEmptyArray(arr)).toBe(true);
+    });
+
+    it('should return true if the array has many elements', () => {
+      // Arrange
+      const arr = [1, 2, 3];
+      // Assert
+      expect(isNonEmptyArray(arr)).toBe(true);
+    });
+
+    it('should return true for a non-empty readonly array', () => {
+      // Arrange
+      const arr: readonly number[] = [1];
+      // Assert
+      expect(isNonEmptyArray(arr)).toBe(true);
+    });
+
+    it('should return false if the array is empty', () => {
+      // Arrange
+      const arr: number[] = [];
+      // Assert
+      expect(isNonEmptyArray(arr)).toBe(false);
+    });
+
+    it('should return false if the array is undefined', () => {
+      // Arrange
+      const arr: undefined[] = [];
+      // Assert
+      expect(isNonEmptyArray(arr)).toBe(false);
+    });
+
+    it('should return false if the array is null', () => {
+      // Arrange
+      const arr: null[] = [];
+      // Assert
+      expect(isNonEmptyArray(arr)).toBe(false);
     });
   });
 });
