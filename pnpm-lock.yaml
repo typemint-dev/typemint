@@ -46,9 +46,6 @@ importers:
       '@typemint/core':
         specifier: ^0.14.0
         version: 0.14.0
-      '@typemint/result':
-        specifier: ^0.1.11
-        version: 0.1.11
 
 packages:
 
