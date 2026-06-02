@@ -1441,6 +1441,18 @@ describe('(Unit) Result', () => {
       // Assert
       expect(result).toBe(false);
     });
+
+    it('should throw a PanicException if any value is not a Result', () => {
+      // Arrange & Act
+      const act = () =>
+        Result.allRecord({
+          name: Result.Ok('Alice'),
+          // @ts-expect-error - we want to test the panic
+          age: '30',
+        });
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────

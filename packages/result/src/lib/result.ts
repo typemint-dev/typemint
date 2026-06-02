@@ -1138,6 +1138,11 @@ export const Result = {
     const entries: Record<string, unknown> = {};
     for (const key in results) {
       const r = results[key];
+      if (!Result.isResult(r)) {
+        throw new PanicException(
+          'Expected a Result, got a value that is not a Result',
+        );
+      }
       if (r.isErr()) {
         return r as Err<
           { -readonly [K in keyof R]: InferOk<R[K]> },
