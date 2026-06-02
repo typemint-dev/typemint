@@ -1,4 +1,4 @@
-import { PanicException } from '@typemint/core';
+import { PanicException, type NonEmptyReadonlyArray } from '@typemint/core';
 import { Result } from '@typemint/result';
 
 /**
@@ -326,7 +326,7 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * // The descriptor already maintains a Set internally for `isOfType`.
    * ```
    */
-  toArray: () => readonly [T, ...T[]];
+  toArray: () => NonEmptyReadonlyArray<T>;
 
   /**
    * The number of members in the union.
@@ -724,10 +724,9 @@ export function LiteralUnion<
     throw new PanicException('LiteralUnion requires at least one member');
   }
 
-  const literalsCopy = Object.freeze([...literals] as readonly [
-    T[number],
-    ...T[number][],
-  ]);
+  const literalsCopy = Object.freeze([...literals] as NonEmptyReadonlyArray<
+    T[number]
+  >);
 
   for (const lit of literalsCopy) {
     if (reservedKeys.has(lit))
@@ -845,7 +844,7 @@ export function LiteralUnion<
     return typeof value === 'string' && memoSet.has(value);
   }
 
-  function toArray(): readonly [T[number], ...T[number][]] {
+  function toArray(): NonEmptyReadonlyArray<T[number]> {
     return literalsCopy;
   }
 
