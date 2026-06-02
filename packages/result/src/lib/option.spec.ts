@@ -867,6 +867,18 @@ describe('(Unit) Option', () => {
       });
       expect(result.isNone()).toBe(true);
     });
+
+    it('should throw a PanicException if any value is not an Option', () => {
+      // Arrange & Act
+      const act = () =>
+        Option.allRecord({
+          name: Option.Some('Alice'),
+          // @ts-expect-error - we want to test the panic
+          age: '30',
+        });
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────

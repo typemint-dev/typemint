@@ -1051,6 +1051,12 @@ export const Option = {
     const entries: Record<string, unknown> = {};
     for (const key in options) {
       const o = options[key];
+
+      if (!Option.isOption(o)) {
+        throw new PanicException(
+          'Expected an Option, got a value that is not an Option',
+        );
+      }
       if (o.isNone()) {
         return new _NoneImpl() as None<{
           -readonly [K in keyof R]: InferSome<R[K]>;
