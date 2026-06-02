@@ -1,5 +1,11 @@
 # @typemint/result
 
+## 0.1.11
+
+### Patch Changes
+
+- Check a nullable case in allRecord methods
+
 ## 0.1.10
 
 ### Patch Changes
