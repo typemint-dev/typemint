@@ -7,6 +7,7 @@ import {
   type InferDictionaryValues,
 } from './dictionary.js';
 import { PanicException, type NonEmptyReadonlyArray } from '@typemint/core';
+import { LiteralUnion } from './literal-union.js';
 
 describe('(unit) Dictionary', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -414,6 +415,55 @@ describe('(unit) Dictionary', () => {
       } else {
         expectTypeOf<typeof value>().toBeUnknown();
       }
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Dictionary from LiteralUnion
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Dictionary from LiteralUnion', () => {
+    it('should create a dictionary descriptor from a literal union', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c']);
+      // Act
+      const descriptor = Dictionary.fromLiteralUnion(union, {
+        a: 1,
+        b: 2,
+        c: 3,
+      });
+      // Assert
+      expectTypeOf<typeof descriptor>().toEqualTypeOf<
+        DictionaryDescriptor<{
+          readonly a: 1;
+          readonly b: 2;
+          readonly c: 3;
+        }>
+      >();
+    });
+
+    it('should throw a compilation error if the literal union does not cover all the keys of the given record', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c']);
+      // Act
+      // @ts-expect-error - the literal union does not cover all the keys of the given record
+      Dictionary.fromLiteralUnion(union, {
+        a: 1,
+        b: 2,
+      });
+    });
+
+    it('should keep the const value from the source record', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c']);
+      // Act
+      const descriptor = Dictionary.fromLiteralUnion(union, {
+        a: 1,
+        b: 2,
+        c: 3,
+      });
+      type A = typeof descriptor.a;
+      // Assert
+      expectTypeOf<A>().toEqualTypeOf<1>();
     });
   });
 });

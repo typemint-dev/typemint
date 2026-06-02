@@ -3,6 +3,10 @@ import {
   isNonEmptyArray,
   NonEmptyReadonlyArray,
 } from '@typemint/core';
+import {
+  type LiteralUnionDescriptor,
+  type LiteralUnionMemberBase,
+} from './literal-union.js';
 
 export type DictionaryKeyBase = string;
 
@@ -87,7 +91,7 @@ function memoizeKeys<T extends DictionarySource<unknown>>(
   return memoKeys;
 }
 
-export function Dictionary<T extends DictionarySource<unknown>>(
+export function Dictionary<const T extends DictionarySource<unknown>>(
   source: T,
 ): DictionaryDescriptor<T> {
   const memoKeys = memoizeKeys(source);
@@ -140,3 +144,13 @@ export function Dictionary<T extends DictionarySource<unknown>>(
 
   return descriptor;
 }
+
+Dictionary.fromLiteralUnion = <
+  T extends LiteralUnionMemberBase,
+  const S extends Record<T, unknown>,
+>(
+  _union: LiteralUnionDescriptor<T>,
+  source: S,
+) => {
+  return Dictionary(source);
+};
