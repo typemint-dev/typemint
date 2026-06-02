@@ -655,6 +655,35 @@ Country.match(c, {
 });
 ```
 
+### The union as a linchpin between representations
+
+The canonical pattern above flows keys *out* of one dictionary into the union.
+But a domain usually has **many** representations of the same entity — an
+alpha-2 code, an ISO numeric code, a flag emoji, a wire format, a DB column.
+The union is the right home for the **name**; each representation is a separate
+`Dictionary`. The union then becomes the **linchpin** they all pivot around.
+
+Think of `'germany'` as the hub of a wheel, with a spoke to each
+representation. None of the spokes connect to each other directly — they all
+connect through the name. Define the union *first*, then build each
+representation with `Dictionary.fromLiteralUnion`, which forces every
+dictionary to cover the union exhaustively:
+
+```ts
+const Country = LiteralUnion(['germany', 'france', 'usa']);
+
+// Each representation must cover every member — forget one and it won't compile.
+const alpha2  = Dictionary.fromLiteralUnion(Country, { germany: 'DE',  france: 'FR',  usa: 'US'  });
+const numeric = Dictionary.fromLiteralUnion(Country, { germany: 276,   france: 250,   usa: 840   });
+const flag    = Dictionary.fromLiteralUnion(Country, { germany: '🇩🇪', france: '🇫🇷', usa: '🇺🇸' });
+```
+
+Because every dictionary is keyed by the same union, the representations never
+drift apart: adding a member to `Country` makes *all three* `fromLiteralUnion`
+calls fail to compile until you supply the missing entry. Converting between
+any two representations is always a two-step pivot — *encoding → name →
+encoding* — and the name is the one fixed point they all agree on.
+
 ### Choosing between `match` and a `Dictionary` lookup
 
 - If a name maps to a **fixed value**, reach for the `Dictionary`
