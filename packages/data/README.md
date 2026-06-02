@@ -40,6 +40,7 @@ import { LiteralUnion, Dictionary } from '@typemint/data';
   - [Type helpers](#literalunion-type-helpers)
 - [`Dictionary`](#dictionary)
   - [Creating a dictionary](#creating-a-dictionary)
+  - [`Dictionary.fromLiteralUnion`](#dictionaryfromliteralunion)
   - [Member access](#member-access-1)
   - [`keys`](#keys-nonemptyreadonlyarray)
   - [`values`](#values-nonemptyreadonlyarray)
@@ -417,6 +418,75 @@ Rules enforced at construction time:
   thrown.
 - Keys must not collide with the reserved descriptor keys (`isOfType`, `keys`,
   `values`, `entries`, `size`). A collision throws a `PanicException`.
+
+### `Dictionary.fromLiteralUnion`
+
+`Dictionary.fromLiteralUnion(union, source)` builds a `Dictionary` whose keys
+are pinned to the members of an existing `LiteralUnion`. Use it when the
+**union is the source of truth** and every dictionary must cover it — the
+inverse of [the canonical pattern](#the-canonical-pattern-keys-flow-into-the-union),
+where keys flow *out* of the dictionary into the union.
+
+```ts
+const Country = LiteralUnion(['germany', 'france', 'usa']);
+
+const alpha2 = Dictionary.fromLiteralUnion(Country, {
+  germany: 'DE',
+  france: 'FR',
+  usa: 'US',
+});
+```
+
+It gives you two guarantees that a plain `Dictionary({ ... })` call does not:
+
+**1. Exhaustiveness is enforced at compile time.** The `source` object must
+provide an entry for *every* member of the union. Miss one and it is a type
+error — you cannot forget a member:
+
+```ts
+// ❌ Argument of type '{ germany: string; france: string; }' is not
+//    assignable to parameter of type 'Record<"germany" | "france" | "usa", …>'
+const partial = Dictionary.fromLiteralUnion(Country, {
+  germany: 'DE',
+  france: 'FR',
+});
+```
+
+The required keys come straight from the union you pass as the first argument,
+so the dictionary can never silently drift behind the union.
+
+> **Note — extra keys are not rejected.** Because `source` is captured through
+> a generic (`const`) type parameter, TypeScript's excess-property check does
+> not apply, so a stray key beyond the union's members is *not* a compile
+> error. The factory guarantees *every member is present*, not *only members
+> are present*. If you also need to forbid extras, add an explicit
+> `satisfies Record<InferLiteralUnion<typeof Country>, V>` on the source.
+
+**2. Values are captured as literals — no `as const` needed.** The factory uses
+a `const` type parameter on the `source`, so value literals are preserved
+without you having to annotate the object:
+
+```ts
+const alpha2 = Dictionary.fromLiteralUnion(Country, {
+  germany: 'DE',
+  france: 'FR',
+  usa: 'US',
+});
+
+alpha2.germany;        // type: 'DE'  (not widened to string)
+alpha2.values();       // type: NonEmptyReadonlyArray<'DE' | 'FR' | 'US'>
+alpha2.isOfType('DE'); // narrows to 'DE' | 'FR' | 'US'
+```
+
+With a plain `Dictionary({ germany: 'DE', ... })` the values would still be
+inferred as literals, but the keys are unchecked against any union. With
+`fromLiteralUnion` you get *both*: exhaustive keys **and** literal values, in a
+single call.
+
+> The first argument is only used to drive the key type at compile time; the
+> resulting descriptor is an ordinary `Dictionary` built from `source`. So all
+> the members and methods below (`keys`, `values`, `entries`, `isOfType`,
+> iteration, …) work exactly the same.
 
 ### Member access
 
