@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { assertNonEmptyArray, isNonEmptyArray } from './array.js';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import {
+  assertNonEmptyArray,
+  isNonEmptyArray,
+  type NonEmptyArray,
+  type NonEmptyReadonlyArray,
+} from './array.js';
 import { AssertException } from './assert.js';
 
 describe('(unit) array', () => {
@@ -106,6 +111,44 @@ describe('(unit) array', () => {
       const arr: null[] = [];
       // Assert
       expect(isNonEmptyArray(arr)).toBe(false);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // MARK: NonEmptyArray
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('NonEmptyArray', () => {
+    it('should infer the first element as non-optional', () => {
+      // Arrange
+      const testArr: NonEmptyArray<number> = [1];
+      // Assert
+      expectTypeOf(testArr[0]).toEqualTypeOf<number>();
+    });
+
+    it('should infer the rest of the elements as optional', () => {
+      // Arrange
+      const testArr: NonEmptyArray<number> = [1];
+      // Assert
+      expectTypeOf(testArr[1]).toEqualTypeOf<number | undefined>();
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // MARK: NonEmptyReadonlyArray
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('NonEmptyReadonlyArray', () => {
+    it('should infer the first element as non-optional', () => {
+      // Arrange
+      const testArr: NonEmptyReadonlyArray<number> = [1];
+      // Assert
+      expectTypeOf(testArr[0]).toEqualTypeOf<number>();
+    });
+
+    it('should infer the rest of the elements as optional', () => {
+      // Arrange
+      const testArr: NonEmptyReadonlyArray<number> = [1];
+      // Assert
+      expectTypeOf(testArr[1]).toEqualTypeOf<number | undefined>();
     });
   });
 });

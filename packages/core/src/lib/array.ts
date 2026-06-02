@@ -56,6 +56,8 @@ export function assertNonEmptyArray<T>(
   assert(isNonEmptyArray(arr), message);
 }
 
+export type NonEmptyArray<T> = [T, ...T[]];
+export type NonEmptyReadonlyArray<T> = readonly [T, ...T[]];
 /**
  * Type guard that checks whether `arr` contains at least one element. When it
  * returns `true`, the compiler narrows `arr` to a non-empty tuple, so
@@ -97,10 +99,10 @@ export function assertNonEmptyArray<T>(
  */
 export function isNonEmptyArray<T>(
   arr: readonly T[],
-): arr is readonly [T, ...T[]];
-export function isNonEmptyArray<T>(arr: T[]): arr is [T, ...T[]];
+): arr is NonEmptyReadonlyArray<T>;
+export function isNonEmptyArray<T>(arr: T[]): arr is NonEmptyArray<T>;
 export function isNonEmptyArray<T>(
   arr: readonly T[],
-): arr is readonly [T, ...T[]] {
+): arr is NonEmptyReadonlyArray<T> {
   return arr.length > 0;
 }
