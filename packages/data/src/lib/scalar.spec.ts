@@ -1,5 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest';
-import type { InferScalar, Scalar, ScalarDescriptor } from './scalar.js';
+import { InferScalar, Scalar, ScalarDescriptor } from './scalar.js';
+import { identity } from '@typemint/core';
 
 describe('(unit) Scalar', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -27,6 +28,44 @@ describe('(unit) Scalar', () => {
 
       // Assert
       expectTypeOf<TestScalar>().toEqualTypeOf<never>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: factory
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('when constructing a scalar descriptor', () => {
+    it('should derive the scalar name from the factory first argument', () => {
+      // Arrange
+      // Act
+      const descriptor = Scalar('test', identity);
+
+      // Assert
+      expectTypeOf<typeof descriptor>().toEqualTypeOf<
+        ScalarDescriptor<'test', unknown>
+      >();
+    });
+
+    it('should create a scalar descriptor with the "unknown" type if no type is provided in the constructor', () => {
+      // Arrange
+      // Act
+      const descriptor = Scalar('test', identity);
+
+      // Assert
+      expectTypeOf<typeof descriptor>().toEqualTypeOf<
+        ScalarDescriptor<'test', unknown>
+      >();
+    });
+
+    it('should create a scalar descriptor which will derive the type of the value from the constructor', () => {
+      // Arrange
+      // Act
+      const descriptor = Scalar('test', identity<number>);
+
+      // Assert
+      expectTypeOf<typeof descriptor>().toEqualTypeOf<
+        ScalarDescriptor<'test', number>
+      >();
     });
   });
 });
