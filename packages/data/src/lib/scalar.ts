@@ -36,7 +36,11 @@ function define<TName extends string, TType, TError = never>(
 
 export const Scalar = define;
 
-export type InferScalar<T extends ScalarDescriptor<string, any>> =
+export type InferScalar<T extends ScalarDescriptor<string, unknown>> =
   T extends ScalarDescriptor<infer TName, infer TType>
     ? Scalar<TName, TType>
     : never;
+
+export type InferScalarError<
+  T extends ScalarDescriptor<string, unknown, unknown>,
+> = T extends ScalarDescriptor<string, unknown, infer TError> ? TError : never;

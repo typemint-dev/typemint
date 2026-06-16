@@ -1,6 +1,12 @@
 import { describe, expectTypeOf, it } from 'vitest';
-import { InferScalar, Scalar, ScalarDescriptor } from './scalar.js';
+import {
+  InferScalar,
+  Scalar,
+  ScalarDescriptor,
+  type InferScalarError,
+} from './scalar.js';
 import { identity } from '@typemint/core';
+import type { Result } from '@typemint/result';
 
 describe('(unit) Scalar', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -28,6 +34,33 @@ describe('(unit) Scalar', () => {
 
       // Assert
       expectTypeOf<TestScalar>().toEqualTypeOf<never>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Infer Scalar error
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Kind', () => {
+    it('should be a function', () => {
+      // Arrange
+      type TestScalarDescriptor = ScalarDescriptor<'test', number, 'error'>;
+      // Act
+      type TestScalarError = InferScalarError<TestScalarDescriptor>;
+
+      // Assert
+      expectTypeOf<TestScalarError>().toEqualTypeOf<'error'>();
+    });
+
+    it('should infer to never when the passed type is not a scalar descriptor', () => {
+      // Arrange
+      type TestScalarDescriptor = number;
+
+      // Act
+      // @ts-expect-error - test scalar descriptor is not a scalar descriptor
+      type TestScalarError = InferScalarError<TestScalarDescriptor>;
+
+      // Assert
+      expectTypeOf<TestScalarError>().toEqualTypeOf<never>();
     });
   });
 
@@ -65,6 +98,25 @@ describe('(unit) Scalar', () => {
       // Assert
       expectTypeOf<typeof descriptor>().toEqualTypeOf<
         ScalarDescriptor<'test', number>
+      >();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: of
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('of', () => {
+    it('should create a scalar from a value and return a result with it', () => {
+      // Arrange
+      const descriptor = Scalar('test', identity<number>);
+      const value = 1;
+
+      // Act
+      const scalarR = descriptor.of(value);
+
+      // Assert
+      expectTypeOf<typeof scalarR>().toEqualTypeOf<
+        Result<Scalar<'test', number>, never>
       >();
     });
   });
