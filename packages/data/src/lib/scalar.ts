@@ -2,13 +2,14 @@ import { Result } from '@typemint/result';
 
 // Inspired by type-fest "Tagged" type
 declare const tag: unique symbol;
+
 export type Scalar<TName extends string, TType, TMeta = never> = TType & {
-  [tag]: {
+  readonly [tag]: {
     [K in TName]: TMeta;
   };
 };
 
-export type InferScalarName<T extends Scalar<string, unknown, unknown>> =
+export type InferScalarNames<T extends Scalar<string, unknown, unknown>> =
   T extends Scalar<infer UName, unknown, unknown> ? UName : never;
 
 export type InferScalarType<T extends ScalarDescriptor<string, unknown>> =
