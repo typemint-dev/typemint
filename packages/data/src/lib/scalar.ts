@@ -16,6 +16,9 @@ export type InferScalar<T extends ScalarDescriptor<string, unknown>> =
     ? Scalar<TName, TType>
     : never;
 
+export type InferScalarMeta<T extends Scalar<string, unknown, unknown>> =
+  T extends Scalar<string, unknown, infer TMeta> ? TMeta : never;
+
 export type ScalarDescriptor<TName extends string, TType, TError = never> = {
   readonly name: TName;
 

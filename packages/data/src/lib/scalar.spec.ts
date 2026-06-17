@@ -3,6 +3,7 @@ import {
   InferScalar,
   Scalar,
   ScalarDescriptor,
+  type InferScalarMeta,
   type InferScalarName,
 } from './scalar.js';
 
@@ -57,6 +58,42 @@ describe('(unit) Scalar', () => {
       // Act
       // @ts-expect-error - test scalar is not a scalar
       type TestScalarName = InferScalarName<TestScalar>;
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Infer scalar meta
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Infer scalar meta from a scalar', () => {
+    it('should infer the scalar meta from the scalar', () => {
+      // Arrange
+      type TestScalar = Scalar<'test', number, 'meta'>;
+
+      // Act
+      type TestScalarMeta = InferScalarMeta<TestScalar>;
+
+      // Assert
+      expectTypeOf<TestScalarMeta>().toEqualTypeOf<'meta'>();
+    });
+
+    it('should not allow to infer a scalar meta from a non-scalar', () => {
+      // Arrange
+      type TestScalar = number;
+
+      // Act
+      // @ts-expect-error - test scalar is not a scalar
+      type TestScalarMeta = InferScalarMeta<TestScalar>;
+    });
+
+    it('should infer to never when the passed scalar has no meta', () => {
+      // Arrange
+      type TestScalar = Scalar<'test', number>;
+
+      // Act
+      type TestScalarMeta = InferScalarMeta<TestScalar>;
+
+      // Assert
+      expectTypeOf<TestScalarMeta>().toEqualTypeOf<never>();
     });
   });
 });
