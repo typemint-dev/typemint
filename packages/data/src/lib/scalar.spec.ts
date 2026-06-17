@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest';
 import {
-  InferScalar,
+  InferScalarType,
   Scalar,
   ScalarDescriptor,
   type InferScalarMeta,
@@ -17,7 +17,7 @@ describe('(unit) Scalar', () => {
       type TestScalarDescriptor = ScalarDescriptor<'test', number>;
 
       // Act
-      type TestScalar = InferScalar<TestScalarDescriptor>;
+      type TestScalar = InferScalarType<TestScalarDescriptor>;
 
       // Assert
       expectTypeOf<TestScalar>().toEqualTypeOf<Scalar<'test', number>>();
@@ -29,7 +29,7 @@ describe('(unit) Scalar', () => {
 
       // Act
       // @ts-expect-error - test scalar descriptor is not a scalar descriptor
-      type TestScalar = InferScalar<TestScalarDescriptor>;
+      type TestScalar = InferScalarType<TestScalarDescriptor>;
 
       // Assert
       expectTypeOf<TestScalar>().toEqualTypeOf<never>();

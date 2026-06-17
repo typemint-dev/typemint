@@ -11,7 +11,7 @@ export type Scalar<TName extends string, TType, TMeta = never> = TType & {
 export type InferScalarName<T extends Scalar<string, unknown, unknown>> =
   T extends Scalar<infer UName, unknown, unknown> ? UName : never;
 
-export type InferScalar<T extends ScalarDescriptor<string, unknown>> =
+export type InferScalarType<T extends ScalarDescriptor<string, unknown>> =
   T extends ScalarDescriptor<infer TName, infer TType>
     ? Scalar<TName, TType>
     : never;
