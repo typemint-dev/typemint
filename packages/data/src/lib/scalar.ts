@@ -1,13 +1,30 @@
 import { Result } from '@typemint/result';
 
-// Inspired by type-fest "Tagged" type
+// Taken from the type-fest "Tagged" type
 declare const tag: unique symbol;
-
-export type Scalar<TName extends string, TType, TMeta = never> = TType & {
-  readonly [tag]: {
-    [K in TName]: TMeta;
-  };
+type TagContainer<Token> = {
+  readonly [tag]: Token;
 };
+
+type Tag<Token extends PropertyKey, TagMetadata> = TagContainer<{
+  [K in Token]: TagMetadata;
+}>;
+
+export type Scalar<TName extends string, TType, TMeta = never> = TType &
+  Tag<TName, TMeta>;
+
+type RemoveAllTags<T> =
+  T extends Tag<PropertyKey, any>
+    ? {
+        [ThisTag in keyof T[typeof tag]]: T extends Scalar<
+          ThisTag & string,
+          infer Type,
+          T[typeof tag][ThisTag]
+        >
+          ? RemoveAllTags<Type>
+          : never;
+      }[keyof T[typeof tag]]
+    : T;
 
 export type InferScalarNames<T extends Scalar<string, unknown, unknown>> =
   T extends Scalar<infer UName, unknown, unknown> ? UName : never;
@@ -17,16 +34,16 @@ export type InferScalarType<T extends ScalarDescriptor<string, unknown>> =
     ? Scalar<TName, TType>
     : never;
 
+export type InferScalarRoot<T extends Scalar<string, unknown, unknown>> =
+  RemoveAllTags<T>;
+
 export type InferScalarMeta<T extends Scalar<string, unknown, unknown>> =
   T extends Scalar<string, unknown, infer TMeta> ? TMeta : never;
 
 export type ScalarDescriptor<TName extends string, TType, TError = never> = {
   readonly name: TName;
 
-  of(
-    // Check if the value input value is a scalar and unwrap its base type.
-    value: TType extends Scalar<string, infer UType> ? UType : TType,
-  ): Result<Scalar<TName, TType>, TError>;
+  of(value: TType): Result<Scalar<TName, TType>, TError>;
 };
 
 /*

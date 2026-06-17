@@ -3,6 +3,7 @@ import {
   InferScalarType,
   Scalar,
   ScalarDescriptor,
+  type InferScalarRoot,
   type InferScalarMeta,
   type InferScalarNames,
 } from './scalar.js';
@@ -59,6 +60,46 @@ describe('(unit) Scalar', () => {
       // @ts-expect-error - test scalar is not a scalar
       type TestScalarName = InferScalarNames<TestScalar>;
     });
+
+    it('should infer the scalar name from a composed scalar as union of all the scalar names', () => {
+      // Arrange
+      type Int = Scalar<'int', number>;
+      type UInt = Scalar<'uint', Int>;
+
+      // Act
+      type ComposedScalarName = InferScalarNames<UInt>;
+
+      // Assert
+      expectTypeOf<ComposedScalarName>().toEqualTypeOf<'uint' | 'int'>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Infer scalar root
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Infer scalar root from a scalar', () => {
+    it('should infer the scalar base type from the scalar', () => {
+      // Arrange
+      type TestScalar = Scalar<'test', number>;
+
+      // Act
+      type TestScalarRoot = InferScalarRoot<TestScalar>;
+
+      // Assert
+      expectTypeOf<TestScalarRoot>().toEqualTypeOf<number>();
+    });
+
+    it('should infer the scalar root from a composed scalar', () => {
+      // Arrange
+      type Int = Scalar<'int', number>;
+      type UInt = Scalar<'uint', Int>;
+
+      // Act
+      type ComposedScalarBaseType = InferScalarRoot<UInt>;
+
+      // Assert
+      expectTypeOf<ComposedScalarBaseType>().toEqualTypeOf<number>();
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -95,36 +136,8 @@ describe('(unit) Scalar', () => {
       // Assert
       expectTypeOf<TestScalarMeta>().toEqualTypeOf<never>();
     });
-  });
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // MARK: Scalar composition from other scalar
-  // ─────────────────────────────────────────────────────────────────────────────
-  describe('Compose a scalar from another scalar', () => {
-    it('should accept the composed scalar as a parent type', () => {
-      // Arrange
-      type Int = Scalar<'int', number>;
-
-      // Act
-      type UInt = Scalar<'uint', Int>;
-
-      // Assert
-      expectTypeOf<UInt>().toExtend<Int>();
-    });
-
-    it('should infer the composed scalar name as union of all the scalar names', () => {
-      // Arrange
-      type Int = Scalar<'int', number>;
-      type UInt = Scalar<'uint', Int>;
-
-      // Act
-      type ComposedScalarName = InferScalarNames<UInt>;
-
-      // Assert
-      expectTypeOf<ComposedScalarName>().toEqualTypeOf<'uint' | 'int'>();
-    });
-
-    it('should infer the composed scalar meta as union of all the scalar metas', () => {
+    it('should infer a union of all the scalar meta when composed from another scalar', () => {
       // Arrange
       type Int = Scalar<'int', number, 'intMeta'>;
       type UInt = Scalar<'uint', Int, 'uintMeta'>;
