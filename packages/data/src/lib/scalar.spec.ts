@@ -112,16 +112,30 @@ describe('(unit) Scalar', () => {
       expectTypeOf<UInt>().toExtend<Int>();
     });
 
-    it('should infer the composed scalar finale name', () => {
+    it('should infer the composed scalar name as union of all the scalar names', () => {
       // Arrange
       type Int = Scalar<'int', number>;
       type UInt = Scalar<'uint', Int>;
 
       // Act
-      type FinalName = InferScalarNames<UInt>;
+      type ComposedScalarName = InferScalarNames<UInt>;
 
       // Assert
-      expectTypeOf<FinalName>().toEqualTypeOf<'uint' | 'int'>();
+      expectTypeOf<ComposedScalarName>().toEqualTypeOf<'uint' | 'int'>();
+    });
+
+    it('should infer the composed scalar meta as union of all the scalar metas', () => {
+      // Arrange
+      type Int = Scalar<'int', number, 'intMeta'>;
+      type UInt = Scalar<'uint', Int, 'uintMeta'>;
+
+      // Act
+      type ComposedScalarMeta = InferScalarMeta<UInt>;
+
+      // Assert
+      expectTypeOf<ComposedScalarMeta>().toEqualTypeOf<
+        'uintMeta' | 'intMeta'
+      >();
     });
   });
 });
