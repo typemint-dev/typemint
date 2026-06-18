@@ -1,5 +1,12 @@
 # @typemint/result
 
+## 0.1.12
+
+### Patch Changes
+
+- Updated dependencies
+  - @typemint/core@0.15.0
+
 ## 0.1.11
 
 ### Patch Changes
