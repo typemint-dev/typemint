@@ -63,6 +63,14 @@ pnpm add @typemint/core
 | ------- | -------------------------------------------------------------------------------------------------- |
 | `Stamp` | Creates a factory-scoped hidden symbol to verify an object was produced by a specific constructor. |
 
+### Compile-time type witnesses
+
+| Export             | Purpose                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `Witness`          | A value-level carrier for a type `T` with no runtime payload (a phantom witness).             |
+| `witness`          | Factory that creates a `Witness<T>` so a type can travel as a value and drive inference.      |
+| `InferWitnessType` | Extracts the type `T` carried by a `Witness<T>`.                                              |
+
 ### Errors
 
 | Export           | Purpose                                                                                        |
@@ -448,6 +456,65 @@ function createUser(name: string) {
 const user = createUser('Alice');
 UserStamp.isStamped(user); // true
 UserStamp.isStamped({ name: 'Alice' }); // false — not stamped
+```
+
+---
+
+### `Witness`
+
+A `Witness<T>` is a **compile-time only** carrier for a type. It has no
+runtime payload — the type it holds exists purely in the type system — so its
+sole purpose is to let a type travel as a _value_. Create one with `witness<T>()`
+and recover the carried type with `InferWitnessType`.
+
+```typescript
+import { witness, type Witness, type InferWitnessType } from '@typemint/core';
+
+const w = witness<{ id: string }>();
+//    ^? Witness<{ id: string }>
+
+type Carried = InferWitnessType<typeof w>;
+//   ^? { id: string }
+```
+
+**Why this exists.** TypeScript resolves type arguments _all-or-nothing_: the
+moment you supply one explicit type argument you must supply them all. So a
+factory that wants to **infer** one parameter from a value (e.g. a name) while
+**accepting** another type explicitly cannot be written directly:
+
+```typescript
+declare function define<TName extends string, T>(name: TName): Tagged<TName, T>;
+
+define<'User'>('User');
+// ❌ Expected 2 type arguments, but got 1.
+
+define('User');
+// ❌ T cannot be inferred — there is no value to infer it from.
+```
+
+A witness solves this by turning the type into a value, so **both** parameters
+are inferred from arguments:
+
+```typescript
+import { witness, type Witness } from '@typemint/core';
+
+declare function define<TName extends string, T>(
+  name: TName,
+  type: Witness<T>,
+): Tagged<TName, T>;
+
+const user = define('User', witness<{ id: string }>());
+//    ^? Tagged<'User', { id: string }>
+// TName is inferred as 'User', T as { id: string } — no explicit type arguments.
+```
+
+`InferWitnessType` is constrained to `Witness<unknown>`, so passing a
+non-witness is a compile error at the use site rather than a silent fallback
+to `never`:
+
+```typescript
+type Oops = InferWitnessType<number>;
+// ❌ Type 'number' does not satisfy the constraint 'Witness<unknown>'.
 ```
 
 ---

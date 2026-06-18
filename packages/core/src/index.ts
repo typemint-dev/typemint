@@ -12,3 +12,4 @@ export * from './lib/with-code.js';
 export * from './lib/with-message.js';
 export * from './lib/with-detail.js';
 export * from './lib/array.js';
+export * from './lib/witness.js';
