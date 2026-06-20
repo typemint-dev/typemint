@@ -1,4 +1,4 @@
-import type { Result, InferOk } from '@typemint/result';
+import type { Result, InferOk, InferErr } from '@typemint/result';
 
 /**
  * A function that decodes a value of type `TIn` into a value of type `TOut`.
@@ -32,3 +32,6 @@ export type Decoder<TIn, TOut, TError = never> = (
 
 export type InferDecoderOutput<TDecoder extends Decoder<unknown, unknown>> =
   InferOk<ReturnType<TDecoder>>;
+
+export type InferDecoderError<TDecoder extends Decoder<unknown, unknown>> =
+  InferErr<ReturnType<TDecoder>>;
