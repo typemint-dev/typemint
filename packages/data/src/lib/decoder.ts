@@ -35,3 +35,6 @@ export type InferDecoderOutput<TDecoder extends Decoder<unknown, unknown>> =
 
 export type InferDecoderError<TDecoder extends Decoder<unknown, unknown>> =
   InferErr<ReturnType<TDecoder>>;
+
+export type InferDecoderInput<TDecoder extends Decoder<unknown, unknown>> =
+  TDecoder extends Decoder<infer TIn, unknown> ? TIn : never;

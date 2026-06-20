@@ -2,6 +2,7 @@ import { describe, expectTypeOf, it } from 'vitest';
 import type {
   Decoder,
   InferDecoderError,
+  InferDecoderInput,
   InferDecoderOutput,
 } from './decoder.js';
 
@@ -110,6 +111,64 @@ describe('(unit) decoder', () => {
       // Act
       // @ts-expect-error - InferDecoderError currently constrains to Decoder<unknown, unknown, never>
       type Error = InferDecoderError<TestDecoder>;
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: InferDecoderInput
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('InferDecoderInput', () => {
+    it('should infer the input type of a decoder', () => {
+      // Arrange
+      type TestDecoder = Decoder<unknown, number>;
+
+      // Act
+      type Input = InferDecoderInput<TestDecoder>;
+
+      // Assert
+      expectTypeOf<Input>().toEqualTypeOf<unknown>();
+    });
+
+    it('should infer unknown when the decoder uses unknown input', () => {
+      // Arrange
+      type TestDecoder = Decoder<unknown, bigint>;
+
+      // Act
+      type Input = InferDecoderInput<TestDecoder>;
+
+      // Assert
+      expectTypeOf<Input>().toEqualTypeOf<unknown>();
+    });
+
+    it('should infer input from a function-shaped decoder alias', () => {
+      // Arrange
+      type TestDecoder = (
+        value: unknown,
+      ) => ReturnType<Decoder<unknown, number>>;
+
+      // Act
+      type Input = InferDecoderInput<TestDecoder>;
+
+      // Assert
+      expectTypeOf<Input>().toEqualTypeOf<unknown>();
+    });
+
+    it('should reject decoders with narrower input types', () => {
+      // Arrange
+      type TestDecoder = Decoder<string, number>;
+
+      // Act
+      // @ts-expect-error - InferDecoderInput currently constrains to Decoder<unknown, unknown, never>, so narrower inputs are rejected
+      type Input = InferDecoderInput<TestDecoder>;
+    });
+
+    it('should reject decoders that specify a non-default error type', () => {
+      // Arrange
+      type TestDecoder = Decoder<unknown, number, RangeError>;
+
+      // Act
+      // @ts-expect-error - InferDecoderInput currently constrains to Decoder<unknown, unknown, never>
+      type Input = InferDecoderInput<TestDecoder>;
     });
   });
 });
