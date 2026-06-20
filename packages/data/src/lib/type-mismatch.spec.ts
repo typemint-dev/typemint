@@ -8,7 +8,6 @@ import {
 
 describe('(unit) TypeMismatchError', () => {
   const numberDescriptor = TypeDescriptor('Number', witness<number>());
-  const stringDescriptor = TypeDescriptor('String', witness<string>());
 
   // ─────────────────────────────────────────────────────────────────────────────
   // MARK: Construction
@@ -16,35 +15,45 @@ describe('(unit) TypeMismatchError', () => {
   describe('Construction', () => {
     it('should tag the error with the TypeMismatchError kind', () => {
       // Arrange & Act
-      const error = TypeMismatchError(numberDescriptor, stringDescriptor);
+      const error = TypeMismatchError(numberDescriptor, 'hello');
 
       // Assert
       expect(error.kind).toBe('TypeMismatchError');
     });
 
-    it('should derive the message from the descriptor names', () => {
+    it('should derive the message from the expected name and received value', () => {
       // Arrange & Act
-      const error = TypeMismatchError(numberDescriptor, stringDescriptor);
+      const error = TypeMismatchError(numberDescriptor, 'hello');
 
       // Assert
-      expect(error.message).toBe('Expected Number but got String');
+      expect(error.message).toBe('Expected Number but got string');
     });
 
-    it('should preserve the expected and received descriptors in details', () => {
+    it('should describe the runtime type of common received values', () => {
+      // Arrange & Act & Assert
+      expect(TypeMismatchError(numberDescriptor, null).message).toBe(
+        'Expected Number but got null',
+      );
+      expect(TypeMismatchError(numberDescriptor, [1, 2]).message).toBe(
+        'Expected Number but got Array',
+      );
+      expect(TypeMismatchError(numberDescriptor, true).message).toBe(
+        'Expected Number but got boolean',
+      );
+    });
+
+    it('should preserve the expected descriptor and received value in details', () => {
       // Arrange & Act
-      const error = TypeMismatchError(numberDescriptor, stringDescriptor);
+      const error = TypeMismatchError(numberDescriptor, 'hello');
 
       // Assert
       expect(error.details.expected).toBe(numberDescriptor);
-      expect(error.details.received).toBe(stringDescriptor);
+      expect(error.details.received).toBe('hello');
     });
 
     it('should be narrowable via the Kind discriminant', () => {
       // Arrange
-      const error: unknown = TypeMismatchError(
-        numberDescriptor,
-        stringDescriptor,
-      );
+      const error: unknown = TypeMismatchError(numberDescriptor, 'hello');
 
       // Act & Assert
       expect(Kind.isOf(error, 'TypeMismatchError')).toBe(true);
@@ -68,7 +77,7 @@ describe('(unit) TypeMismatchError', () => {
 
     it('should infer the expected type from a constructed error', () => {
       // Arrange
-      const error = TypeMismatchError(numberDescriptor, stringDescriptor);
+      const error = TypeMismatchError(numberDescriptor, 'hello');
 
       // Act
       type Expected = InferTypeMismatchErrorExpected<typeof error>;
@@ -104,7 +113,7 @@ describe('(unit) TypeMismatchError', () => {
 
     it('should infer the received type from a constructed error', () => {
       // Arrange
-      const error = TypeMismatchError(numberDescriptor, stringDescriptor);
+      const error = TypeMismatchError(numberDescriptor, 'hello');
 
       // Act
       type Received = InferTypeMismatchErrorReceived<typeof error>;

@@ -8,17 +8,20 @@ import { Kind, WithDetail, WithMessage, TypeDescriptor } from '@typemint/core';
  * - {@link Kind} — tags the object with the discriminant `'TypeMismatchError'`
  *   so it can be narrowed within discriminated unions.
  * - {@link WithMessage} — a human-readable `message`.
- * - {@link WithDetail} — the structured `details`, holding the `expected` and
- *   `received` {@link TypeDescriptor}s that drive both the message and
- *   compile-time inference.
+ * - {@link WithDetail} — the structured `details`, holding the `expected`
+ *   {@link TypeDescriptor} and the actual `received` value.
  *
- * The `expected` and `received` types are phantom: they only ever live in the
- * type system (carried by the descriptors), so they can be recovered later with
- * {@link InferTypeMismatchErrorExpected} and
+ * The two sides are intentionally asymmetric. `expected` is something the
+ * caller knows statically, so it is described by a {@link TypeDescriptor} whose
+ * phantom `TExpected` type can be recovered later with
+ * {@link InferTypeMismatchErrorExpected}. `received`, on the other hand, is the
+ * value you are trying to identify — at a type-check boundary it is usually
+ * `unknown` — so it is stored as the raw value rather than a descriptor. Its
+ * type `TReceived` is inferred from that value and can be recovered with
  * {@link InferTypeMismatchErrorReceived}.
  *
  * @typeParam TExpected - The type that was expected (phantom).
- * @typeParam TReceived - The type that was actually received (phantom).
+ * @typeParam TReceived - The type of the received value.
  *
  * @example Narrowing a union on the `kind` discriminant
  *
@@ -42,7 +45,7 @@ export type TypeMismatchError<TExpected, TReceived> =
     WithMessage &
     WithDetail<{
       expected: TypeDescriptor<TExpected, string>;
-      received: TypeDescriptor<TReceived, string>;
+      received: TReceived;
     }>;
 
 /**
@@ -80,16 +83,17 @@ export type InferTypeMismatchErrorReceived<
 const kind = Kind.from('TypeMismatchError');
 
 /**
- * Creates a {@link TypeMismatchError} from the {@link TypeDescriptor}s of the
- * expected and received types.
+ * Creates a {@link TypeMismatchError} from a {@link TypeDescriptor} for the
+ * expected type and the actual received value.
  *
- * Both type parameters are inferred from the descriptor arguments, so neither
- * has to be written out at the call site. The `message` is derived from the
- * descriptors' `name`s as `Expected <expected> but got <received>`, and the
- * descriptors themselves are preserved under `details` for programmatic access.
+ * `TExpected` is inferred from the descriptor and `TReceived` from the value,
+ * so neither has to be written out at the call site. The `message` is derived
+ * as `Expected <expected> but got <received>`, where the received part is the
+ * runtime type name of the value (see {@link typeNameOf}). The descriptor and
+ * the raw value are preserved under `details` for programmatic access.
  *
  * @param expected - A descriptor for the type that was expected.
- * @param received - A descriptor for the type that was actually received.
+ * @param received - The value that was actually received.
  * @returns A fully populated `TypeMismatchError`.
  *
  * @example
@@ -99,24 +103,48 @@ const kind = Kind.from('TypeMismatchError');
  *
  * const error = TypeMismatchError(
  *   TypeDescriptor('Number', witness<number>()),
- *   TypeDescriptor('String', witness<string>()),
+ *   'hello',
  * );
  *
- * error.kind;                  // 'TypeMismatchError'
- * error.message;               // 'Expected Number but got String'
- * error.details.expected.name; // 'Number'
- * error.details.received.name; // 'String'
+ * error.kind;             // 'TypeMismatchError'
+ * error.message;          // 'Expected Number but got string'
+ * error.details.expected; // the Number descriptor
+ * error.details.received; // 'hello'
  * ```
  */
 export function TypeMismatchError<TExpected, TReceived>(
   expected: TypeDescriptor<TExpected, string>,
-  received: TypeDescriptor<TReceived, string>,
+  received: TReceived,
 ): TypeMismatchError<TExpected, TReceived> {
-  const message = `Expected ${expected.name} but got ${received.name}`;
+  const message = `Expected ${expected.name} but got ${typeNameOf(received)}`;
 
   return {
     ...kind,
     ...WithMessage.from(message),
     ...WithDetail.from({ expected, received }),
   };
+}
+
+/**
+ * Derives a human-readable runtime type name for an arbitrary value, used to
+ * describe the `received` value in a {@link TypeMismatchError} message.
+ *
+ * Returns `'null'` for `null`, `'Array'` for arrays, the constructor name for
+ * other objects (falling back to `'object'`), and the `typeof` result for
+ * primitives.
+ */
+function typeNameOf(value: unknown): string {
+  if (value === null) {
+    return 'null';
+  }
+
+  if (Array.isArray(value)) {
+    return 'Array';
+  }
+
+  if (typeof value === 'object') {
+    return value.constructor?.name ?? 'object';
+  }
+
+  return typeof value;
 }
