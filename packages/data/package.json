@@ -48,7 +48,7 @@
     "prepublishOnly": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test"
   },
   "dependencies": {
-    "@typemint/core": "^0.16.0",
-    "@typemint/result": "^0.1.13"
+    "@typemint/core": "^0.16.1",
+    "@typemint/result": "^0.1.14"
   }
 }
