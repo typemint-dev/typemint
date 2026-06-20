@@ -1,5 +1,11 @@
 # @typemint/core
 
+## 0.16.0
+
+### Minor Changes
+
+- Add TypeDescriptor to exapnd Withness with a runtime name representation
+
 ## 0.15.0
 
 ### Minor Changes
