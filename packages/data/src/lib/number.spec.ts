@@ -1,69 +1,184 @@
-import { describe, expect, it } from 'vitest';
-import { isNumber } from './number.js';
-
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import {
+  InferTypeDescriptorName,
+  InferTypeDescriptorType,
+  Kind,
+} from '@typemint/core';
+import {
+  NumberDescriptor,
+  isNumber,
+  unknownToNumberDecoder,
+  type UnknownToNumberDecoder,
+} from './number.js';
+import type { TypeMismatchError } from './type-mismatch.js';
 describe('(unit) number', () => {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: NumberDescriptor
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('NumberDescriptor', () => {
+    it('should carry the literal name "number"', () => {
+      // Assert
+      expect(NumberDescriptor.name).toBe('number');
+    });
+    it('should infer the literal name "number"', () => {
+      // Act
+      type Name = InferTypeDescriptorName<typeof NumberDescriptor>;
+      // Assert
+      expectTypeOf<Name>().toEqualTypeOf<'number'>();
+    });
+    it('should describe the number type via its witness', () => {
+      // Act
+      type Described = InferTypeDescriptorType<typeof NumberDescriptor>;
+      // Assert
+      expectTypeOf<Described>().toEqualTypeOf<number>();
+    });
+  });
   // ─────────────────────────────────────────────────────────────────────────────
   // MARK: isNumber
   // ─────────────────────────────────────────────────────────────────────────────
-  describe('isString', () => {
+  describe('isNumber', () => {
     it('should return true for a primitive number', () => {
       // Assert
       expect(isNumber(42)).toBe(true);
     });
-
-    it('should return true for a negative number', () => {
-      // Assert
-      expect(isNumber(-42)).toBe(true);
-    });
-
-    it('should return true for a positive number', () => {
-      // Assert
-      expect(isNumber(42)).toBe(true);
-    });
-
-    it('should return true for a zero', () => {
+    it('should return true for zero', () => {
       // Assert
       expect(isNumber(0)).toBe(true);
     });
-
-    it('should return true for a floating point number', () => {
-      // Assert
-      expect(isNumber(3.14)).toBe(true);
-    });
-
-    it('should return true for a scientific notation number', () => {
-      // Assert
-      expect(isNumber(1e10)).toBe(true);
-    });
-
-    it('should return true for a binary number', () => {
-      // Assert
-      expect(isNumber(0b1010)).toBe(true);
-    });
-
-    it('should return true for an octal number', () => {
-      // Assert
-      expect(isNumber(0o10)).toBe(true);
-    });
-
-    it('should return true for a hexadecimal number', () => {
-      // Assert
-      expect(isNumber(0x10)).toBe(true);
-    });
-
-    it('should return true for a NaN', () => {
+    it('should return true for NaN (typeof NaN is "number")', () => {
       // Assert
       expect(isNumber(NaN)).toBe(true);
     });
-
-    it('should return true for a Infinity', () => {
+    it('should return true for Infinity', () => {
       // Assert
       expect(isNumber(Infinity)).toBe(true);
     });
-
-    it('should return false for a non-number', () => {
+    it.each([
+      ['a string', '42'],
+      ['a boolean', true],
+      ['a bigint', 42n],
+      ['null', null],
+      ['undefined', undefined],
+      ['an object', {}],
+      ['an array', []],
+      ['a Number wrapper object', new Number(42)],
+    ])('should return false for %s', (_label, value) => {
       // Assert
-      expect(isNumber('42')).toBe(false);
+      expect(isNumber(value)).toBe(false);
+    });
+    it('should narrow the value to number when it returns true', () => {
+      // Arrange
+      const value: unknown = 42;
+      // Act & Assert
+      if (isNumber(value)) {
+        expectTypeOf<typeof value>().toEqualTypeOf<number>();
+      } else {
+        expectTypeOf<typeof value>().toBeUnknown();
+      }
+    });
+  });
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: unknownToNumberDecoder — success
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('unknownToNumberDecoder (success)', () => {
+    it('should return an Ok for a number value', () => {
+      // Act
+      const result = unknownToNumberDecoder(42);
+      // Assert
+      expect(result.isOk()).toBe(true);
+    });
+    it('should preserve the decoded number value unchanged', () => {
+      // Act
+      const result = unknownToNumberDecoder(42);
+      // Assert
+      expect(result.unsafeUnwrap()).toBe(42);
+    });
+    it('should decode zero', () => {
+      // Act
+      const result = unknownToNumberDecoder(0);
+      // Assert
+      expect(result.isOk()).toBe(true);
+      expect(result.unsafeUnwrap()).toBe(0);
+    });
+  });
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: unknownToNumberDecoder — failure
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('unknownToNumberDecoder (failure)', () => {
+    it('should return an Err for a non-number value', () => {
+      // Act
+      const result = unknownToNumberDecoder('42');
+      // Assert
+      expect(result.isErr()).toBe(true);
+    });
+    it('should fail with a TypeMismatchError', () => {
+      // Act
+      const result = unknownToNumberDecoder('42');
+      // Assert
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(Kind.isOf(result.unwrapErr(), 'TypeMismatchError')).toBe(true);
+      }
+    });
+    it('should expect the NumberDescriptor in the error details', () => {
+      // Act
+      const result = unknownToNumberDecoder('42');
+      // Assert
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.unwrapErr().details.expected).toBe(NumberDescriptor);
+      }
+    });
+    it('should preserve the received value in the error details', () => {
+      // Arrange
+      const value = { id: 1 };
+      // Act
+      const result = unknownToNumberDecoder(value);
+      // Assert
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.unwrapErr().details.received).toBe(value);
+      }
+    });
+    it.each([
+      ['42', 'Expected number but got string'],
+      [true, 'Expected number but got boolean'],
+      [null, 'Expected number but got null'],
+      [[1, 2], 'Expected number but got Array'],
+    ])(
+      'should derive the message from the received runtime type for %s',
+      (value, message) => {
+        // Act
+        const result = unknownToNumberDecoder(value);
+        // Assert
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.unwrapErr().message).toBe(message);
+        }
+      },
+    );
+  });
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: UnknownToNumberDecoder type
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('UnknownToNumberDecoder type', () => {
+    it('should type the canonical decoder as an UnknownToNumberDecoder', () => {
+      // Assert
+      expectTypeOf(
+        unknownToNumberDecoder,
+      ).toEqualTypeOf<UnknownToNumberDecoder>();
+    });
+    it('should produce a number success channel and a TypeMismatchError failure channel', () => {
+      // Act
+      const result = unknownToNumberDecoder(42);
+      // Assert
+      if (result.isOk()) {
+        expectTypeOf(result.value).toEqualTypeOf<number>();
+      } else {
+        expectTypeOf(result.error).toEqualTypeOf<
+          TypeMismatchError<number, unknown>
+        >();
+      }
     });
   });
 });
