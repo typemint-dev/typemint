@@ -895,6 +895,62 @@ export function Err<T, E>(error: E): Err<T, E>;
 export function Err<T = never, E = unknown>(error: E): Err<T, E> {
   return new _ErrImpl(error);
 }
+
+/**
+ * Lifts a value into a {@link Result} based on a predicate. Returns
+ * {@link Ok} with the value when the predicate holds, {@link Err}
+ * with the provided error otherwise.
+ *
+ * When `predicate` is a type-guard (`value is U`), the resulting
+ * {@link Ok} is narrowed to `U` — making this the idiomatic way to turn
+ * a type-guard into a `Result` without a manual `if`/`else`.
+ *
+ * The `error` argument may be a plain value or a lazy factory
+ * `(value: T) => E` that receives the rejected value. The factory is
+ * only invoked when the predicate fails, so it is safe to build an
+ * expensive or value-dependent error there.
+ *
+ * Note: because the lazy form is detected via `typeof error === 'function'`,
+ * an `error` whose type `E` is itself a function would be called rather
+ * than wrapped. Pass such errors through a factory (`() => fn`) to be
+ * explicit.
+ *
+ * @example
+ * ```ts
+ * const isString = (v: unknown): v is string => typeof v === 'string';
+ *
+ * Result.fromPredicate('hi', isString, 'NOT_A_STRING');
+ * // Ok<string, string>
+ *
+ * Result.fromPredicate(42, isString, (v) => `expected string, got ${typeof v}`);
+ * // Err('expected string, got number')
+ *
+ * Result.fromPredicate(4, (n: number) => n % 2 === 0, 'ODD');
+ * // Ok<number, string> — plain predicate leaves the value type unchanged
+ * ```
+ */
+function fromPredicate<T, U extends T, E>(
+  value: T,
+  guard: (value: T) => value is U,
+  error: E | ((value: T) => E),
+): Result<U, E>;
+function fromPredicate<T, E>(
+  value: T,
+  predicate: (value: T) => boolean,
+  error: E | ((value: T) => E),
+): Result<T, E>;
+function fromPredicate<T, E>(
+  value: T,
+  predicate: (value: T) => boolean,
+  error: E | ((value: T) => E),
+): Result<T, E> {
+  if (predicate(value)) {
+    return new _OkImpl(value);
+  }
+  return new _ErrImpl(
+    typeof error === 'function' ? (error as (value: T) => E)(value) : error,
+  );
+}
 // #endregion
 
 // ───────────────────────────────────────────────────────────────────────────────
@@ -904,6 +960,7 @@ export const Result = {
   // Factories
   Ok,
   Err,
+  fromPredicate,
 
   /**
    * Wraps a nullable value in a {@link Result}. Returns {@link Ok} if

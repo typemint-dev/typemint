@@ -1012,6 +1012,130 @@ describe('(Unit) Result', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  // MARK: Result.fromPredicate
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('Result.fromPredicate - when lifting a value into a Result via a predicate', () => {
+    const isString = (value: unknown): value is string =>
+      typeof value === 'string';
+
+    it('should return Ok with the value when a plain predicate holds', () => {
+      // Arrange
+      const value = 4;
+
+      // Act
+      const result = Result.fromPredicate(
+        value,
+        (n: number) => n % 2 === 0,
+        'ODD',
+      );
+
+      // Assert
+      assertOk(result);
+      expect(result.value).toBe(4);
+    });
+
+    it('should return Err with the provided error when a plain predicate fails', () => {
+      // Arrange
+      const value = 3;
+
+      // Act
+      const result = Result.fromPredicate(
+        value,
+        (n: number) => n % 2 === 0,
+        'ODD',
+      );
+
+      // Assert
+      assertErr(result);
+      expect(result.error).toBe('ODD');
+    });
+
+    it('should return Ok when a type-guard holds', () => {
+      // Arrange
+      const value: unknown = 'hello';
+
+      // Act
+      const result = Result.fromPredicate(value, isString, 'NOT_A_STRING');
+
+      // Assert
+      assertOk(result);
+      expect(result.value).toBe('hello');
+    });
+
+    it('should return Err when a type-guard fails', () => {
+      // Arrange
+      const value: unknown = 42;
+
+      // Act
+      const result = Result.fromPredicate(value, isString, 'NOT_A_STRING');
+
+      // Assert
+      assertErr(result);
+      expect(result.error).toBe('NOT_A_STRING');
+    });
+
+    it('should compute the error lazily from the value when the predicate fails', () => {
+      // Arrange
+      const value: unknown = 42;
+
+      // Act
+      const result = Result.fromPredicate(
+        value,
+        isString,
+        (v) => `expected string, got ${typeof v}`,
+      );
+
+      // Assert
+      assertErr(result);
+      expect(result.error).toBe('expected string, got number');
+    });
+
+    it('should not call the lazy error factory when the predicate holds', () => {
+      // Arrange
+      const value = 4;
+      const errorFn = vi.fn<(n: number) => string>(() => 'ODD');
+
+      // Act
+      const result = Result.fromPredicate(
+        value,
+        (n: number) => n % 2 === 0,
+        errorFn,
+      );
+
+      // Assert
+      expect(errorFn).not.toHaveBeenCalled();
+      assertOk(result);
+      expect(result.value).toBe(4);
+    });
+
+    it('should narrow the Ok value type via a type-guard', () => {
+      // Arrange
+      const value: unknown = 'hello';
+
+      // Act
+      const result = Result.fromPredicate(value, isString, 'NOT_A_STRING');
+
+      // Assert (type-level)
+      expectTypeOf<typeof result>().toEqualTypeOf<Result<string, string>>();
+    });
+
+    it('should leave the value type unchanged for a plain predicate', () => {
+      // Arrange
+      const value: number = 4;
+
+      // Act
+      const result = Result.fromPredicate(
+        value,
+        (n: number) => n % 2 === 0,
+        'ODD',
+      );
+
+      // Assert (type-level)
+      expectTypeOf<typeof result>().toEqualTypeOf<Result<number, string>>();
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
   // MARK: Result.fromThrowable
   // ───────────────────────────────────────────────────────────────────────────
   describe('Result.fromThrowable - when capturing throws as Err', () => {

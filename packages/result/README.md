@@ -43,7 +43,10 @@ Every operation on `Result` and `Option` is exposed in two equivalent forms:
 - **Data-first (instance methods)** — called as a method on the value.
 
   ```ts
-  result.map((n) => n * 2).andThen(parse).unwrapOr(0);
+  result
+    .map((n) => n * 2)
+    .andThen(parse)
+    .unwrapOr(0);
   ```
 
 - **Data-last (namespace operators)** — curried functions that take the data as their
@@ -80,7 +83,7 @@ const status = user
 
 **Data-last is better when:**
 
-- You want to build a reusable pipeline *before* you have a value to run it on.
+- You want to build a reusable pipeline _before_ you have a value to run it on.
 - You're composing with other curried combinators (`flow`, `pipe`, point-free code).
 - The function should be passed around as a first-class value (stored in a map,
   returned from a factory, applied to many inputs).
@@ -141,10 +144,10 @@ if (r.isOk()) {
 // Top-level factory functions
 import { Ok, Err } from '@typemint/result';
 
-Ok(42);               // Ok<number, never>
+Ok(42); // Ok<number, never>
 Ok<number, string>(42); // Ok<number, string> — widen the error channel
 
-Err('NOT_FOUND');               // Err<never, string>
+Err('NOT_FOUND'); // Err<never, string>
 Err<number, string>('NOT_FOUND'); // Err<number, string> — widen the value channel
 
 // Or via the Result namespace
@@ -185,7 +188,7 @@ value transformations that can't themselves fail; if `f` might fail, use
 [`andThen`](#andthenf) instead.
 
 ```ts
-Result.Ok(2).map((n) => n * 10);    // Ok(20)
+Result.Ok(2).map((n) => n * 10); // Ok(20)
 Result.Err('x').map((n) => n * 10); // Err('x') — f not called
 ```
 
@@ -199,7 +202,7 @@ tags before they propagate further.
 
 ```ts
 Result.Err('NOT_FOUND').mapErr((code) => ({ code })); // Err({ code: 'NOT_FOUND' })
-Result.Ok(1).mapErr((e) => e);                        // Ok(1) — f not called
+Result.Ok(1).mapErr((e) => e); // Ok(1) — f not called
 ```
 
 #### `mapOr(defaultValue, f)`
@@ -210,7 +213,7 @@ regardless of whether it's needed, so prefer [`mapOrElse`](#maporelsedefaultfn-f
 the default is expensive to compute or if you need access to the error to build it.
 
 ```ts
-Result.Ok(3).mapOr(0, (n) => n * 2);    // 6
+Result.Ok(3).mapOr(0, (n) => n * 2); // 6
 Result.Err('x').mapOr(0, (n) => n * 2); // 0
 ```
 
@@ -246,9 +249,9 @@ way it could have failed.
 const parse = (s: string): Result<number, 'NaN'> =>
   Number.isNaN(Number(s)) ? Result.Err('NaN') : Result.Ok(Number(s));
 
-Result.Ok('42').andThen(parse);   // Ok(42)
-Result.Ok('bad').andThen(parse);  // Err('NaN')
-Result.Err('x').andThen(parse);   // Err('x') — f not called
+Result.Ok('42').andThen(parse); // Ok(42)
+Result.Ok('bad').andThen(parse); // Err('NaN')
+Result.Err('x').andThen(parse); // Err('x') — f not called
 ```
 
 #### `orElse(f)`
@@ -261,7 +264,7 @@ to a cache, switching to a default path, or chaining retry logic.
 
 ```ts
 Result.Err('boom').orElse((_e) => Result.Ok(0)); // Ok(0)
-Result.Ok(1).orElse(() => Result.Ok(99));         // Ok(1) — f not called
+Result.Ok(1).orElse(() => Result.Ok(99)); // Ok(1) — f not called
 ```
 
 #### `unwrap()`
@@ -299,7 +302,7 @@ The default is eagerly evaluated, so use [`unwrapOrElse`](#unwraporelsef) when
 computing it is expensive or depends on the error.
 
 ```ts
-Result.Ok(1).unwrapOr(0);    // 1
+Result.Ok(1).unwrapOr(0); // 1
 Result.Err('x').unwrapOr(0); // 0
 ```
 
@@ -325,9 +328,9 @@ following a call that always returns the same variant). For normal code paths, a
 prefer `unwrap` / `unwrapErr` after an explicit `isOk()` / `isErr()` check.
 
 ```ts
-Result.Ok(1).unsafeUnwrap();       // 1
+Result.Ok(1).unsafeUnwrap(); // 1
 Result.Err('x').unsafeUnwrapErr(); // 'x'
-Result.Err('x').unsafeUnwrap();    // throws PanicException
+Result.Err('x').unsafeUnwrap(); // throws PanicException
 ```
 
 #### `tap(f)`
@@ -362,7 +365,7 @@ is a single expression rather than a statement. Prefer `match` over explicit
 
 ```ts
 const message = result.match({
-  Ok:  (n) => `value: ${n}`,
+  Ok: (n) => `value: ${n}`,
   Err: (e) => `error: ${e}`,
 });
 ```
@@ -377,8 +380,8 @@ built-in APIs. Note that only the methods are stripped; non-JSON-safe payload va
 codec layer if you need that.
 
 ```ts
-Result.Ok(42).toJSON();       // { kind: 'Ok', value: 42 }
-Result.Err('x').toJSON();     // { kind: 'Err', error: 'x' }
+Result.Ok(42).toJSON(); // { kind: 'Ok', value: 42 }
+Result.Err('x').toJSON(); // { kind: 'Err', error: 'x' }
 JSON.stringify(Result.Ok(1)); // '{"kind":"Ok","value":1}'
 ```
 
@@ -401,6 +404,33 @@ re-check for null.
 Result.fromNullable(process.env.PORT, 'PORT not set');
 // Ok<string, string> when PORT is set, Err('PORT not set') otherwise
 ```
+
+#### `Result.fromPredicate(value, predicate, error)`
+
+Lifts a value into a `Result` by testing it against a predicate: `Ok(value)` when the
+predicate holds, `Err(error)` when it doesn't. When `predicate` is a **type-guard**
+(`value is U`), the resulting `Ok` is narrowed to `U` — making this the idiomatic way
+to turn a type-guard into a `Result` without a manual `if`/`else`. With a plain boolean
+predicate the value type is left unchanged. The `error` may be a plain value or a lazy
+factory `(value) => error` that receives the rejected value and is only invoked on
+failure.
+
+```ts
+const isString = (v: unknown): v is string => typeof v === 'string';
+
+Result.fromPredicate('hi', isString, 'NOT_A_STRING');
+// Ok<string, string>
+
+Result.fromPredicate(42, isString, (v) => `expected string, got ${typeof v}`);
+// Err('expected string, got number')
+
+Result.fromPredicate(4, (n: number) => n % 2 === 0, 'ODD');
+// Ok<number, string> — plain predicate leaves the value type unchanged
+```
+
+> Because the lazy form is detected via `typeof error === 'function'`, an `error` whose
+> type is itself a function would be _called_ rather than wrapped. Pass such errors
+> through a factory (`() => fn`) to be explicit.
 
 #### `Result.fromThrowable(f, mapError?)`
 
@@ -473,7 +503,7 @@ Result.all(Result.Ok(1), Result.Err('oops'), Result.Ok(true));
 Like `all`, but **accumulates every error** instead of short-circuiting on the first.
 Returns `Ok([...values])` only when every input is `Ok`; otherwise returns
 `Err([...errors])` containing each failure. The analogue of `Promise.allSettled` for
-cases where you want to report *all* problems at once — typical for form validation,
+cases where you want to report _all_ problems at once — typical for form validation,
 where stopping at the first invalid field produces a poor user experience.
 
 ```ts
@@ -506,7 +536,7 @@ symbol so accidentally-shaped look-alikes (e.g. an API response happening to inc
 RPC handlers, IPC entry points.
 
 ```ts
-Result.isResult(Result.Ok(1));              // true
+Result.isResult(Result.Ok(1)); // true
 Result.isResult({ kind: 'Ok', value: 1 }); // false
 ```
 
@@ -586,8 +616,8 @@ if (o.isSome()) {
 ```ts
 import { Some, None } from '@typemint/result';
 
-Some(42);       // Some<number>
-None();         // None<never> — T inferred from context
+Some(42); // Some<number>
+None(); // None<never> — T inferred from context
 None<number>(); // None<number>
 
 // Or via the Option namespace
@@ -624,7 +654,7 @@ Use for pure transformations that cannot themselves fail or produce absence; if 
 could return `None`, use [`andThen`](#andthenf-1) instead.
 
 ```ts
-Option.Some(2).map((n) => n * 10);       // Some(20)
+Option.Some(2).map((n) => n * 10); // Some(20)
 Option.None<number>().map((n) => n * 10); // None()
 ```
 
@@ -636,7 +666,7 @@ call site regardless of which branch fires — prefer
 [`mapOrElse`](#maporelsedefaultfn-f-1) if it is expensive to build.
 
 ```ts
-Option.Some(3).mapOr(0, (n) => n * 2);       // 6
+Option.Some(3).mapOr(0, (n) => n * 2); // 6
 Option.None<number>().mapOr(0, (n) => n * 2); // 0
 ```
 
@@ -670,9 +700,9 @@ other libraries.
 const parse = (s: string): Option<number> =>
   Number.isNaN(Number(s)) ? Option.None() : Option.Some(Number(s));
 
-Option.Some('42').andThen(parse);      // Some(42)
-Option.Some('bad').andThen(parse);     // None()
-Option.None<string>().andThen(parse);  // None() — f not called
+Option.Some('42').andThen(parse); // Some(42)
+Option.Some('bad').andThen(parse); // None()
+Option.None<string>().andThen(parse); // None() — f not called
 ```
 
 #### `orElse(f)`
@@ -684,7 +714,7 @@ a cache, then a hard-coded default, chained via `orElse`.
 
 ```ts
 Option.None<number>().orElse(() => Option.Some(0)); // Some(0)
-Option.Some(1).orElse(() => Option.Some(99));       // Some(1) — f not called
+Option.Some(1).orElse(() => Option.Some(99)); // Some(1) — f not called
 ```
 
 #### `filter(predicate)`
@@ -695,9 +725,9 @@ technically exists but doesn't meet an additional constraint (e.g. a string is
 present but empty, a number is present but negative).
 
 ```ts
-Option.Some(4).filter((n) => n % 2 === 0);   // Some(4)
-Option.Some(3).filter((n) => n % 2 === 0);   // None()
-Option.None<number>().filter(() => true);     // None() — predicate not called
+Option.Some(4).filter((n) => n % 2 === 0); // Some(4)
+Option.Some(3).filter((n) => n % 2 === 0); // None()
+Option.None<number>().filter(() => true); // None() — predicate not called
 ```
 
 #### `zip(other)`
@@ -708,7 +738,7 @@ is `None`. The `Option`-world equivalent of a logical AND across presence.
 
 ```ts
 Option.Some(1).zip(Option.Some('a')); // Some([1, 'a'])
-Option.Some(1).zip(Option.None());    // None()
+Option.Some(1).zip(Option.None()); // None()
 ```
 
 #### `unwrap()`
@@ -733,7 +763,7 @@ The default is evaluated eagerly; use [`unwrapOrElse`](#unwraporelsef-1) if it's
 expensive or you only want to compute it on demand.
 
 ```ts
-Option.Some(1).unwrapOr(0);       // 1
+Option.Some(1).unwrapOr(0); // 1
 Option.None<number>().unwrapOr(0); // 0
 ```
 
@@ -757,8 +787,8 @@ produces `Some`). For normal code, prefer `unwrap` after an `isSome()` check or
 `unwrapOr` / `unwrapOrElse` for a safe fallback.
 
 ```ts
-Option.Some(1).unsafeUnwrap();  // 1
-Option.None().unsafeUnwrap();   // throws PanicException
+Option.Some(1).unsafeUnwrap(); // 1
+Option.None().unsafeUnwrap(); // throws PanicException
 ```
 
 #### `tap(f)`
@@ -804,7 +834,7 @@ value itself isn't JSON-safe (e.g. `bigint`, `Date`), pair with a codec.
 
 ```ts
 Option.Some(42).toJSON(); // { kind: 'Some', value: 42 }
-Option.None().toJSON();   // { kind: 'None' }
+Option.None().toJSON(); // { kind: 'None' }
 ```
 
 #### `toResult(error)`
@@ -815,8 +845,8 @@ Converts the Option into a `Result` by attaching an error for the absent case.
 should become `Err('NOT_FOUND')` before being returned from an API handler.
 
 ```ts
-Option.Some(1).toResult('NOT_FOUND');          // Ok(1)
-Option.None<number>().toResult('NOT_FOUND');   // Err('NOT_FOUND')
+Option.Some(1).toResult('NOT_FOUND'); // Ok(1)
+Option.None<number>().toResult('NOT_FOUND'); // Err('NOT_FOUND')
 ```
 
 ---
@@ -832,10 +862,10 @@ DOM APIs, `Map.get`, `Array.prototype.find`, optional object properties. The res
 `Some` carries `NonNullable<T>`, so downstream code never has to re-check for null.
 
 ```ts
-Option.fromNullable('hello');   // Some('hello')
-Option.fromNullable(null);      // None()
+Option.fromNullable('hello'); // Some('hello')
+Option.fromNullable(null); // None()
 Option.fromNullable(undefined); // None()
-Option.fromNullable(0);         // Some(0) — only null/undefined become None
+Option.fromNullable(0); // Some(0) — only null/undefined become None
 ```
 
 #### `Option.fromResult(result)`
@@ -846,8 +876,8 @@ only cares whether it succeeded, not why it failed — e.g. a best-effort lookup
 any failure should be treated as absence.
 
 ```ts
-Option.fromResult(Result.Ok(42));       // Some(42)
-Option.fromResult(Result.Err('boom'));  // None()
+Option.fromResult(Result.Ok(42)); // Some(42)
+Option.fromResult(Result.Err('boom')); // None()
 ```
 
 #### `Option.fromJSON(value)`
@@ -890,7 +920,7 @@ when dealing with named fields, since the resulting object retains meaningful ke
 ```ts
 Option.allRecord({
   name: parseName(input),
-  age:  parseAge(input),
+  age: parseAge(input),
 });
 // Option<{ name: Name; age: Age }>
 ```
@@ -903,7 +933,7 @@ look-alike objects (e.g. a deserialized payload that hasn't been run through
 `fromJSON`) are correctly rejected. Use at trust boundaries.
 
 ```ts
-Option.isOption(Option.Some(1));              // true
+Option.isOption(Option.Some(1)); // true
 Option.isOption({ kind: 'Some', value: 1 }); // false
 ```
 
@@ -935,7 +965,7 @@ const getDisplayName = flow(
 );
 
 getDisplayName(Option.Some({ displayName: '  Alice  ' })); // 'Alice'
-getDisplayName(Option.None());                              // 'Anonymous'
+getDisplayName(Option.None()); // 'Anonymous'
 ```
 
 | Operator                         | Description                                    |
@@ -961,12 +991,12 @@ The two types convert to each other freely.
 
 ```ts
 // Result → Option (drop the error)
-const option  = Option.fromResult(Result.Ok(42));      // Some(42)
-const option2 = Option.fromResult(Result.Err('x'));    // None()
+const option = Option.fromResult(Result.Ok(42)); // Some(42)
+const option2 = Option.fromResult(Result.Err('x')); // None()
 
 // Option → Result (supply an error for the None case)
-const result  = Option.Some(1).toResult('NOT_FOUND');          // Ok(1)
-const result2 = Option.None<number>().toResult('NOT_FOUND');   // Err('NOT_FOUND')
+const result = Option.Some(1).toResult('NOT_FOUND'); // Ok(1)
+const result2 = Option.None<number>().toResult('NOT_FOUND'); // Err('NOT_FOUND')
 
 // Data-last in a pipeline
 pipe(
@@ -1002,7 +1032,7 @@ separately for use in serialization schemas and type guards without needing a li
 ```ts
 import { OkLike, SomeLike } from '@typemint/result';
 
-OkLike.isOfType({ kind: 'Ok', value: 1 });    // true
+OkLike.isOfType({ kind: 'Ok', value: 1 }); // true
 SomeLike.isOfType({ kind: 'Some', value: 1 }); // true
 ```
 
@@ -1027,8 +1057,8 @@ They are **not** a general error-handling mechanism — for normal branching, us
 import { assertOk, assertErr, assertSome, assertNone } from '@typemint/result';
 
 const r: Result<number, string> = Result.Ok(1);
-assertOk(r);   // narrows r to Ok<number, string> in the following scope
-r.value;       // number
+assertOk(r); // narrows r to Ok<number, string> in the following scope
+r.value; // number
 
 const o: Option<number> = Option.None();
 assertNone(o); // narrows o to None<number>
