@@ -35,17 +35,17 @@ importers:
   packages/data:
     dependencies:
       '@typemint/core':
-        specifier: ^0.14.0
-        version: 0.14.0
+        specifier: ^0.16.0
+        version: 0.16.0
       '@typemint/result':
-        specifier: ^0.1.10
-        version: 0.1.11
+        specifier: ^0.1.13
+        version: 0.1.13
 
   packages/result:
     dependencies:
       '@typemint/core':
-        specifier: ^0.14.0
-        version: 0.14.0
+        specifier: ^0.16.0
+        version: 0.16.0
 
 packages:
 
@@ -532,11 +532,11 @@ packages:
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
 
-  '@typemint/core@0.14.0':
-    resolution: {integrity: sha512-npzdrK8nP+L8F5ixQIwxzrlh5YYeIZAT+26B1PaIh7JZ1Rj9ABfwpGRrHsRkoV9qKKHu47jmAfBUNUUbx+azag==}
+  '@typemint/core@0.16.0':
+    resolution: {integrity: sha512-mjdqaqs7opbsQzumtTyGoXUg53mvaJnjgpFAeX5Qjtcj0tcZRfb96Ex7waTpqPO8eKl3pCRCwdhfg5nndw0B2Q==}
 
-  '@typemint/result@0.1.11':
-    resolution: {integrity: sha512-motmQtH0EzX7y3Y8DWH0zjO/8ATeDlBf8w3yjkRdvOjUrY6LbmroynVnm7VfRYC7HqPQ9+fATWKohh4tucVpHQ==}
+  '@typemint/result@0.1.13':
+    resolution: {integrity: sha512-eSc5VXlwL8i2iIEUIIW01nH+uCu0t4Uf72n3GJdKbImmViZXdk4O+bc+/6DGoWtQfylOsFhLDzUwoNKGKJLpGg==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1627,11 +1627,11 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@typemint/core@0.14.0': {}
+  '@typemint/core@0.16.0': {}
 
-  '@typemint/result@0.1.11':
+  '@typemint/result@0.1.13':
     dependencies:
-      '@typemint/core': 0.14.0
+      '@typemint/core': 0.16.0
 
   '@types/chai@5.2.3':
     dependencies:
