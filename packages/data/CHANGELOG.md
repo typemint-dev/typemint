@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.2.3
+
+### Patch Changes
+
+- Fix WIP code type errors
+
 ## 0.2.2
 
 ### Patch Changes
