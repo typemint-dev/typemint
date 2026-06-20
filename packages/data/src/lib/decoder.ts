@@ -29,4 +29,3 @@ export type Decoder<TIn, TOut, TError = never> = (
 ) => Result<TOut, TError>;
 
 // Implements only the decoders for javascript native primitives
-
