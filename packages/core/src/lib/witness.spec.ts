@@ -89,5 +89,13 @@ describe('(unit) Witness', () => {
       // Assert
       expect(a).not.toBe(b);
     });
+
+    it('should prevent mutation of the returned object', () => {
+      // Arrange & Act
+      const w = witness<number>();
+
+      // Assert
+      expect(Object.isFrozen(w)).toBe(true);
+    });
   });
 });

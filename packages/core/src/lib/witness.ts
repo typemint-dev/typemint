@@ -40,5 +40,5 @@ export type InferWitnessType<T extends Witness<unknown>> =
  * ```
  */
 export function witness<T>(): Witness<T> {
-  return {} as Witness<T>;
+  return Object.freeze({}) as Witness<T>;
 }
