@@ -65,11 +65,14 @@ pnpm add @typemint/core
 
 ### Compile-time type witnesses
 
-| Export             | Purpose                                                                                       |
-| ------------------ | --------------------------------------------------------------------------------------------- |
-| `Witness`          | A value-level carrier for a type `T` with no runtime payload (a phantom witness).             |
-| `witness`          | Factory that creates a `Witness<T>` so a type can travel as a value and drive inference.      |
-| `InferWitnessType` | Extracts the type `T` carried by a `Witness<T>`.                                              |
+| Export                    | Purpose                                                                                  |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `Witness`                 | A value-level carrier for a type `T` with no runtime payload (a phantom witness).        |
+| `witness`                 | Factory that creates a `Witness<T>` so a type can travel as a value and drive inference. |
+| `InferWitnessType`        | Extracts the type `T` carried by a `Witness<T>`.                                         |
+| `TypeDescriptor`          | A `Witness<T>` augmented with a runtime `name` — a named, serializable type reference.   |
+| `InferTypeDescriptorName` | Extracts the literal name carried by a `TypeDescriptor`.                                 |
+| `InferTypeDescriptorType` | Extracts the described type carried by a `TypeDescriptor`.                               |
 
 ### Errors
 
@@ -515,6 +518,51 @@ to `never`:
 ```typescript
 type Oops = InferWitnessType<number>;
 // ❌ Type 'number' does not satisfy the constraint 'Witness<unknown>'.
+```
+
+---
+
+### `TypeDescriptor`
+
+A `TypeDescriptor` is a `Witness<T>` augmented with one real runtime field — a
+literal `name`. Where a bare witness is pure phantom (empty at runtime), a
+descriptor can be **referred to at runtime** — in error messages, registries,
+or as a discriminant — while still driving compile-time inference like any
+other witness. Build one by pairing a name with a `witness<T>()`.
+
+```typescript
+import {
+  TypeDescriptor,
+  witness,
+  type InferTypeDescriptorName,
+  type InferTypeDescriptorType,
+} from '@typemint/core';
+
+const Email = TypeDescriptor('Email', witness<string>());
+//    ^? TypeDescriptor<string, 'Email'>
+
+Email.name; // 'Email' — a real, frozen, serializable value typed as 'Email'
+
+type N = InferTypeDescriptorName<typeof Email>; // 'Email'
+type T = InferTypeDescriptorType<typeof Email>; // string
+```
+
+Both arguments are inferred from values — the literal name via `const`, the
+described type from the witness — so neither type parameter is written at the
+call site (this is the same all-or-nothing workaround `witness` exists for).
+The returned object is frozen and carries only `name`; the described type is
+phantom.
+
+Because a `TypeDescriptor` intersects `Witness<T>`, it _is_ a witness — so
+`InferWitnessType` works on it directly, and it can be passed anywhere a
+`Witness<T>` is expected:
+
+```typescript
+import { TypeDescriptor, witness, type InferWitnessType } from '@typemint/core';
+
+const User = TypeDescriptor('User', witness<{ id: string }>());
+
+type U = InferWitnessType<typeof User>; // { id: string }
 ```
 
 ---
