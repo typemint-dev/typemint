@@ -1,5 +1,38 @@
 # @typemint/data
 
+## 0.4.0
+
+### Minor Changes
+
+- Add unknownToStringDecoder
+- Add isString type guard
+- Add StringDescriptor
+- Add UnknownDescriptor
+- Add NumberDescriptor
+- Add isNumber type guard
+- Add unknownToNumberDecoder
+- Add BigIntDescriptor
+- Add isBigInt type guard
+- Add unknownToBigIntDecoder
+- Add BooleanDescriptor
+- Add isBoolean type guard
+- Add unknownToBooleanDecoder
+- Add Decoder type
+- Add InferDecoderOutput type
+- Add InferDecoderError type
+- Add InferDecoderInput type
+
+## 0.3.0
+
+### Minor Changes
+
+- Add TypeMismatchError
+
+### Patch Changes
+
+- Updated dependencies
+  - @typemint/result@0.2.0
+
 ## 0.2.3
 
 ### Patch Changes
