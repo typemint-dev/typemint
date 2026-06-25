@@ -1,5 +1,12 @@
 # @typemint/data
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @typemint/result@0.3.0
+
 ## 0.4.0
 
 ### Minor Changes
