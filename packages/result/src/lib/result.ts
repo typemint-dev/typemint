@@ -954,6 +954,71 @@ function fromPredicate<T, E>(
 // #endregion
 
 // ───────────────────────────────────────────────────────────────────────────────
+// #region data-last factories
+/**
+ * Data-last variant of {@link fromPredicate}. Partially applies the predicate
+ * and error, returning a reusable function `(value: T) => Result<U, E>` that
+ * can be passed directly as a {@link Decoder} or used point-free with `map`,
+ * `andThen`, etc.
+ *
+ * When `predicate` is a type-guard (`value is U`), the returned function
+ * narrows its output to `Ok<U, E>` on success — making this the idiomatic way
+ * to build a typed decoder from a guard without a manual wrapper.
+ *
+ * The `error` argument follows the same rules as {@link fromPredicate}: a plain
+ * value is used as-is; a factory `(value: T) => E` is called with the rejected
+ * value and is only invoked on failure.
+ *
+ * @example Type-guard — narrows the output type
+ * ```ts
+ * const isString = (v: unknown): v is string => typeof v === 'string';
+ *
+ * const parseString = Result.liftPredicate(isString, 'NOT_A_STRING');
+ * // (value: unknown) => Result<string, string>
+ *
+ * parseString('hi');  // Ok('hi')
+ * parseString(42);    // Err('NOT_A_STRING')
+ * ```
+ *
+ * @example Plain predicate — value type is unchanged
+ * ```ts
+ * const parsePositive = Result.liftPredicate(
+ *   (n: number) => n > 0,
+ *   (n) => `expected positive number, got ${n}`,
+ * );
+ * // (value: number) => Result<number, string>
+ *
+ * parsePositive(5);   // Ok(5)
+ * parsePositive(-1);  // Err('expected positive number, got -1')
+ * ```
+ *
+ * @example Used as a Decoder
+ * ```ts
+ * const unknownToStringDecoder = Result.liftPredicate(
+ *   (v: unknown): v is string => typeof v === 'string',
+ *   (v) => TypeMismatchError(StringDescriptor, v),
+ * );
+ * ```
+ */
+function liftPredicate<T, U extends T, E>(
+  guard: (value: T) => value is U,
+  error: E | ((value: T) => E),
+): (value: T) => Result<U, E>;
+function liftPredicate<T, E>(
+  predicate: (value: T) => boolean,
+  error: E | ((value: T) => E),
+): (value: T) => Result<T, E>;
+function liftPredicate<T, E>(
+  predicate: (value: T) => boolean,
+  error: E | ((value: T) => E),
+): (value: T) => Result<T, E> {
+  return (value) => fromPredicate(value, predicate, error);
+}
+
+// #endregion
+// ───────────────────────────────────────────────────────────────────────────────
+
+// ───────────────────────────────────────────────────────────────────────────────
 // #region Result Namespace
 
 export const Result = {
@@ -961,6 +1026,7 @@ export const Result = {
   Ok,
   Err,
   fromPredicate,
+  liftPredicate,
 
   /**
    * Wraps a nullable value in a {@link Result}. Returns {@link Ok} if

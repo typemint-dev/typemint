@@ -1136,6 +1136,69 @@ describe('(Unit) Result', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  // MARK: Result.liftPredicate
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('Result.liftPredicate - when lifting a value into a Result via a predicate', () => {
+    it('should return Ok with the value when a plain predicate holds', () => {
+      // Arrange
+      const value = 4;
+
+      // Act
+      const result = Result.liftPredicate(
+        (n: number) => n % 2 === 0,
+        'ODD',
+      )(value);
+
+      // Assert
+      assertOk(result);
+      expect(result.value).toBe(4);
+    });
+
+    it('should return Err with the provided error when a plain predicate fails', () => {
+      // Arrange
+      const value = 3;
+
+      // Act
+      const result = Result.liftPredicate(
+        (n: number) => n % 2 === 0,
+        'ODD',
+      )(value);
+
+      // Assert
+      assertErr(result);
+      expect(result.error).toBe('ODD');
+    });
+
+    it('should return Ok when a type-guard holds', () => {
+      // Arrange
+      const value: unknown = 'hello';
+      const isString = (value: unknown): value is string =>
+        typeof value === 'string';
+
+      // Act
+      const result = Result.liftPredicate(isString, 'NOT_A_STRING')(value);
+
+      // Assert
+      assertOk(result);
+      expect(result.value).toBe('hello');
+    });
+
+    it('should return Err when a type-guard fails', () => {
+      // Arrange
+      const value: unknown = 42;
+      const isString = (value: unknown): value is string =>
+        typeof value === 'string';
+
+      // Act
+      const result = Result.liftPredicate(isString, 'NOT_A_STRING')(value);
+
+      // Assert
+      assertErr(result);
+      expect(result.error).toBe('NOT_A_STRING');
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
   // MARK: Result.fromThrowable
   // ───────────────────────────────────────────────────────────────────────────
   describe('Result.fromThrowable - when capturing throws as Err', () => {

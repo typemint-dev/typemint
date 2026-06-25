@@ -432,6 +432,53 @@ Result.fromPredicate(4, (n: number) => n % 2 === 0, 'ODD');
 > type is itself a function would be _called_ rather than wrapped. Pass such errors
 > through a factory (`() => fn`) to be explicit.
 
+#### `Result.liftPredicate(predicate, error)`
+
+Data-last counterpart of `fromPredicate`. Partially applies the predicate and error,
+returning a reusable function `(value: T) => Result<U, E>` that can be stored,
+passed as a callback, or used point-free in a pipeline. Calling the returned function
+is identical to calling `Result.fromPredicate(value, predicate, error)`.
+
+When `predicate` is a **type-guard** (`value is U`), the returned function narrows its
+output to `Ok<U, E>` on success — making this the idiomatic way to turn a guard into a
+typed `Decoder` without a manual wrapper. With a plain boolean predicate the value
+type is left unchanged.
+
+The `error` argument follows the same rules as `fromPredicate`: a plain value is used
+as-is; a factory `(value: T) => E` is called with the rejected value and is only
+invoked on failure.
+
+```ts
+// Type-guard overload — Ok is narrowed to the guard's output type
+const isString = (v: unknown): v is string => typeof v === 'string';
+
+const parseString = Result.liftPredicate(isString, 'NOT_A_STRING');
+// (value: unknown) => Result<string, string>
+
+parseString('hi'); // Ok('hi')
+parseString(42);   // Err('NOT_A_STRING')
+
+// Plain predicate — value type is unchanged
+const parsePositive = Result.liftPredicate(
+  (n: number) => n > 0,
+  (n) => `expected positive number, got ${n}`,
+);
+// (value: number) => Result<number, string>
+
+parsePositive(5);  // Ok(5)
+parsePositive(-1); // Err('expected positive number, got -1')
+
+// Used directly as a Decoder
+const unknownToStringDecoder = Result.liftPredicate(
+  (v: unknown): v is string => typeof v === 'string',
+  (v) => TypeMismatchError(StringDescriptor, v),
+);
+```
+
+> Because the lazy form is detected via `typeof error === 'function'`, an `error` whose
+> type is itself a function would be _called_ rather than wrapped. Pass such errors
+> through a factory (`() => fn`) to be explicit.
+
 #### `Result.fromThrowable(f, mapError?)`
 
 Bridges exception-throwing code into the `Result` world. Invokes `f`; if it throws,
