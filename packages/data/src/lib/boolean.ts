@@ -17,10 +17,7 @@ export type UnknownToBooleanDecoder = Decoder<
   TypeMismatchError<boolean, unknown>
 >;
 
-export const unknownToBooleanDecoder: UnknownToBooleanDecoder = (
-  value: unknown,
-) => {
-  return Result.fromPredicate(value, isBoolean, () =>
+export const unknownToBooleanDecoder: UnknownToBooleanDecoder =
+  Result.liftPredicate(isBoolean, (value) =>
     TypeMismatchError(BooleanDescriptor, value),
   );
-};

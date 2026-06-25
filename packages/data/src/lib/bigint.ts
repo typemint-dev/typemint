@@ -17,10 +17,7 @@ export type UnknownToBigIntDecoder = Decoder<
   TypeMismatchError<bigint, unknown>
 >;
 
-export const unknownToBigIntDecoder: UnknownToBigIntDecoder = (
-  value: unknown,
-) => {
-  return Result.fromPredicate(value, isBigInt, () =>
+export const unknownToBigIntDecoder: UnknownToBigIntDecoder =
+  Result.liftPredicate(isBigInt, (value) =>
     TypeMismatchError(BigIntDescriptor, value),
   );
-};

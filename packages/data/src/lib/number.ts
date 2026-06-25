@@ -17,10 +17,7 @@ export type UnknownToNumberDecoder = Decoder<
   TypeMismatchError<number, unknown>
 >;
 
-export const unknownToNumberDecoder: UnknownToNumberDecoder = (
-  value: unknown,
-) => {
-  return Result.fromPredicate(value, isNumber, () =>
+export const unknownToNumberDecoder: UnknownToNumberDecoder =
+  Result.liftPredicate(isNumber, (value) =>
     TypeMismatchError(NumberDescriptor, value),
   );
-};

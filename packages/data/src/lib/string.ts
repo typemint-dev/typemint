@@ -72,8 +72,7 @@ export type UnknownToStringDecoder = Decoder<
  * result.unwrapErr().message;           // 'Expected string but got number'
  * ```
  */
-export const unknownToStringDecoder: UnknownToStringDecoder = (value) => {
-  return Result.fromPredicate(value, isString, () =>
+export const unknownToStringDecoder: UnknownToStringDecoder =
+  Result.liftPredicate(isString, (value) =>
     TypeMismatchError(StringDescriptor, value),
   );
-};
