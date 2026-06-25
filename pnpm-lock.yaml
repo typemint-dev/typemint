@@ -38,8 +38,8 @@ importers:
         specifier: ^0.16.1
         version: 0.16.1
       '@typemint/result':
-        specifier: ^0.2.0
-        version: 0.2.0
+        specifier: ^0.3.0
+        version: 0.3.0
 
   packages/result:
     dependencies:
@@ -535,8 +535,8 @@ packages:
   '@typemint/core@0.16.1':
     resolution: {integrity: sha512-1W8hhTTQUbq9Hw5PcXfAwg0rEjiHvkjZmrM3dcPZNwBR/uF/3SumWHupZYh8xzdGzaMnrgsiVQObxUxtPTSGHQ==}
 
-  '@typemint/result@0.2.0':
-    resolution: {integrity: sha512-7zTixAWOe2dXAV5Brg8jM1xyFwje88INYoziUkXwP77rPO0C46FkDIYjy3F4n95HoD3P+w5eOsq/CgE2z0rBIg==}
+  '@typemint/result@0.3.0':
+    resolution: {integrity: sha512-9qMVU0uPxHx4IPVwu3+Xwo+poLP58Gv3mrBFtPU/7l76GSfbRw+PEwT5iCrwLnOFBrNGZWA6QgM6Exq6QDCymQ==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1629,7 +1629,7 @@ snapshots:
 
   '@typemint/core@0.16.1': {}
 
-  '@typemint/result@0.2.0':
+  '@typemint/result@0.3.0':
     dependencies:
       '@typemint/core': 0.16.1
 
