@@ -98,6 +98,119 @@ describe('(unit) invariant', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Invariant.or
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Invariant.or', () => {
+    it('should return ok when the first invariant passes', () => {
+      // Arrange
+      const invariant1 = Invariant(
+        (value: number) => value > 0,
+        () => 'Value must be greater than 0' as const,
+      );
+      const invariant2 = Invariant(
+        (value: number) => value % 2 === 0,
+        () => 'Value must be even' as const,
+      );
+      const invariant = Invariant.or(invariant1, invariant2);
+
+      // Act
+      const result = invariant(3);
+
+      // Assert
+      assertOk(result);
+    });
+
+    it('should return ok when only the last invariant passes', () => {
+      // Arrange
+      const invariant1 = Invariant(
+        (value: number) => value > 0,
+        () => 'Value must be greater than 0' as const,
+      );
+      const invariant2 = Invariant(
+        (value: number) => value % 2 === 0,
+        () => 'Value must be even' as const,
+      );
+      const invariant = Invariant.or(invariant1, invariant2);
+
+      // Act
+      const result = invariant(-2);
+
+      // Assert
+      assertOk(result);
+    });
+
+    it('should return the last error when all invariants fail', () => {
+      // Arrange
+      const invariant1 = Invariant(
+        (value: number) => value > 0,
+        () => 'Value must be greater than 0' as const,
+      );
+      const invariant2 = Invariant(
+        (value: number) => value % 2 === 0,
+        () => 'Value must be even' as const,
+      );
+      const invariant = Invariant.or(invariant1, invariant2);
+
+      // Act
+      const result = invariant(-3);
+
+      // Assert
+      assertErr(result);
+      expect(result.error).toBe('Value must be even');
+    });
+
+    it('should accumulate error types into a union type', () => {
+      // Arrange
+      const invariant1 = Invariant(
+        (value: number) => value > 0,
+        () => 'Value must be greater than 0' as const,
+      );
+      const invariant2 = Invariant(
+        (value: number) => value % 2 === 0,
+        () => 'Value must be even' as const,
+      );
+      const invariant3 = Invariant(
+        (value: number) => value < 100,
+        () => 'Value must be less than 100' as const,
+      );
+
+      // Act
+      const invariant = Invariant.or(invariant1, invariant2, invariant3);
+      type InvariantError = InferInvariantError<typeof invariant>;
+
+      // Assert
+      expectTypeOf<InvariantError>().toEqualTypeOf<
+        | 'Value must be greater than 0'
+        | 'Value must be even'
+        | 'Value must be less than 100'
+      >();
+    });
+
+    it('should short-circuit and not run subsequent invariants after first success', () => {
+      // Arrange
+      let callCount = 0;
+      const invariant1 = Invariant(
+        (value: number) => value > 0,
+        () => 'Value must be greater than 0' as const,
+      );
+      const invariant2 = Invariant(
+        (value: number) => {
+          callCount++;
+          return value % 2 === 0;
+        },
+        () => 'Value must be even' as const,
+      );
+      const invariant = Invariant.or(invariant1, invariant2);
+
+      // Act
+      invariant(3);
+
+      // Assert
+      expect(callCount).toBe(0);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // MARK: Invariant.andSettled
   // ─────────────────────────────────────────────────────────────────────────────
   describe('Invariant.andSettled', () => {

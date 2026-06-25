@@ -43,6 +43,32 @@ export namespace Invariant {
     };
   }
 
+  export function or<
+    const TFirst extends AnyInvariant,
+    const TRest extends readonly Invariant<InferInvariantValue<TFirst>, any>[],
+  >(
+    first: TFirst,
+    ...rest: TRest
+  ): Invariant<
+    InferInvariantValue<TFirst>,
+    InferInvariantError<TFirst> | InferInvariantError<TRest[number]>
+  > {
+    const invariants = [first, ...rest] as const;
+    return (value) => {
+      let last!: Result<
+        void,
+        InferInvariantError<TFirst> | InferInvariantError<TRest[number]>
+      >;
+      for (const invariant of invariants) {
+        last = invariant(value);
+        if (last.isOk()) {
+          return last;
+        }
+      }
+      return last;
+    };
+  }
+
   export function and<
     const TFirst extends AnyInvariant,
     const TRest extends readonly Invariant<InferInvariantValue<TFirst>, any>[],
