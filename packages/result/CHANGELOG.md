@@ -1,5 +1,11 @@
 # @typemint/result
 
+## 0.3.0
+
+### Minor Changes
+
+- add liftPredicate factory
+
 ## 0.2.0
 
 ### Minor Changes
