@@ -1,4 +1,6 @@
 import { Result } from '@typemint/result';
+import type { Decoder, InferDecoderOutput } from './decoder.js';
+import type { TypeMismatchError } from './type-mismatch.js';
 
 // Taken from the type-fest "Tagged" type
 declare const tag: unique symbol;
@@ -26,58 +28,84 @@ type RemoveAllTags<T> =
       }[keyof T[typeof tag]]
     : T;
 
-export type InferScalarNames<T extends Scalar<string, unknown, unknown>> =
-  T extends Scalar<infer UName, unknown, unknown> ? UName : never;
+export type InferScalarNames<
+  T extends
+    | Scalar<string, unknown, unknown>
+    | ScalarDescriptor<string, unknown, unknown>,
+> =
+  T extends Scalar<string, unknown, unknown>
+    ? T extends Scalar<infer UName, unknown, unknown>
+      ? UName
+      : never
+    : T extends ScalarDescriptor<string, unknown, unknown>
+      ? T['name']
+      : never;
 
 export type InferScalarType<T extends ScalarDescriptor<string, unknown>> =
   T extends ScalarDescriptor<infer TName, infer TType>
     ? Scalar<TName, TType>
     : never;
 
-export type InferScalarRoot<T extends Scalar<string, unknown, unknown>> =
-  RemoveAllTags<T>;
+export type InferScalarRoot<
+  T extends
+    | Scalar<string, unknown, unknown>
+    | ScalarDescriptor<string, unknown, unknown>,
+> =
+  T extends Scalar<string, unknown, unknown>
+    ? RemoveAllTags<T>
+    : T extends ScalarDescriptor<string, infer TType, unknown>
+      ? TType
+      : never;
 
-export type InferScalarMeta<T extends Scalar<string, unknown, unknown>> =
-  T extends Scalar<string, unknown, infer TMeta> ? TMeta : never;
+export type InferScalarMeta<
+  T extends
+    | Scalar<string, unknown, unknown>
+    | ScalarDescriptor<string, unknown, unknown>,
+> =
+  T extends Scalar<string, unknown, infer TMeta>
+    ? TMeta
+    : T extends ScalarDescriptor<string, unknown, infer TMeta>
+      ? TMeta
+      : never;
 
-export type ScalarDescriptor<TName extends string, TType, TError = never> = {
+export type ScalarDescriptor<TName extends string, TRoot, TError = never> = {
   readonly name: TName;
 
-  of(value: TType): Result<Scalar<TName, TType>, TError>;
+  of(value: TRoot): Result<Scalar<TName, TRoot>, TError>;
+
+  parse(
+    value: unknown,
+  ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown> | TError>;
 };
 
-/*
-function define<TName extends string, TType, TError = never>(
+export type ScalarFactory<
+  TName extends string,
+  TDecoder extends Decoder<unknown, unknown, unknown>,
+> = (
   name: TName,
-  construct: (
-    value: TType extends Scalar<string, infer UVal> ? UVal : never,
-  ) => TType | Result<TType, TError>,
-): ScalarDescriptor<TName, TType, TError> {
-  function of(
-    value: TType extends Scalar<string, infer UVal> ? UVal : never,
-  ): Result<Scalar<TName, TType>, TError> {
-    const constructorOutput = construct(value);
-    const valueR = Result.isResult(constructorOutput)
-      ? constructorOutput
-      : Result.Ok(constructorOutput);
+  decoder: TDecoder,
+) => ScalarDescriptor<TName, InferDecoderOutput<TDecoder>>;
 
-    return valueR.map((v) => v as Scalar<TName, TType>);
+export function Scalar<const TName extends string, TRoot>(
+  name: TName,
+  decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
+): ScalarDescriptor<TName, TRoot> {
+  function of(value: TRoot): Result<Scalar<TName, TRoot>, never> {
+    return Result.Ok(value as Scalar<TName, TRoot>);
   }
 
-  const base = {
-    ...Kind.from(name),
-    of,
-  };
+  function parse(
+    value: unknown,
+  ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown>> {
+    return decoder(value).andThen(of);
+  }
 
-  return base;
+  return {
+    name,
+    of,
+    parse,
+  };
 }
-  */
-/*
-export function Scalar<const TName extends string, TBaseType>(
-  name: TName,
-  baseType: TBaseType,
-): ScalarDescriptor<TName, TBaseType> {}
-*/
 
 export type InferScalarError<
   T extends ScalarDescriptor<string, unknown, unknown>,

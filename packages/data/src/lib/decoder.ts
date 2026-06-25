@@ -30,11 +30,14 @@ export type Decoder<TIn, TOut, TError = never> = (
 
 // Implements only the decoders for javascript native primitives
 
-export type InferDecoderOutput<TDecoder extends Decoder<unknown, unknown>> =
-  InferOk<ReturnType<TDecoder>>;
+export type InferDecoderOutput<
+  TDecoder extends Decoder<unknown, unknown, unknown>,
+> = InferOk<ReturnType<TDecoder>>;
 
-export type InferDecoderError<TDecoder extends Decoder<unknown, unknown>> =
-  InferErr<ReturnType<TDecoder>>;
+export type InferDecoderError<
+  TDecoder extends Decoder<unknown, unknown, unknown>,
+> = InferErr<ReturnType<TDecoder>>;
 
-export type InferDecoderInput<TDecoder extends Decoder<unknown, unknown>> =
-  TDecoder extends Decoder<infer TIn, unknown> ? TIn : never;
+export type InferDecoderInput<
+  TDecoder extends Decoder<unknown, unknown, unknown>,
+> = TDecoder extends Decoder<infer TIn, unknown, unknown> ? TIn : never;

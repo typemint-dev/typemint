@@ -1,4 +1,4 @@
-import { describe, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   InferScalarType,
   Scalar,
@@ -7,6 +7,10 @@ import {
   type InferScalarMeta,
   type InferScalarNames,
 } from './scalar.js';
+import { unknownToStringDecoder } from './string.js';
+import { assertErr, assertOk, type Result } from '@typemint/result';
+import type { TypeMismatchError } from './type-mismatch.js';
+import type { TypeDescriptor } from '@typemint/core';
 
 describe('(unit) Scalar', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -72,6 +76,17 @@ describe('(unit) Scalar', () => {
       // Assert
       expectTypeOf<ComposedScalarName>().toEqualTypeOf<'uint' | 'int'>();
     });
+
+    it('should infer the scalar name from a scalar descriptor', () => {
+      // Arrange
+      type TestScalarDescriptor = ScalarDescriptor<'test', number>;
+
+      // Act
+      type TestScalarName = InferScalarNames<TestScalarDescriptor>;
+
+      // Assert
+      expectTypeOf<TestScalarName>().toEqualTypeOf<'test'>();
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -99,6 +114,17 @@ describe('(unit) Scalar', () => {
 
       // Assert
       expectTypeOf<ComposedScalarBaseType>().toEqualTypeOf<number>();
+    });
+
+    it('should infer the scalar root from a scalar descriptor', () => {
+      // Arrange
+      type TestScalarDescriptor = ScalarDescriptor<'test', number>;
+
+      // Act
+      type TestScalarRoot = InferScalarRoot<TestScalarDescriptor>;
+
+      // Assert
+      expectTypeOf<TestScalarRoot>().toEqualTypeOf<number>();
     });
   });
 
@@ -149,6 +175,204 @@ describe('(unit) Scalar', () => {
       expectTypeOf<ComposedScalarMeta>().toEqualTypeOf<
         'uintMeta' | 'intMeta'
       >();
+    });
+
+    it('should infer the scalar meta from a scalar descriptor', () => {
+      // Arrange
+      type TestScalarDescriptor = ScalarDescriptor<'test', number, 'meta'>;
+
+      // Act
+      type TestScalarMeta = InferScalarMeta<TestScalarDescriptor>;
+
+      // Assert
+      expectTypeOf<TestScalarMeta>().toEqualTypeOf<'meta'>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar factory
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar factory', () => {
+    it('should infer the scalar descriptor root from the decoder output', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      type MyStringScalar = InferScalarRoot<typeof MyString>;
+
+      // Assert
+      expectTypeOf<MyStringScalar>().toEqualTypeOf<string>();
+    });
+
+    it('should infer the scalar name from the scalar descriptor', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      type MyStringScalarName = InferScalarNames<typeof MyString>;
+
+      // Assert
+      expectTypeOf<MyStringScalarName>().toEqualTypeOf<'MyString'>();
+    });
+
+    it('should expose the scalar name on the scalar descriptor', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      const myStringScalarName = MyString.name;
+
+      // Assert
+      expect(myStringScalarName).toBe('MyString');
+    });
+
+    it('should preserve the scalar name type on the scalar descriptor', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      type MyStringScalarName = typeof MyString.name;
+
+      // Assert
+      expectTypeOf<MyStringScalarName>().toEqualTypeOf<'MyString'>();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar of
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar of', () => {
+    it('should expose the "of" method on the descriptor with the root type as the input and the Result of the scalar as the output', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      type MyStringScalarOf = typeof MyString.of;
+
+      // Assert
+      expectTypeOf<MyStringScalarOf>().toEqualTypeOf<
+        (value: string) => Result<Scalar<'MyString', string, never>, never>
+      >();
+    });
+
+    it('should create a scalar from a value', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      const myStringScalarR = MyString.of('hello');
+
+      // Assert
+      assertOk(myStringScalarR);
+      expect(myStringScalarR.value).toEqual('hello');
+    });
+
+    it('should brand the value with the scalar phantom brand', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      const myStringScalarR = MyString.of('hello');
+
+      // Assert
+      assertOk(myStringScalarR);
+      expectTypeOf<typeof myStringScalarR.value>().toEqualTypeOf<
+        Scalar<'MyString', string>
+      >();
+    });
+
+    it('should not accept a value which is not the root type', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      // @ts-expect-error - test scalar is not a scalar
+      const myStringScalarR = MyString.of(42);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar parse
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar parse', () => {
+    it('should expose the "parse" method on the descriptor with the unknown type as the input and the Result of the scalar as the output', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      type MyStringScalarParse = typeof MyString.parse;
+
+      // Assert
+      expectTypeOf<MyStringScalarParse>().toEqualTypeOf<
+        (
+          value: unknown,
+        ) => Result<
+          Scalar<'MyString', string, never>,
+          TypeMismatchError<string, unknown>
+        >
+      >();
+    });
+    it('should parse a value into a scalar', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      const myStringScalarR = MyString.parse('hello');
+
+      // Assert
+      assertOk(myStringScalarR);
+      expect(myStringScalarR.value).toEqual('hello');
+    });
+
+    it('should brand the value with the scalar phantom brand', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      const myStringScalarR = MyString.parse('hello');
+
+      // Assert
+      assertOk(myStringScalarR);
+      expectTypeOf<typeof myStringScalarR.value>().toEqualTypeOf<
+        Scalar<'MyString', string>
+      >();
+    });
+
+    it('should return a TypeMismatchError when the value is not the root type', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      const myStringScalarR = MyString.parse(42);
+
+      // Assert
+      assertErr(myStringScalarR);
+      expect(myStringScalarR.error.kind).toBe('TypeMismatchError');
+    });
+
+    it('should return the MismatchError with the received value and the expected type as the details', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      const myStringScalarR = MyString.parse(42);
+
+      assertErr(myStringScalarR);
+      expect(myStringScalarR.error.kind).toBe('TypeMismatchError');
+      expect(myStringScalarR.error.details.received).toEqual(42);
+    });
+
+    it('should return the MismatchError with the type descriptor of the root type as the expected type', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      const myStringScalarR = MyString.parse(42);
+
+      assertErr(myStringScalarR);
+      expectTypeOf<
+        typeof myStringScalarR.error.details.expected
+      >().toEqualTypeOf<TypeDescriptor<string, string>>();
     });
   });
 });
