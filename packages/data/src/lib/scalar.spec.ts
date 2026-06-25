@@ -6,9 +6,10 @@ import {
   type InferScalarRoot,
   type InferScalarMeta,
   type InferScalarNames,
+  type InferScalarInvariantError,
 } from './scalar.js';
 import { unknownToStringDecoder } from './string.js';
-import { assertErr, assertOk, type Result } from '@typemint/result';
+import { assertErr, assertOk, Result } from '@typemint/result';
 import type { TypeMismatchError } from './type-mismatch.js';
 import type { TypeDescriptor } from '@typemint/core';
 
@@ -236,6 +237,29 @@ describe('(unit) Scalar', () => {
       // Assert
       expectTypeOf<MyStringScalarName>().toEqualTypeOf<'MyString'>();
     });
+
+    it('should derive an invariant error type from the provided invariant', () => {
+      // Arrange
+      type HelloStringInvariantError = 'Value must be "hello"';
+      function isHelloString(value: string): value is 'hello' {
+        return value === 'hello';
+      }
+      const helloStringInvariant = Result.liftPredicate(
+        isHelloString,
+        'Value must be "hello"' as HelloStringInvariantError,
+      );
+      const MyString = Scalar(
+        'MyString',
+        unknownToStringDecoder,
+        helloStringInvariant,
+      );
+
+      // Act
+      type MyStringInvariantError = InferScalarInvariantError<typeof MyString>;
+
+      // Assert
+      expectTypeOf<MyStringInvariantError>().toEqualTypeOf<'Value must be "hello"'>();
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -288,6 +312,27 @@ describe('(unit) Scalar', () => {
       // Act
       // @ts-expect-error - test scalar is not a scalar
       const myStringScalarR = MyString.of(42);
+    });
+
+    it('should return an invariant error when the value does not satisfy the invariant', () => {
+      // Arrange
+      type HelloStringInvariantError = 'Value must be "hello"';
+      const helloStringInvariant = Result.liftPredicate(
+        (value: string): value is 'hello' => value === 'hello',
+        'Value must be "hello"' as HelloStringInvariantError,
+      );
+      const MyString = Scalar(
+        'MyString',
+        unknownToStringDecoder,
+        helloStringInvariant,
+      );
+
+      // Act
+      const myStringScalarR = MyString.of('world');
+
+      // Assert
+      assertErr(myStringScalarR);
+      expect(myStringScalarR.error).toBe('Value must be "hello"');
     });
   });
 
@@ -373,6 +418,27 @@ describe('(unit) Scalar', () => {
       expectTypeOf<
         typeof myStringScalarR.error.details.expected
       >().toEqualTypeOf<TypeDescriptor<string, string>>();
+    });
+
+    it('should return an invariant error when the value does not satisfy the invariant', () => {
+      // Arrange
+      type HelloStringInvariantError = 'Value must be "hello"';
+      const helloStringInvariant = Result.liftPredicate(
+        (value: string): value is 'hello' => value === 'hello',
+        'Value must be "hello"' as HelloStringInvariantError,
+      );
+      const MyString = Scalar(
+        'MyString',
+        unknownToStringDecoder,
+        helloStringInvariant,
+      );
+
+      // Act
+      const myStringScalarR = MyString.parse('world');
+
+      // Assert
+      assertErr(myStringScalarR);
+      expect(myStringScalarR.error).toBe('Value must be "hello"');
     });
   });
 });

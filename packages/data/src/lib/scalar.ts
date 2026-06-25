@@ -1,5 +1,5 @@
 import { Result } from '@typemint/result';
-import type { Decoder, InferDecoderOutput } from './decoder.js';
+import type { Decoder } from './decoder.js';
 import type { TypeMismatchError } from './type-mismatch.js';
 
 // Taken from the type-fest "Tagged" type
@@ -68,6 +68,10 @@ export type InferScalarMeta<
       ? TMeta
       : never;
 
+export type InferScalarInvariantError<
+  T extends ScalarDescriptor<string, unknown, unknown>,
+> = T extends ScalarDescriptor<string, unknown, infer TError> ? TError : never;
+
 export type ScalarDescriptor<TName extends string, TRoot, TError = never> = {
   readonly name: TName;
 
@@ -78,25 +82,33 @@ export type ScalarDescriptor<TName extends string, TRoot, TError = never> = {
   ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown> | TError>;
 };
 
-export type ScalarFactory<
-  TName extends string,
-  TDecoder extends Decoder<unknown, unknown, unknown>,
-> = (
-  name: TName,
-  decoder: TDecoder,
-) => ScalarDescriptor<TName, InferDecoderOutput<TDecoder>>;
+export type ScalarInvariant<TValue, TError> = (
+  value: TValue,
+) => Result<unknown, TError>;
 
 export function Scalar<const TName extends string, TRoot>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-): ScalarDescriptor<TName, TRoot> {
-  function of(value: TRoot): Result<Scalar<TName, TRoot>, never> {
-    return Result.Ok(value as Scalar<TName, TRoot>);
+): ScalarDescriptor<TName, TRoot, never>;
+export function Scalar<const TName extends string, TRoot, TError>(
+  name: TName,
+  decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
+  invariant: ScalarInvariant<TRoot, TError>,
+): ScalarDescriptor<TName, TRoot, TError>;
+export function Scalar<const TName extends string, TRoot, TError = never>(
+  name: TName,
+  decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
+  invariant?: ScalarInvariant<TRoot, TError>,
+): ScalarDescriptor<TName, TRoot, TError> {
+  function of(value: TRoot): Result<Scalar<TName, TRoot>, TError> {
+    return invariant
+      ? invariant(value).andThen(() => Result.Ok(value as Scalar<TName, TRoot>))
+      : Result.Ok(value as Scalar<TName, TRoot>);
   }
 
   function parse(
     value: unknown,
-  ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown>> {
+  ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown> | TError> {
     return decoder(value).andThen(of);
   }
 
@@ -106,6 +118,12 @@ export function Scalar<const TName extends string, TRoot>(
     parse,
   };
 }
+
+export type ScalarFactory<
+  TName extends string,
+  TRoot,
+  TError = never,
+> = typeof Scalar<TName, TRoot, TError>;
 
 export type InferScalarError<
   T extends ScalarDescriptor<string, unknown, unknown>,
