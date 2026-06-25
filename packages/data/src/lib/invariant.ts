@@ -17,6 +17,32 @@ export type InferInvariantError<T extends AnyInvariant> =
   T extends Invariant<any, infer TError> ? TError : never;
 
 export namespace Invariant {
+  export function andSettled<
+    const TFirst extends AnyInvariant,
+    const TRest extends readonly Invariant<InferInvariantValue<TFirst>, any>[],
+  >(
+    first: TFirst,
+    ...rest: TRest
+  ): Invariant<
+    InferInvariantValue<TFirst>,
+    (InferInvariantError<TFirst> | InferInvariantError<TRest[number]>)[]
+  > {
+    const invariants = [first, ...rest] as const;
+    return (value) => {
+      const errors: (
+        | InferInvariantError<TFirst>
+        | InferInvariantError<TRest[number]>
+      )[] = [];
+      for (const invariant of invariants) {
+        const result = invariant(value);
+        if (result.isErr()) {
+          errors.push(result.error);
+        }
+      }
+      return errors.length > 0 ? Result.Err(errors) : Result.Ok(void 0);
+    };
+  }
+
   export function and<
     const TFirst extends AnyInvariant,
     const TRest extends readonly Invariant<InferInvariantValue<TFirst>, any>[],

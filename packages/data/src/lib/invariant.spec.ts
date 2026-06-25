@@ -96,4 +96,86 @@ describe('(unit) invariant', () => {
       expect(result.error).toBe('Value must be less than 10');
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Invariant.andSettled
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Invariant.andSettled', () => {
+    it('should return an invariant that is the conjunction of the given invariants', () => {
+      // Arrange
+      const invariant1 = Invariant(
+        (value: number) => value > 0,
+        () => 'Value must be greater than 0' as const,
+      );
+      const invariant2 = Invariant(
+        (value: number) => value < 10,
+        () => 'Value must be less than 10' as const,
+      );
+      const invariant = Invariant.andSettled(invariant1, invariant2);
+      const result = invariant(5);
+
+      // Assert
+      assertOk(result);
+    });
+
+    it('should accumulate errors from the given invariants into an array', () => {
+      // Arrange
+      const invariant1 = Invariant(
+        (value: number) => value > 0,
+        () => 'Value must be greater than 0' as const,
+      );
+      const invariant2 = Invariant(
+        (value: number) => value < 10,
+        () => 'Value must be less than 10' as const,
+      );
+      const invariant3 = Invariant(
+        (value: number) => value % 2 === 0,
+        () => 'Value must be even' as const,
+      );
+      const invariant = Invariant.andSettled(
+        invariant1,
+        invariant2,
+        invariant3,
+      );
+      const result = invariant(11);
+
+      // Assert
+      assertErr(result);
+      expect(result.error).toEqual([
+        'Value must be less than 10',
+        'Value must be even',
+      ]);
+    });
+
+    it('should accumulate the error types into an array of union types', () => {
+      // Arrange
+      const invariant1 = Invariant(
+        (value: number) => value > 0,
+        () => 'Value must be greater than 0' as const,
+      );
+      const invariant2 = Invariant(
+        (value: number) => value < 10,
+        () => 'Value must be less than 10' as const,
+      );
+      const invariant3 = Invariant(
+        (value: number) => value % 2 === 0,
+        () => 'Value must be even' as const,
+      );
+      const invariant = Invariant.andSettled(
+        invariant1,
+        invariant2,
+        invariant3,
+      );
+      type InvariantError = InferInvariantError<typeof invariant>;
+
+      // Assert
+      expectTypeOf<InvariantError>().toEqualTypeOf<
+        Array<
+          | 'Value must be greater than 0'
+          | 'Value must be less than 10'
+          | 'Value must be even'
+        >
+      >();
+    });
+  });
 });
