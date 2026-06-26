@@ -1,5 +1,13 @@
 # @typemint/data
 
+## 0.4.0
+
+### Minor Changes
+
+- Add concept of Invariant
+- Add Invariant.and combinator factory
+- Add Invariant.or combinator
+
 ## 0.3.1
 
 ### Patch Changes
