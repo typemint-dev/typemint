@@ -17,6 +17,32 @@ export type InferInvariantError<T extends AnyInvariant> =
   T extends Invariant<any, infer TError> ? TError : never;
 
 export namespace Invariant {
+  /**
+   * Combines invariants with an **accumulating AND**: runs every invariant
+   * regardless of earlier failures and collects all errors into an array.
+   * Returns `Ok` only when every invariant passes; otherwise returns
+   * `Err([...errors])` containing one entry per failing invariant.
+   *
+   * Prefer this over {@link and} when you want to surface every violation at
+   * once — for example, form or schema validation where reporting only the
+   * first error produces a poor experience.
+   *
+   * The error type of the combined invariant is an array of the union of every
+   * individual error type.
+   *
+   * @example
+   * ```ts
+   * const validate = Invariant.andSettled(
+   *   Invariant((n: number) => n > 0,   () => 'TOO_SMALL' as const),
+   *   Invariant((n: number) => n < 100, () => 'TOO_LARGE' as const),
+   *   Invariant((n: number) => n % 2 === 0, () => 'NOT_EVEN' as const),
+   * );
+   *
+   * validate(50);   // Ok(void)
+   * validate(-3);   // Err(['TOO_SMALL', 'NOT_EVEN']) — both violations reported
+   * validate(200);  // Err(['TOO_LARGE', 'NOT_EVEN'])
+   * ```
+   */
   export function andSettled<
     const TFirst extends AnyInvariant,
     const TRest extends readonly Invariant<InferInvariantValue<TFirst>, any>[],
@@ -43,6 +69,29 @@ export namespace Invariant {
     };
   }
 
+  /**
+   * Combines invariants with a **short-circuit OR**: runs each invariant left
+   * to right and returns `Ok` immediately on the first success, without
+   * evaluating the remaining invariants. Returns the **last** `Err` only when
+   * every invariant fails.
+   *
+   * The error type of the combined invariant is the union of every individual
+   * error type. The last error is returned on total failure because it
+   * represents the final attempted path — consistent with how `Result.orElse`
+   * propagates the last failure in a recovery chain.
+   *
+   * @example
+   * ```ts
+   * const isNonZero = Invariant.or(
+   *   Invariant((n: number) => n > 0, () => 'NOT_POSITIVE' as const),
+   *   Invariant((n: number) => n < 0, () => 'NOT_NEGATIVE' as const),
+   * );
+   *
+   * isNonZero(5);   // Ok(void)  — first invariant passes, second never runs
+   * isNonZero(-3);  // Ok(void)  — second invariant passes
+   * isNonZero(0);   // Err('NOT_NEGATIVE')  — both fail, last error returned
+   * ```
+   */
   export function or<
     const TFirst extends AnyInvariant,
     const TRest extends readonly Invariant<InferInvariantValue<TFirst>, any>[],
@@ -69,6 +118,29 @@ export namespace Invariant {
     };
   }
 
+  /**
+   * Combines invariants with a **fail-fast AND**: runs each invariant left to
+   * right and returns the first `Err` immediately, without evaluating the
+   * remaining invariants. Returns `Ok` only when every invariant passes.
+   *
+   * The error type of the combined invariant is the union of every individual
+   * error type, so callers can handle each failure mode precisely.
+   *
+   * Requires at least one invariant (`first`). Pass additional invariants as
+   * rest arguments.
+   *
+   * @example
+   * ```ts
+   * const isInRange = Invariant.and(
+   *   Invariant((n: number) => n > 0,   () => 'TOO_SMALL' as const),
+   *   Invariant((n: number) => n < 100, () => 'TOO_LARGE' as const),
+   * );
+   *
+   * isInRange(50);  // Ok(void)
+   * isInRange(-1);  // Err('TOO_SMALL')  — second invariant never runs
+   * isInRange(200); // Err('TOO_LARGE')
+   * ```
+   */
   export function and<
     const TFirst extends AnyInvariant,
     const TRest extends readonly Invariant<InferInvariantValue<TFirst>, any>[],
