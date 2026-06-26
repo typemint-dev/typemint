@@ -1,5 +1,11 @@
 # @typemint/core
 
+## 0.16.2
+
+### Patch Changes
+
+- Add CJS support
+
 ## 0.16.0
 
 ### Minor Changes
