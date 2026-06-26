@@ -714,6 +714,144 @@ Because the union is derived from the dictionary's keys, the two can never
 drift out of sync: adding a country to `codes` automatically extends both the
 union's members and the exhaustiveness check on every `match`.
 
+---
+
+## `Invariant`
+
+An `Invariant` is a validation rule for an already-typed value: a function
+`(value: TValue) => Result<void, TError>` that returns `Ok` when the value
+satisfies the rule and `Err` when it does not. Invariants are the primary way
+to express domain constraints on a `Scalar` beyond what its decoder can check
+(e.g. "this number must be positive", "this string must not be empty").
+
+### Creating an invariant
+
+Call `Invariant` with a predicate and an error factory. The error factory
+receives the offending value so it can produce context-rich errors:
+
+```ts
+import { Invariant } from '@typemint/data';
+
+const isPositive = Invariant(
+  (n: number) => n > 0,
+  (n) => `Expected positive number, got ${n}`,
+);
+
+isPositive(5);   // Ok(void)
+isPositive(-1);  // Err('Expected positive number, got -1')
+```
+
+Invariants compose freely via the static combinators below. A single
+invariant can also be built from `Result.liftPredicate` when you already have
+a predicate and an error factory available as separate values:
+
+```ts
+import { Result } from '@typemint/result';
+
+const isNonEmpty = Result.liftPredicate(
+  (s: string) => s.length > 0,
+  () => 'EMPTY_STRING',
+);
+// (value: string) => Result<string, 'EMPTY_STRING'>
+// assignable to Invariant<string, 'EMPTY_STRING'>
+```
+
+### `Invariant.and(first, ...rest)`
+
+Fail-fast AND: runs each invariant left to right and returns the first `Err`
+immediately, without evaluating the remaining invariants. Returns `Ok` only
+when every invariant passes. The error type is the union of every individual
+error type.
+
+Use `and` when the first violation is enough to make the value unacceptable
+and subsequent checks would be redundant or misleading.
+
+```ts
+const isInRange = Invariant.and(
+  Invariant((n: number) => n > 0,   () => 'TOO_SMALL' as const),
+  Invariant((n: number) => n < 100, () => 'TOO_LARGE' as const),
+);
+
+isInRange(50);   // Ok(void)
+isInRange(-1);   // Err('TOO_SMALL')  — second invariant never runs
+isInRange(200);  // Err('TOO_LARGE')
+```
+
+### `Invariant.andSettled(first, ...rest)`
+
+Accumulating AND: runs every invariant regardless of earlier failures and
+collects all errors into an array. Returns `Ok` only when every invariant
+passes; otherwise returns `Err([...errors])` with one entry per failing
+invariant. The error type is an array of the union of every individual error
+type.
+
+Use `andSettled` when you want to surface every violation at once — for
+example, validating all fields of a form rather than stopping at the first
+invalid one.
+
+```ts
+const validate = Invariant.andSettled(
+  Invariant((n: number) => n > 0,       () => 'TOO_SMALL' as const),
+  Invariant((n: number) => n < 100,     () => 'TOO_LARGE' as const),
+  Invariant((n: number) => n % 2 === 0, () => 'NOT_EVEN'  as const),
+);
+
+validate(50);   // Ok(void)
+validate(-3);   // Err(['TOO_SMALL', 'NOT_EVEN'])  — both violations reported
+validate(200);  // Err(['TOO_LARGE', 'NOT_EVEN'])
+```
+
+### `Invariant.or(first, ...rest)`
+
+Short-circuit OR: runs each invariant left to right and returns `Ok`
+immediately on the first success, without evaluating the remaining invariants.
+Returns the **last** `Err` only when every invariant fails. The error type is
+the union of every individual error type.
+
+Use `or` to express "at least one of these conditions must hold" — for
+example, a value that is acceptable when it is either zero or a positive even
+number.
+
+```ts
+const isNonZero = Invariant.or(
+  Invariant((n: number) => n > 0, () => 'NOT_POSITIVE' as const),
+  Invariant((n: number) => n < 0, () => 'NOT_NEGATIVE' as const),
+);
+
+isNonZero(5);   // Ok(void)  — first invariant passes, second never runs
+isNonZero(-3);  // Ok(void)  — second invariant passes
+isNonZero(0);   // Err('NOT_NEGATIVE')  — both fail, last error returned
+```
+
+Combinators compose freely, so complex rules can be expressed by nesting:
+
+```ts
+const isValidScore = Invariant.and(
+  Invariant((n: number) => Number.isInteger(n), () => 'NOT_INTEGER' as const),
+  Invariant.or(
+    Invariant((n: number) => n === 0,   () => 'NOT_ZERO'     as const),
+    Invariant((n: number) => n >= 10,   () => 'BELOW_MIN'    as const),
+  ),
+);
+```
+
+### `Invariant` type helpers
+
+| Type | Description |
+| ---- | ----------- |
+| `Invariant<TValue, TError>` | The invariant function type: `(value: TValue) => Result<void, TError>`. |
+| `InferInvariantError<T>` | Extracts the error type from an `Invariant`. |
+
+```ts
+const isPositive = Invariant(
+  (n: number) => n > 0,
+  () => 'NOT_POSITIVE' as const,
+);
+
+type Error = InferInvariantError<typeof isPositive>;
+// type Error = 'NOT_POSITIVE'
+```
+
 ## License
 
 MIT
