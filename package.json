@@ -9,6 +9,9 @@
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check ."
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
     "@vitest/coverage-v8": "^4.1.3",
