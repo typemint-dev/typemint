@@ -1,5 +1,11 @@
 # @typemint/result
 
+## 0.3.1
+
+### Patch Changes
+
+- Add CJS support
+
 ## 0.3.0
 
 ### Minor Changes
