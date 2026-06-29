@@ -528,7 +528,7 @@ Result.fromJSON<number, string>(json); // Ok(Ok(42))
 Result.fromJSON({ kind: 'wrong' }); // Err(ParseResultError { ... })
 ```
 
-#### `Result.all(...results)`
+#### `Result.all(...results)` / `Result.all(results)`
 
 Combines multiple independent `Result`s into a single tuple-valued `Result`. On
 success the return type is a tuple matching the argument order; on failure the first
@@ -537,8 +537,17 @@ ignored. This is the analogue of `Promise.all` for synchronous fallible computat
 and is ideal when you want to **fail fast** — e.g. gate further work on all inputs
 being valid.
 
+Accepts the inputs either spread as individual arguments or as a single array — the
+tuple element types are preserved in both forms. The array form is convenient when
+you already hold the results in a (preferably `as const`) array.
+
 ```ts
+// Spread form
 Result.all(Result.Ok(1), Result.Ok('hello'), Result.Ok(true));
+// Ok([1, 'hello', true])
+
+// Array form — identical result
+Result.all([Result.Ok(1), Result.Ok('hello'), Result.Ok(true)]);
 // Ok([1, 'hello', true])
 
 Result.all(Result.Ok(1), Result.Err('oops'), Result.Ok(true));

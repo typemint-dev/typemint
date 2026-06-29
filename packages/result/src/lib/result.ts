@@ -1015,6 +1015,63 @@ function liftPredicate<T, E>(
   return (value) => fromPredicate(value, predicate, error);
 }
 
+/**
+ * Combines multiple {@link Result}s into a single {@link Result} of a tuple.
+ *
+ * - If every input is {@link Ok}, returns `Ok` of a tuple of their values,
+ *   preserving element order and types.
+ * - On the first {@link Err}, short-circuits and returns that error.
+ *   Subsequent results are not inspected.
+ *
+ * @example
+ * ```ts
+ * const r = Result.all(
+ *   Result.Ok(1),
+ *   Result.Ok("hello"),
+ *   Result.Ok(true),
+ * );
+ * // Result<[number, string, boolean], never>
+ *
+ * const fail = Result.all(
+ *   Result.Ok(1),
+ *   Result.Err("oops" as const),
+ *   Result.Ok(true),   // never inspected
+ * );
+ * // Result<[number, string, boolean], "oops">
+ *
+ * // Accepts an array as well — the tuple types are preserved either way.
+ * const arr = Result.all([Result.Ok(1), Result.Ok("hello")]);
+ * // Result<[number, string], never>
+ * ```
+ */
+function all<R extends readonly Result<unknown, unknown>[]>(
+  ...results: R
+): Result<{ -readonly [K in keyof R]: InferOk<R[K]> }, InferErr<R[number]>>;
+function all<R extends readonly Result<unknown, unknown>[]>(
+  results: R,
+): Result<{ -readonly [K in keyof R]: InferOk<R[K]> }, InferErr<R[number]>>;
+function all<R extends readonly Result<unknown, unknown>[]>(
+  ...args: R | [R]
+): Result<{ -readonly [K in keyof R]: InferOk<R[K]> }, InferErr<R[number]>> {
+  const results = (
+    args.length === 1 && Array.isArray(args[0]) ? args[0] : args
+  ) as R;
+  const values: unknown[] = [];
+  for (const r of results) {
+    if (r.isErr()) {
+      return r as Err<
+        { -readonly [K in keyof R]: InferOk<R[K]> },
+        InferErr<R[number]>
+      >;
+    }
+    values.push(r.value);
+  }
+  return Ok(values) as Ok<
+    { -readonly [K in keyof R]: InferOk<R[K]> },
+    InferErr<R[number]>
+  >;
+}
+
 // #endregion
 // ───────────────────────────────────────────────────────────────────────────────
 
@@ -1027,6 +1084,7 @@ export const Result = {
   Err,
   fromPredicate,
   liftPredicate,
+  all,
 
   /**
    * Wraps a nullable value in a {@link Result}. Returns {@link Ok} if
@@ -1151,49 +1209,6 @@ export const Result = {
         value,
       ),
     );
-  },
-  /**
-   * Combines multiple {@link Result}s into a single {@link Result} of a tuple.
-   *
-   * - If every input is {@link Ok}, returns `Ok` of a tuple of their values,
-   *   preserving element order and types.
-   * - On the first {@link Err}, short-circuits and returns that error.
-   *   Subsequent results are not inspected.
-   *
-   * @example
-   * ```ts
-   * const r = Result.all(
-   *   Result.Ok(1),
-   *   Result.Ok("hello"),
-   *   Result.Ok(true),
-   * );
-   * // Result<[number, string, boolean], never>
-   *
-   * const fail = Result.all(
-   *   Result.Ok(1),
-   *   Result.Err("oops" as const),
-   *   Result.Ok(true),   // never inspected
-   * );
-   * // Result<[number, string, boolean], "oops">
-   * ```
-   */
-  all<R extends readonly Result<unknown, unknown>[]>(
-    ...results: R
-  ): Result<{ -readonly [K in keyof R]: InferOk<R[K]> }, InferErr<R[number]>> {
-    const values: unknown[] = [];
-    for (const r of results) {
-      if (r.isErr()) {
-        return r as Err<
-          { -readonly [K in keyof R]: InferOk<R[K]> },
-          InferErr<R[number]>
-        >;
-      }
-      values.push(r.value);
-    }
-    return Ok(values) as Ok<
-      { -readonly [K in keyof R]: InferOk<R[K]> },
-      InferErr<R[number]>
-    >;
   },
 
   /**

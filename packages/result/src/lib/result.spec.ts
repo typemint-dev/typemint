@@ -1481,6 +1481,43 @@ describe('(Unit) Result', () => {
       assertOk(combined);
       expect(combined.value).toEqual([]);
     });
+
+    it('should accept an array of Results and return Ok of the tuple', () => {
+      // Arrange
+      const results = [
+        Result.Ok(1),
+        Result.Ok('hello'),
+        Result.Ok(true),
+      ] as const;
+
+      // Act
+      const combined = Result.all(results);
+
+      // Assert
+      assertOk(combined);
+      expect(combined.value).toEqual([1, 'hello', true]);
+    });
+
+    it('should short-circuit on the first Err when given an array', () => {
+      // Arrange
+      const results = [Result.Err('first' as const), Result.Ok(99)] as const;
+
+      // Act
+      const combined = Result.all(results);
+
+      // Assert
+      assertErr(combined);
+      expect(combined.error).toBe('first');
+    });
+
+    it('should return Ok of an empty array when given an empty array', () => {
+      // Arrange & Act
+      const combined = Result.all([]);
+
+      // Assert
+      assertOk(combined);
+      expect(combined.value).toEqual([]);
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
