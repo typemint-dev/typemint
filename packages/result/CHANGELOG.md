@@ -1,5 +1,11 @@
 # @typemint/result
 
+## 0.3.2
+
+### Patch Changes
+
+- Allow array argument in Result.all
+
 ## 0.3.1
 
 ### Patch Changes
