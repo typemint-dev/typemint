@@ -52,7 +52,7 @@
     "format:check": "oxfmt --check src",
     "typecheck": "tsc --noEmit",
     "precommit:check": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test",
-    "prepublishOnly": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test"
+    "prepublishOnly": "pnpm build && pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test"
   },
   "dependencies": {
     "@typemint/core": "^0.16.2"
