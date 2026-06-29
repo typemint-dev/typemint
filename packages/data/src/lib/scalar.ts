@@ -86,6 +86,10 @@ export type ScalarInvariant<TValue, TError> = (
   value: TValue,
 ) => Result<unknown, TError>;
 
+export type ScalarConfig<TRoot, TError = never> = {
+  readonly invariant?: ScalarInvariant<TRoot, TError>;
+};
+
 export function Scalar<const TName extends string, TRoot>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
@@ -93,13 +97,15 @@ export function Scalar<const TName extends string, TRoot>(
 export function Scalar<const TName extends string, TRoot, TError>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-  invariant: ScalarInvariant<TRoot, TError>,
+  config: ScalarConfig<TRoot, TError>,
 ): ScalarDescriptor<TName, TRoot, TError>;
 export function Scalar<const TName extends string, TRoot, TError = never>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-  invariant?: ScalarInvariant<TRoot, TError>,
+  config?: ScalarConfig<TRoot, TError>,
 ): ScalarDescriptor<TName, TRoot, TError> {
+  const invariant = config?.invariant;
+
   function of(value: TRoot): Result<Scalar<TName, TRoot>, TError> {
     return invariant
       ? invariant(value).andThen(() => Result.Ok(value as Scalar<TName, TRoot>))

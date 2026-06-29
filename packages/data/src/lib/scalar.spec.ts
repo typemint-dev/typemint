@@ -248,11 +248,9 @@ describe('(unit) Scalar', () => {
         isHelloString,
         'Value must be "hello"' as HelloStringInvariantError,
       );
-      const MyString = Scalar(
-        'MyString',
-        unknownToStringDecoder,
-        helloStringInvariant,
-      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariant: helloStringInvariant,
+      });
 
       // Act
       type MyStringInvariantError = InferScalarInvariantError<typeof MyString>;
@@ -321,11 +319,9 @@ describe('(unit) Scalar', () => {
         (value: string): value is 'hello' => value === 'hello',
         'Value must be "hello"' as HelloStringInvariantError,
       );
-      const MyString = Scalar(
-        'MyString',
-        unknownToStringDecoder,
-        helloStringInvariant,
-      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariant: helloStringInvariant,
+      });
 
       // Act
       const myStringScalarR = MyString.of('world');
@@ -427,11 +423,9 @@ describe('(unit) Scalar', () => {
         (value: string): value is 'hello' => value === 'hello',
         'Value must be "hello"' as HelloStringInvariantError,
       );
-      const MyString = Scalar(
-        'MyString',
-        unknownToStringDecoder,
-        helloStringInvariant,
-      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariant: helloStringInvariant,
+      });
 
       // Act
       const myStringScalarR = MyString.parse('world');
