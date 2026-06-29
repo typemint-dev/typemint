@@ -503,4 +503,81 @@ describe('(unit) Scalar', () => {
       >();
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar validate
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar validate', () => {
+    it('should expose the "validate" method on the descriptor with the root type as the input and the Result of the scalar as the output', () => {
+      // Arrange
+      const helloStringInvariant = Invariant(
+        (value: string) => value === 'hello',
+        () => 'NOT_HELLO' as const,
+      );
+      const minLengthStringInvariant = Invariant(
+        (value: string) => value.length >= 5,
+        () => 'TOO_SHORT' as const,
+      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariants: [helloStringInvariant, minLengthStringInvariant] as const,
+      });
+
+      // Act
+      type MyStringScalarValidate = typeof MyString.validate;
+
+      // Assert
+      expectTypeOf<MyStringScalarValidate>().toEqualTypeOf<
+        (
+          value: string,
+        ) => Result<
+          Scalar<'MyString', string>,
+          readonly ('NOT_HELLO' | 'TOO_SHORT')[]
+        >
+      >();
+    });
+
+    it('should validate a value and return the scalar when the value satisfies the invariants', () => {
+      // Arrange
+      const helloStringInvariant = Invariant(
+        (value: string) => value === 'hello',
+        () => 'NOT_HELLO' as const,
+      );
+      const minLengthStringInvariant = Invariant(
+        (value: string) => value.length >= 5,
+        () => 'TOO_SHORT' as const,
+      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariants: [helloStringInvariant, minLengthStringInvariant] as const,
+      });
+
+      // Act
+      const myStringScalarR = MyString.validate('hello');
+
+      // Assert
+      assertOk(myStringScalarR);
+      expect(myStringScalarR.value).toEqual('hello');
+    });
+
+    it('should return an array of invariant errors when the value does not satisfy the invariants', () => {
+      // Arrange
+      const helloStringInvariant = Invariant(
+        (value: string) => value === 'hello',
+        () => 'NOT_HELLO' as const,
+      );
+      const minLengthStringInvariant = Invariant(
+        (value: string) => value.length >= 6,
+        () => 'TOO_SHORT' as const,
+      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariants: [helloStringInvariant, minLengthStringInvariant] as const,
+      });
+
+      // Act
+      const myStringScalarR = MyString.validate('world');
+
+      // Assert
+      assertErr(myStringScalarR);
+      expect(myStringScalarR.error).toEqual(['NOT_HELLO', 'TOO_SHORT']);
+    });
+  });
 });

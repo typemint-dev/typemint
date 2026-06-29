@@ -81,6 +81,8 @@ export type ScalarDescriptor<TName extends string, TRoot, TError = never> = {
   parse(
     value: unknown,
   ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown> | TError>;
+
+  validate(value: TRoot): Result<Scalar<TName, TRoot>, readonly TError[]>;
 };
 
 export type ScalarMethods<TName extends string, TRoot> = Record<
@@ -160,11 +162,16 @@ export function Scalar<const TName extends string, TRoot>(
 ): ScalarDescriptor<TName, TRoot, any> {
   const [first, ...rest] = config?.invariants ?? [];
   // `of` enforces the invariants fail-fast: the first failure short-circuits.
-  const invariant = first ? Invariant.and(first, ...rest) : undefined;
+  const failFastInvariant = first ? Invariant.and(first, ...rest) : undefined;
+  const allSettledInvariant = first
+    ? Invariant.andSettled(first, ...rest)
+    : undefined;
 
   function of(value: TRoot): Result<Scalar<TName, TRoot>, any> {
-    return invariant
-      ? invariant(value).andThen(() => Result.Ok(value as Scalar<TName, TRoot>))
+    return failFastInvariant
+      ? failFastInvariant(value).andThen(() =>
+          Result.Ok(value as Scalar<TName, TRoot>),
+        )
       : Result.Ok(value as Scalar<TName, TRoot>);
   }
 
@@ -172,10 +179,21 @@ export function Scalar<const TName extends string, TRoot>(
     return decoder(value).andThen(of);
   }
 
+  function validate(
+    value: TRoot,
+  ): Result<Scalar<TName, TRoot>, readonly any[]> {
+    return allSettledInvariant
+      ? allSettledInvariant(value).andThen(() =>
+          Result.Ok(value as Scalar<TName, TRoot>),
+        )
+      : Result.Ok(value as Scalar<TName, TRoot>);
+  }
+
   const descriptor: ScalarDescriptor<TName, TRoot, any> = {
     name,
     of,
     parse,
+    validate,
   };
 
   return config?.methods
