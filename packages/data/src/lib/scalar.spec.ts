@@ -9,6 +9,7 @@ import {
   type InferScalarInvariantError,
 } from './scalar.js';
 import { unknownToStringDecoder } from './string.js';
+import { Invariant } from './invariant.js';
 import { assertErr, assertOk, Result } from '@typemint/result';
 import type { TypeMismatchError } from './type-mismatch.js';
 import type { TypeDescriptor } from '@typemint/core';
@@ -241,15 +242,12 @@ describe('(unit) Scalar', () => {
     it('should derive an invariant error type from the provided invariant', () => {
       // Arrange
       type HelloStringInvariantError = 'Value must be "hello"';
-      function isHelloString(value: string): value is 'hello' {
-        return value === 'hello';
-      }
-      const helloStringInvariant = Result.liftPredicate(
-        isHelloString,
-        'Value must be "hello"' as HelloStringInvariantError,
+      const helloStringInvariant = Invariant(
+        (value: string) => value === 'hello',
+        (): HelloStringInvariantError => 'Value must be "hello"',
       );
       const MyString = Scalar('MyString', unknownToStringDecoder, {
-        invariant: helloStringInvariant,
+        invariants: [helloStringInvariant],
       });
 
       // Act
@@ -257,6 +255,29 @@ describe('(unit) Scalar', () => {
 
       // Assert
       expectTypeOf<MyStringInvariantError>().toEqualTypeOf<'Value must be "hello"'>();
+    });
+
+    it('should derive a union of all error types from a readonly tuple of invariants', () => {
+      // Arrange
+      const isHello = Invariant(
+        (value: string) => value === 'hello',
+        () => 'NOT_HELLO' as const,
+      );
+      const isShort = Invariant(
+        (value: string) => value.length <= 5,
+        () => 'TOO_LONG' as const,
+      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariants: [isHello, isShort],
+      });
+
+      // Act
+      type MyStringInvariantError = InferScalarInvariantError<typeof MyString>;
+
+      // Assert
+      expectTypeOf<MyStringInvariantError>().toEqualTypeOf<
+        'NOT_HELLO' | 'TOO_LONG'
+      >();
     });
   });
 
@@ -315,12 +336,12 @@ describe('(unit) Scalar', () => {
     it('should return an invariant error when the value does not satisfy the invariant', () => {
       // Arrange
       type HelloStringInvariantError = 'Value must be "hello"';
-      const helloStringInvariant = Result.liftPredicate(
-        (value: string): value is 'hello' => value === 'hello',
-        'Value must be "hello"' as HelloStringInvariantError,
+      const helloStringInvariant = Invariant(
+        (value: string) => value === 'hello',
+        (): HelloStringInvariantError => 'Value must be "hello"',
       );
       const MyString = Scalar('MyString', unknownToStringDecoder, {
-        invariant: helloStringInvariant,
+        invariants: [helloStringInvariant],
       });
 
       // Act
@@ -329,6 +350,30 @@ describe('(unit) Scalar', () => {
       // Assert
       assertErr(myStringScalarR);
       expect(myStringScalarR.error).toBe('Value must be "hello"');
+    });
+
+    it('should combine invariants fail-fast, returning the first failing error', () => {
+      // Arrange
+      const isHello = Invariant(
+        (value: string) => value === 'hello',
+        () => 'NOT_HELLO' as const,
+      );
+      const isShort = Invariant(
+        (value: string) => value.length <= 5,
+        () => 'TOO_LONG' as const,
+      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariants: [isHello, isShort],
+      });
+
+      // Act
+      // Fails the first invariant; the second never runs even though it would
+      // also fail, so the first error is the one returned.
+      const myStringScalarR = MyString.of('a very long value');
+
+      // Assert
+      assertErr(myStringScalarR);
+      expect(myStringScalarR.error).toBe('NOT_HELLO');
     });
   });
 
@@ -419,12 +464,12 @@ describe('(unit) Scalar', () => {
     it('should return an invariant error when the value does not satisfy the invariant', () => {
       // Arrange
       type HelloStringInvariantError = 'Value must be "hello"';
-      const helloStringInvariant = Result.liftPredicate(
-        (value: string): value is 'hello' => value === 'hello',
-        'Value must be "hello"' as HelloStringInvariantError,
+      const helloStringInvariant = Invariant(
+        (value: string) => value === 'hello',
+        (): HelloStringInvariantError => 'Value must be "hello"',
       );
       const MyString = Scalar('MyString', unknownToStringDecoder, {
-        invariant: helloStringInvariant,
+        invariants: [helloStringInvariant],
       });
 
       // Act

@@ -1,5 +1,6 @@
 import { Result } from '@typemint/result';
 import type { Decoder } from './decoder.js';
+import { Invariant, type InferInvariantError } from './invariant.js';
 import type { TypeMismatchError } from './type-mismatch.js';
 
 // Taken from the type-fest "Tagged" type
@@ -82,22 +83,39 @@ export type ScalarDescriptor<TName extends string, TRoot, TError = never> = {
   ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown> | TError>;
 };
 
-export type ScalarInvariant<TValue, TError> = (
-  value: TValue,
-) => Result<unknown, TError>;
-
 export type ScalarMethods<TName extends string, TRoot> = Record<
   string,
   (value: Scalar<TName, TRoot>, ...args: any[]) => unknown
 >;
 
+/**
+ * Derives the union of error types produced by a tuple of invariants. This
+ * only yields a precise union when `TInvariants` is a readonly tuple — a
+ * non-tuple `Invariant<TRoot, any>[]` collapses to `any`.
+ */
+export type InferInvariantsError<
+  TInvariants extends readonly Invariant<any, any>[],
+> = InferInvariantError<TInvariants[number]>;
+
 export type ScalarConfig<
   TName extends string,
   TRoot,
-  TError = never,
+  TInvariants extends readonly Invariant<TRoot, any>[] = readonly Invariant<
+    TRoot,
+    any
+  >[],
   TMethods extends ScalarMethods<TName, TRoot> = ScalarMethods<TName, TRoot>,
 > = {
-  readonly invariant?: ScalarInvariant<TRoot, TError>;
+  /**
+   * Invariants enforced on every value produced by this scalar. Declare the
+   * array `as const` (or inline it in the call) so it stays a readonly tuple —
+   * that is what lets the error types be derived as a precise union instead of
+   * collapsing to `any`.
+   *
+   * The `of` method combines them with {@link Invariant.and} — fail-fast: the
+   * first failing invariant short-circuits and its error is returned.
+   */
+  readonly invariants?: TInvariants;
 
   /**
    * Defines additional methods on the scalar descriptor. The callback receives
@@ -116,7 +134,9 @@ export type ScalarConfig<
    * });
    * Email.getDomain(parsedEmail);
    */
-  readonly methods?: (self: ScalarDescriptor<TName, TRoot, TError>) => TMethods;
+  readonly methods?: (
+    self: ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>>,
+  ) => TMethods;
 };
 
 export function Scalar<const TName extends string, TRoot>(
@@ -126,33 +146,33 @@ export function Scalar<const TName extends string, TRoot>(
 export function Scalar<
   const TName extends string,
   TRoot,
-  TError = never,
+  const TInvariants extends readonly Invariant<TRoot, any>[] = readonly [],
   TMethods extends ScalarMethods<TName, TRoot> = Record<never, never>,
 >(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-  config: ScalarConfig<TName, TRoot, TError, TMethods>,
-): ScalarDescriptor<TName, TRoot, TError> & TMethods;
-export function Scalar<const TName extends string, TRoot, TError = never>(
+  config: ScalarConfig<TName, TRoot, TInvariants, TMethods>,
+): ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>> & TMethods;
+export function Scalar<const TName extends string, TRoot>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-  config?: ScalarConfig<TName, TRoot, TError>,
-): ScalarDescriptor<TName, TRoot, TError> {
-  const invariant = config?.invariant;
+  config?: ScalarConfig<TName, TRoot>,
+): ScalarDescriptor<TName, TRoot, any> {
+  const [first, ...rest] = config?.invariants ?? [];
+  // `of` enforces the invariants fail-fast: the first failure short-circuits.
+  const invariant = first ? Invariant.and(first, ...rest) : undefined;
 
-  function of(value: TRoot): Result<Scalar<TName, TRoot>, TError> {
+  function of(value: TRoot): Result<Scalar<TName, TRoot>, any> {
     return invariant
       ? invariant(value).andThen(() => Result.Ok(value as Scalar<TName, TRoot>))
       : Result.Ok(value as Scalar<TName, TRoot>);
   }
 
-  function parse(
-    value: unknown,
-  ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown> | TError> {
+  function parse(value: unknown): Result<Scalar<TName, TRoot>, any> {
     return decoder(value).andThen(of);
   }
 
-  const descriptor: ScalarDescriptor<TName, TRoot, TError> = {
+  const descriptor: ScalarDescriptor<TName, TRoot, any> = {
     name,
     of,
     parse,
@@ -163,11 +183,10 @@ export function Scalar<const TName extends string, TRoot, TError = never>(
     : descriptor;
 }
 
-export type ScalarFactory<
-  TName extends string,
-  TRoot,
-  TError = never,
-> = typeof Scalar<TName, TRoot, TError>;
+export type ScalarFactory<TName extends string, TRoot> = typeof Scalar<
+  TName,
+  TRoot
+>;
 
 export type InferScalarError<
   T extends ScalarDescriptor<string, unknown, unknown>,
