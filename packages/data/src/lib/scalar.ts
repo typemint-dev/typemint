@@ -2,6 +2,7 @@ import { Result } from '@typemint/result';
 import type { Decoder } from './decoder.js';
 import { Invariant, type InferInvariantError } from './invariant.js';
 import type { TypeMismatchError } from './type-mismatch.js';
+import { PanicException } from '@typemint/core';
 
 // Taken from the type-fest "Tagged" type
 declare const tag: unique symbol;
@@ -201,9 +202,21 @@ export function Scalar<const TName extends string, TRoot>(
     validate,
   };
 
-  return config?.methods
-    ? Object.assign(descriptor, config.methods(descriptor))
-    : descriptor;
+  const methods = config?.methods?.(descriptor);
+  if (methods) {
+    const target = descriptor as Record<string, unknown>;
+    for (const [key, method] of Object.entries(methods)) {
+      if (Object.hasOwn(descriptor, key)) {
+        throw new PanicException(
+          `Scalar("${name}"): method "${key}" collides with a built-in ` +
+            `descriptor member and cannot be overridden`,
+        );
+      }
+      target[key] = method;
+    }
+  }
+
+  return descriptor;
 }
 
 export type ScalarFactory<TName extends string, TRoot> = typeof Scalar<

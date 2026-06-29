@@ -12,7 +12,7 @@ import { unknownToStringDecoder } from './string.js';
 import { Invariant } from './invariant.js';
 import { assertErr, assertOk, Result } from '@typemint/result';
 import type { TypeMismatchError } from './type-mismatch.js';
-import type { TypeDescriptor } from '@typemint/core';
+import { type TypeDescriptor, PanicException } from '@typemint/core';
 
 describe('(unit) Scalar', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -503,44 +503,64 @@ describe('(unit) Scalar', () => {
       >();
     });
 
-    it('should prevent the custom method overriding the key "name" with a compilation error', () => {
-      // Arrange & Act & Assert
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
-        // @ts-expect-error - test scalar is not a scalar
-        methods: (self) => ({
-          name: (value: any): any => value,
-        }),
-      });
+    it('should prevent the custom method overriding the key "name" with a compilation error or a runtime error', () => {
+      // Arrange & Act
+      const act = () => {
+        Scalar('MyString', unknownToStringDecoder, {
+          // @ts-expect-error - test scalar is not a scalar
+          methods: (self) => ({
+            name: (value: any): any => value,
+          }),
+        });
+      };
+
+      // Assert
+      expect(act).toThrow(PanicException);
     });
 
     it('should prevent the custom method overriding the key "of" with a compilation error', () => {
-      // Arrange & Act & Assert
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
-        // @ts-expect-error - test scalar is not a scalar
-        methods: (self) => ({
-          of: (value: any): any => value,
-        }),
-      });
+      // Arrange & Act
+      const act = () => {
+        Scalar('MyString', unknownToStringDecoder, {
+          // @ts-expect-error - test scalar is not a scalar
+          methods: (self) => ({
+            of: (value: any): any => value,
+          }),
+        });
+      };
+
+      // Assert
+      expect(act).toThrow(PanicException);
     });
 
     it('should prevent the custom method overriding the key "parse" with a compilation error', () => {
-      // Arrange & Act & Assert
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
-        // @ts-expect-error - test scalar is not a scalar
-        methods: (self) => ({
-          parse: (value: any): any => value,
-        }),
-      });
+      // Arrange & Act
+      const act = () => {
+        Scalar('MyString', unknownToStringDecoder, {
+          // @ts-expect-error - test scalar is not a scalar
+          methods: (self) => ({
+            parse: (value: any): any => value,
+          }),
+        });
+      };
+
+      // Assert
+      expect(act).toThrow(PanicException);
     });
 
     it('should prevent the custom method overriding the key "validate" with a compilation error', () => {
-      // Arrange & Act & Assert
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
-        // @ts-expect-error - test scalar is not a scalar
-        methods: (self) => ({
-          validate: (value: any): any => value,
-        }),
-      });
+      // Arrange & Act
+      const act = () => {
+        Scalar('MyString', unknownToStringDecoder, {
+          // @ts-expect-error - test scalar is not a scalar
+          methods: (self) => ({
+            validate: (value: any): any => value,
+          }),
+        });
+      };
+
+      // Assert
+      expect(act).toThrow(PanicException);
     });
   });
 
