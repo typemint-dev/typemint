@@ -96,6 +96,8 @@ export type ScalarMethods<TName extends string, TRoot> = Record<
   (value: Scalar<TName, TRoot>, ...args: any[]) => unknown
 >;
 
+export type ScalarConsts = Record<string, unknown>;
+
 /**
  * Derives the union of error types produced by a tuple of invariants. This
  * only yields a precise union when `TInvariants` is a readonly tuple — a
@@ -113,6 +115,7 @@ export type ScalarConfig<
     any
   >[],
   TMethods extends ScalarMethods<TName, TRoot> = ScalarMethods<TName, TRoot>,
+  TConsts extends ScalarConsts = ScalarConsts,
 > = {
   /**
    * Invariants enforced on every value produced by this scalar. Declare the
@@ -127,8 +130,9 @@ export type ScalarConfig<
 
   /**
    * Defines additional methods on the scalar descriptor. The callback receives
-   * `self`, the descriptor with the built-in members (`name`, `of`, `parse`),
-   * so methods can reuse them (e.g. to return a new scalar via `self.of`).
+   * `self`, the descriptor with the built-in members (`name`, `of`, `parse`,
+   * `validate`), so methods can reuse them (e.g. to return a new scalar via
+   * `self.of`).
    *
    * Each method takes a validated scalar value as its first argument, which
    * keeps values as plain primitives while ensuring only branded values can be
@@ -145,6 +149,25 @@ export type ScalarConfig<
   readonly methods?: (
     self: ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>>,
   ) => TMethods & { [K in ReservedScalarKeys<TName, TRoot>]?: never };
+
+  /**
+   * Defines readonly constants on the scalar descriptor — static data that
+   * travels with the type and is discoverable on the descriptor (e.g.
+   * `MyString.MIN_LENGTH`). Declare them inline (or `as const`) so their
+   * literal types are preserved.
+   *
+   * Constants must not collide with the built-in members or with any declared
+   * method; a clash is a {@link PanicException} at construction time.
+   *
+   * @example
+   * const Username = Scalar('Username', stringDecoder, {
+   *   consts: { MIN_LENGTH: 3, MAX_LENGTH: 32 },
+   * });
+   * Username.MIN_LENGTH; // 3
+   */
+  readonly consts?: TConsts & {
+    [K in ReservedScalarKeys<TName, TRoot>]?: never;
+  };
 };
 
 export function Scalar<const TName extends string, TRoot>(
@@ -156,11 +179,14 @@ export function Scalar<
   TRoot,
   const TInvariants extends readonly Invariant<TRoot, any>[] = readonly [],
   TMethods extends ScalarMethods<TName, TRoot> = Record<never, never>,
+  const TConsts extends ScalarConsts = Record<never, never>,
 >(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-  config: ScalarConfig<TName, TRoot, TInvariants, TMethods>,
-): ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>> & TMethods;
+  config: ScalarConfig<TName, TRoot, TInvariants, TMethods, TConsts>,
+): ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>> &
+  TMethods &
+  TConsts;
 export function Scalar<const TName extends string, TRoot>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
@@ -202,18 +228,31 @@ export function Scalar<const TName extends string, TRoot>(
     validate,
   };
 
-  const methods = config?.methods?.(descriptor);
-  if (methods) {
-    const target = descriptor as Record<string, unknown>;
-    for (const [key, method] of Object.entries(methods)) {
+  const target = descriptor as Record<string, unknown>;
+
+  // Assigns custom members one by one, panicking on any collision with a
+  // built-in member or a previously defined custom member. Methods are
+  // defined before consts so the check also catches method/const clashes.
+  function define(members: Record<string, unknown> | undefined): void {
+    if (!members) {
+      return;
+    }
+    for (const [key, value] of Object.entries(members)) {
       if (Object.hasOwn(descriptor, key)) {
         throw new PanicException(
-          `Scalar("${name}"): method "${key}" collides with a built-in ` +
-            `descriptor member and cannot be overridden`,
+          `Scalar("${name}"): member "${key}" collides with a built-in ` +
+            `descriptor member or another custom member and cannot be defined`,
         );
       }
-      target[key] = method;
+      target[key] = value;
     }
+  }
+
+  if (typeof config?.methods === 'function') {
+    define(config.methods(descriptor));
+  }
+  if (config?.consts) {
+    define(config.consts);
   }
 
   return descriptor;

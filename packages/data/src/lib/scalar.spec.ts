@@ -640,4 +640,80 @@ describe('(unit) Scalar', () => {
       expect(myStringScalarR.error).toEqual(['NOT_HELLO', 'TOO_SHORT']);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar consts
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar consts', () => {
+    it('should expose the consts on the descriptor', () => {
+      // Arrange
+      const Username = Scalar('Username', unknownToStringDecoder, {
+        consts: { MIN_LENGTH: 3, MAX_LENGTH: 32 },
+      });
+
+      // Act & Assert
+      expect(Username.MIN_LENGTH).toBe(3);
+      expect(Username.MAX_LENGTH).toBe(32);
+    });
+
+    it('should preserve the literal type of the consts', () => {
+      // Arrange
+      const Username = Scalar('Username', unknownToStringDecoder, {
+        consts: { MIN_LENGTH: 3 },
+      });
+
+      // Act
+      type MyStringMinLength = typeof Username.MIN_LENGTH;
+
+      // Assert
+      expectTypeOf<MyStringMinLength>().toEqualTypeOf<3>();
+    });
+
+    it('should expose consts alongside methods', () => {
+      // Arrange
+      const Username = Scalar('Username', unknownToStringDecoder, {
+        consts: { MIN_LENGTH: 3 },
+        methods: (self) => ({
+          isLongEnough: (value: InferScalarType<typeof self>) =>
+            value.length >= 3,
+        }),
+      });
+      const username = Username.of('abc');
+      assertOk(username);
+
+      // Act & Assert
+      expect(Username.MIN_LENGTH).toBe(3);
+      expect(Username.isLongEnough(username.value)).toBe(true);
+    });
+
+    it('should prevent a const overriding a built-in key with a compilation error and a runtime error', () => {
+      // Arrange & Act
+      const act = () => {
+        Scalar('MyString', unknownToStringDecoder, {
+          // @ts-expect-error - "of" collides with a built-in descriptor member
+          consts: { of: 1 },
+        });
+      };
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should panic when a const collides with a custom method name', () => {
+      // Arrange & Act
+      // The type guard only forbids built-in keys, so a method/const clash is
+      // caught at runtime rather than at compile time.
+      const act = () => {
+        Scalar('MyString', unknownToStringDecoder, {
+          methods: () => ({
+            label: (value: Scalar<'MyString', string>) => value,
+          }),
+          consts: { label: 'literal' },
+        });
+      };
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
 });
