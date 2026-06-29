@@ -502,6 +502,46 @@ describe('(unit) Scalar', () => {
         (email: Scalar<'MyString', string>) => string | undefined
       >();
     });
+
+    it('should prevent the custom method overriding the key "name" with a compilation error', () => {
+      // Arrange & Act & Assert
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        // @ts-expect-error - test scalar is not a scalar
+        methods: (self) => ({
+          name: (value: any): any => value,
+        }),
+      });
+    });
+
+    it('should prevent the custom method overriding the key "of" with a compilation error', () => {
+      // Arrange & Act & Assert
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        // @ts-expect-error - test scalar is not a scalar
+        methods: (self) => ({
+          of: (value: any): any => value,
+        }),
+      });
+    });
+
+    it('should prevent the custom method overriding the key "parse" with a compilation error', () => {
+      // Arrange & Act & Assert
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        // @ts-expect-error - test scalar is not a scalar
+        methods: (self) => ({
+          parse: (value: any): any => value,
+        }),
+      });
+    });
+
+    it('should prevent the custom method overriding the key "validate" with a compilation error', () => {
+      // Arrange & Act & Assert
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        // @ts-expect-error - test scalar is not a scalar
+        methods: (self) => ({
+          validate: (value: any): any => value,
+        }),
+      });
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

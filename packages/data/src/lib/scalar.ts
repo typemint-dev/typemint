@@ -85,6 +85,11 @@ export type ScalarDescriptor<TName extends string, TRoot, TError = never> = {
   validate(value: TRoot): Result<Scalar<TName, TRoot>, readonly TError[]>;
 };
 
+type ReservedScalarKeys<TName extends string, TRoot> = keyof ScalarDescriptor<
+  TName,
+  TRoot
+>;
+
 export type ScalarMethods<TName extends string, TRoot> = Record<
   string,
   (value: Scalar<TName, TRoot>, ...args: any[]) => unknown
@@ -138,7 +143,7 @@ export type ScalarConfig<
    */
   readonly methods?: (
     self: ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>>,
-  ) => TMethods;
+  ) => TMethods & { [K in ReservedScalarKeys<TName, TRoot>]?: never };
 };
 
 export function Scalar<const TName extends string, TRoot>(
