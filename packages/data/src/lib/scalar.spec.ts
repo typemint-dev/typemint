@@ -435,4 +435,27 @@ describe('(unit) Scalar', () => {
       expect(myStringScalarR.error).toBe('Value must be "hello"');
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar methods
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar methods', () => {
+    it('should expose the methods on the descriptor', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        methods: (self) => ({
+          getDomain: (email: InferScalarType<typeof self>) =>
+            email.split('@')[1],
+        }),
+      });
+
+      // Act
+      type MyStringMethods = typeof MyString.getDomain;
+
+      // Assert
+      expectTypeOf<MyStringMethods>().toEqualTypeOf<
+        (email: Scalar<'MyString', string>) => string | undefined
+      >();
+    });
+  });
 });

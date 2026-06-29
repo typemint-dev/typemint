@@ -86,23 +86,57 @@ export type ScalarInvariant<TValue, TError> = (
   value: TValue,
 ) => Result<unknown, TError>;
 
-export type ScalarConfig<TRoot, TError = never> = {
+export type ScalarMethods<TName extends string, TRoot> = Record<
+  string,
+  (value: Scalar<TName, TRoot>, ...args: any[]) => unknown
+>;
+
+export type ScalarConfig<
+  TName extends string,
+  TRoot,
+  TError = never,
+  TMethods extends ScalarMethods<TName, TRoot> = ScalarMethods<TName, TRoot>,
+> = {
   readonly invariant?: ScalarInvariant<TRoot, TError>;
+
+  /**
+   * Defines additional methods on the scalar descriptor. The callback receives
+   * `self`, the descriptor with the built-in members (`name`, `of`, `parse`),
+   * so methods can reuse them (e.g. to return a new scalar via `self.of`).
+   *
+   * Each method takes a validated scalar value as its first argument, which
+   * keeps values as plain primitives while ensuring only branded values can be
+   * passed in:
+   *
+   * @example
+   * const Email = Scalar('Email', stringDecoder, {
+   *   methods: (self) => ({
+   *     getDomain: (email) => email.split('@')[1],
+   *   }),
+   * });
+   * Email.getDomain(parsedEmail);
+   */
+  readonly methods?: (self: ScalarDescriptor<TName, TRoot, TError>) => TMethods;
 };
 
 export function Scalar<const TName extends string, TRoot>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
 ): ScalarDescriptor<TName, TRoot, never>;
-export function Scalar<const TName extends string, TRoot, TError>(
+export function Scalar<
+  const TName extends string,
+  TRoot,
+  TError = never,
+  TMethods extends ScalarMethods<TName, TRoot> = Record<never, never>,
+>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-  config: ScalarConfig<TRoot, TError>,
-): ScalarDescriptor<TName, TRoot, TError>;
+  config: ScalarConfig<TName, TRoot, TError, TMethods>,
+): ScalarDescriptor<TName, TRoot, TError> & TMethods;
 export function Scalar<const TName extends string, TRoot, TError = never>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-  config?: ScalarConfig<TRoot, TError>,
+  config?: ScalarConfig<TName, TRoot, TError>,
 ): ScalarDescriptor<TName, TRoot, TError> {
   const invariant = config?.invariant;
 
@@ -118,11 +152,15 @@ export function Scalar<const TName extends string, TRoot, TError = never>(
     return decoder(value).andThen(of);
   }
 
-  return {
+  const descriptor: ScalarDescriptor<TName, TRoot, TError> = {
     name,
     of,
     parse,
   };
+
+  return config?.methods
+    ? Object.assign(descriptor, config.methods(descriptor))
+    : descriptor;
 }
 
 export type ScalarFactory<
