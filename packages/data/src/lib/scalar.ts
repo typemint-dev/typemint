@@ -10,20 +10,18 @@ type TagContainer<Token> = {
   readonly [tag]: Token;
 };
 
-type Tag<Token extends PropertyKey, TagMetadata> = TagContainer<{
-  [K in Token]: TagMetadata;
+type Tag<Token extends PropertyKey> = TagContainer<{
+  [K in Token]: K;
 }>;
 
-export type Scalar<TName extends string, TType, TMeta = never> = TType &
-  Tag<TName, TMeta>;
+export type Scalar<TName extends string, TType> = TType & Tag<TName>;
 
 type RemoveAllTags<T> =
-  T extends Tag<PropertyKey, any>
+  T extends Tag<PropertyKey>
     ? {
         [ThisTag in keyof T[typeof tag]]: T extends Scalar<
           ThisTag & string,
-          infer Type,
-          T[typeof tag][ThisTag]
+          infer Type
         >
           ? RemoveAllTags<Type>
           : never;
@@ -31,12 +29,10 @@ type RemoveAllTags<T> =
     : T;
 
 export type InferScalarNames<
-  T extends
-    | Scalar<string, unknown, unknown>
-    | ScalarDescriptor<string, unknown, unknown>,
+  T extends Scalar<string, unknown> | ScalarDescriptor<string, unknown, unknown>,
 > =
-  T extends Scalar<string, unknown, unknown>
-    ? T extends Scalar<infer UName, unknown, unknown>
+  T extends Scalar<string, unknown>
+    ? T extends Scalar<infer UName, unknown>
       ? UName
       : never
     : T extends ScalarDescriptor<string, unknown, unknown>
@@ -49,25 +45,12 @@ export type InferScalarType<T extends ScalarDescriptor<string, unknown>> =
     : never;
 
 export type InferScalarRoot<
-  T extends
-    | Scalar<string, unknown, unknown>
-    | ScalarDescriptor<string, unknown, unknown>,
+  T extends Scalar<string, unknown> | ScalarDescriptor<string, unknown, unknown>,
 > =
-  T extends Scalar<string, unknown, unknown>
+  T extends Scalar<string, unknown>
     ? RemoveAllTags<T>
     : T extends ScalarDescriptor<string, infer TType, unknown>
       ? TType
-      : never;
-
-export type InferScalarMeta<
-  T extends
-    | Scalar<string, unknown, unknown>
-    | ScalarDescriptor<string, unknown, unknown>,
-> =
-  T extends Scalar<string, unknown, infer TMeta>
-    ? TMeta
-    : T extends ScalarDescriptor<string, unknown, infer TMeta>
-      ? TMeta
       : never;
 
 export type InferScalarInvariantError<
@@ -240,10 +223,7 @@ export function Scalar<const TName extends string, TRoot>(
   // Assigns custom members one by one, panicking on any collision with a
   // built-in member or a previously defined custom member. Methods are
   // defined before consts so the check also catches method/const clashes.
-  function define(members: Record<string, unknown> | undefined): void {
-    if (!members) {
-      return;
-    }
+  function define(members: Record<string, unknown>): void {
     for (const [key, value] of Object.entries(members)) {
       if (Object.hasOwn(descriptor, key)) {
         throw new PanicException(

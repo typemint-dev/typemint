@@ -4,7 +4,6 @@ import {
   Scalar,
   ScalarDescriptor,
   type InferScalarRoot,
-  type InferScalarMeta,
   type InferScalarNames,
   type InferScalarInvariantError,
 } from './scalar.js';
@@ -131,67 +130,6 @@ describe('(unit) Scalar', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // MARK: Infer scalar meta
-  // ─────────────────────────────────────────────────────────────────────────────
-  describe('Infer scalar meta from a scalar', () => {
-    it('should infer the scalar meta from the scalar', () => {
-      // Arrange
-      type TestScalar = Scalar<'test', number, 'meta'>;
-
-      // Act
-      type TestScalarMeta = InferScalarMeta<TestScalar>;
-
-      // Assert
-      expectTypeOf<TestScalarMeta>().toEqualTypeOf<'meta'>();
-    });
-
-    it('should not allow to infer a scalar meta from a non-scalar', () => {
-      // Arrange
-      type TestScalar = number;
-
-      // Act
-      // @ts-expect-error - test scalar is not a scalar
-      type TestScalarMeta = InferScalarMeta<TestScalar>;
-    });
-
-    it('should infer to never when the passed scalar has no meta', () => {
-      // Arrange
-      type TestScalar = Scalar<'test', number>;
-
-      // Act
-      type TestScalarMeta = InferScalarMeta<TestScalar>;
-
-      // Assert
-      expectTypeOf<TestScalarMeta>().toEqualTypeOf<never>();
-    });
-
-    it('should infer a union of all the scalar meta when composed from another scalar', () => {
-      // Arrange
-      type Int = Scalar<'int', number, 'intMeta'>;
-      type UInt = Scalar<'uint', Int, 'uintMeta'>;
-
-      // Act
-      type ComposedScalarMeta = InferScalarMeta<UInt>;
-
-      // Assert
-      expectTypeOf<ComposedScalarMeta>().toEqualTypeOf<
-        'uintMeta' | 'intMeta'
-      >();
-    });
-
-    it('should infer the scalar meta from a scalar descriptor', () => {
-      // Arrange
-      type TestScalarDescriptor = ScalarDescriptor<'test', number, 'meta'>;
-
-      // Act
-      type TestScalarMeta = InferScalarMeta<TestScalarDescriptor>;
-
-      // Assert
-      expectTypeOf<TestScalarMeta>().toEqualTypeOf<'meta'>();
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
   // MARK: Scalar factory
   // ─────────────────────────────────────────────────────────────────────────────
   describe('Scalar factory', () => {
@@ -307,7 +245,7 @@ describe('(unit) Scalar', () => {
 
       // Assert
       expectTypeOf<MyStringScalarOf>().toEqualTypeOf<
-        (value: string) => Result<Scalar<'MyString', string, never>, never>
+        (value: string) => Result<Scalar<'MyString', string>, never>
       >();
     });
 
@@ -406,7 +344,7 @@ describe('(unit) Scalar', () => {
         (
           value: unknown,
         ) => Result<
-          Scalar<'MyString', string, never>,
+          Scalar<'MyString', string>,
           TypeMismatchError<string, unknown>
         >
       >();
