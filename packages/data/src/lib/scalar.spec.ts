@@ -716,4 +716,75 @@ describe('(unit) Scalar', () => {
       expect(act).toThrow(PanicException);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar is
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar is', () => {
+    it('should expose the "is" method on the descriptor with the root type as the input and the boolean as the output', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      type MyStringScalarIs = typeof MyString.is;
+
+      // Assert
+      expectTypeOf<MyStringScalarIs>().toEqualTypeOf<
+        (value: unknown) => value is Scalar<'MyString', string>
+      >();
+    });
+
+    it('should return true when the value is a scalar', () => {
+      // Arrange
+      const isHelloString = Invariant(
+        (value: string) => value === 'hello',
+        () => 'NOT_HELLO' as const,
+      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariants: [isHelloString],
+      });
+
+      // Act
+      const isMyString = MyString.is('hello');
+      // Assert
+      expect(isMyString).toBe(true);
+    });
+
+    it('should return false when the value is not a scalar', () => {
+      // Arrange
+      const isHelloString = Invariant(
+        (value: string) => value === 'hello',
+        () => 'NOT_HELLO' as const,
+      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariants: [isHelloString],
+      });
+
+      // Act
+      const isMyString = MyString.is('not hello');
+      // Assert
+      expect(isMyString).toBe(false);
+    });
+
+    it('should infer the scalar type when the value is a scalar', () => {
+      // Arrange
+      const isHelloString = Invariant(
+        (value: string) => value === 'hello',
+        () => 'NOT_HELLO' as const,
+      );
+      const MyString = Scalar('MyString', unknownToStringDecoder, {
+        invariants: [isHelloString],
+      });
+      const value: unknown = 'hello';
+
+      // Act
+      if (MyString.is(value)) {
+        expectTypeOf<typeof value>().toEqualTypeOf<
+          Scalar<'MyString', string>
+        >();
+      } else {
+        expectTypeOf<typeof value>().toBeUnknown();
+      }
+    });
+  });
 });

@@ -84,6 +84,8 @@ export type ScalarDescriptor<TName extends string, TRoot, TError = never> = {
   ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown> | TError>;
 
   validate(value: TRoot): Result<Scalar<TName, TRoot>, readonly TError[]>;
+
+  is(value: unknown): value is Scalar<TName, TRoot>;
 };
 
 type ReservedScalarKeys<TName extends string, TRoot> = keyof ScalarDescriptor<
@@ -221,11 +223,16 @@ export function Scalar<const TName extends string, TRoot>(
       : Result.Ok(value as Scalar<TName, TRoot>);
   }
 
+  function is(value: unknown): value is Scalar<TName, TRoot> {
+    return parse(value).isOk();
+  }
+
   const descriptor: ScalarDescriptor<TName, TRoot, any> = {
     name,
     of,
     parse,
     validate,
+    is,
   };
 
   const target = descriptor as Record<string, unknown>;
