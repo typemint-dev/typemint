@@ -262,7 +262,7 @@ export function Scalar<const TName extends string, TRoot>(
     define(config.consts);
   }
 
-  return descriptor;
+  return Object.freeze(descriptor);
 }
 
 export type ScalarFactory<TName extends string, TRoot> = typeof Scalar<

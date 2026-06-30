@@ -279,6 +279,19 @@ describe('(unit) Scalar', () => {
         'NOT_HELLO' | 'TOO_LONG'
       >();
     });
+
+    it('should prevent the scalar descriptor from being mutated', () => {
+      // Arrange
+      const MyString = Scalar('MyString', unknownToStringDecoder);
+
+      // Act
+      const act = () => {
+        Object.assign(MyString, { foo: 'bar' });
+      };
+
+      // Assert
+      expect(act).toThrow(Error);
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
