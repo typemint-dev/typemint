@@ -14,14 +14,57 @@ type Tag<Token extends PropertyKey> = TagContainer<{
   [K in Token]: K;
 }>;
 
-export type Scalar<TName extends string, TType> = TType & Tag<TName>;
+/**
+ * The set of primitive types a {@link Scalar} may refine. Restricted to
+ * immutable, value-equal primitives on purpose — see {@link Scalar}.
+ *
+ * `null` and `undefined` are intentionally excluded: a scalar of them is
+ * degenerate, and `null & Tag` / `undefined & Tag` collapse to `never`, so the
+ * brand could not even form.
+ */
+export type ScalarPrimitive = string | number | bigint | boolean | symbol;
+
+/**
+ * A `Scalar` is a **pure refinement** of a single primitive value: the
+ * underlying `TType` carried unchanged, plus a phantom `Tag<TName>` brand that
+ * makes it a distinct nominal type. A `Scalar<'Email', string>` is still a
+ * `string` at runtime — the brand exists only at the type level.
+ *
+ * Scalars **refine**, they never **transform**: construction validates the
+ * value against its invariants and brands it as-is; the value is never
+ * normalized or converted. Representation changes (parsing, normalizing,
+ * encoding) belong to a codec layer, not here.
+ *
+ * `TType` is bound to {@link ScalarPrimitive} on purpose:
+ *
+ * - A brand certifies "this value passed its invariants", which is only honest
+ *   if the value cannot change after the check. Primitives are immutable; a
+ *   mutable object (`Date`, `URL`, `RegExp`) could be mutated after validation,
+ *   turning the brand into a lie.
+ * - Primitives compare by value (`===`), so branded scalars work as map keys,
+ *   in sets, and in equality checks — reference-typed objects do not.
+ *
+ * Consequently:
+ *
+ * - **Records / plain objects** → model with a `Struct`, not a `Scalar`.
+ * - **Value objects** (`Date`, `URL`, `Temporal.*`) → never use as a root.
+ *   Brand their canonical primitive serialization instead — e.g. a `BirthDate`
+ *   as an ISO-8601 `string` (or epoch `number`) — and reconstruct the rich
+ *   object on demand via a method or codec. Prefer immutable representations.
+ *
+ * @example
+ * const Email = Scalar('Email', stringDecoder, { invariants: [isEmail] });
+ * type Email = InferScalarType<typeof Email>; // Scalar<'Email', string>
+ */
+export type Scalar<TName extends string, TType extends ScalarPrimitive> = TType &
+  Tag<TName>;
 
 type RemoveAllTags<T> =
   T extends Tag<PropertyKey>
     ? {
         [ThisTag in keyof T[typeof tag]]: T extends Scalar<
           ThisTag & string,
-          infer Type
+          infer Type extends ScalarPrimitive
         >
           ? RemoveAllTags<Type>
           : never;
@@ -29,35 +72,47 @@ type RemoveAllTags<T> =
     : T;
 
 export type InferScalarNames<
-  T extends Scalar<string, unknown> | ScalarDescriptor<string, unknown, unknown>,
+  T extends
+    | Scalar<string, ScalarPrimitive>
+    | ScalarDescriptor<string, ScalarPrimitive, unknown>,
 > =
-  T extends Scalar<string, unknown>
-    ? T extends Scalar<infer UName, unknown>
+  T extends Scalar<string, ScalarPrimitive>
+    ? T extends Scalar<infer UName, ScalarPrimitive>
       ? UName
       : never
-    : T extends ScalarDescriptor<string, unknown, unknown>
+    : T extends ScalarDescriptor<string, ScalarPrimitive, unknown>
       ? T['name']
       : never;
 
-export type InferScalarType<T extends ScalarDescriptor<string, unknown>> =
-  T extends ScalarDescriptor<infer TName, infer TType>
+export type InferScalarType<
+  T extends ScalarDescriptor<string, ScalarPrimitive>,
+> =
+  T extends ScalarDescriptor<infer TName, infer TType extends ScalarPrimitive>
     ? Scalar<TName, TType>
     : never;
 
 export type InferScalarRoot<
-  T extends Scalar<string, unknown> | ScalarDescriptor<string, unknown, unknown>,
+  T extends
+    | Scalar<string, ScalarPrimitive>
+    | ScalarDescriptor<string, ScalarPrimitive, unknown>,
 > =
-  T extends Scalar<string, unknown>
+  T extends Scalar<string, ScalarPrimitive>
     ? RemoveAllTags<T>
     : T extends ScalarDescriptor<string, infer TType, unknown>
       ? TType
       : never;
 
 export type InferScalarInvariantError<
-  T extends ScalarDescriptor<string, unknown, unknown>,
-> = T extends ScalarDescriptor<string, unknown, infer TError> ? TError : never;
+  T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
+> = T extends ScalarDescriptor<string, ScalarPrimitive, infer TError>
+  ? TError
+  : never;
 
-export type ScalarDescriptor<TName extends string, TRoot, TError = never> = {
+export type ScalarDescriptor<
+  TName extends string,
+  TRoot extends ScalarPrimitive,
+  TError = never,
+> = {
   readonly name: TName;
 
   of(value: TRoot): Result<Scalar<TName, TRoot>, TError>;
@@ -71,12 +126,18 @@ export type ScalarDescriptor<TName extends string, TRoot, TError = never> = {
   is(value: unknown): value is Scalar<TName, TRoot>;
 };
 
-type ReservedScalarKeys<TName extends string, TRoot> = keyof ScalarDescriptor<
+type ReservedScalarKeys<
+  TName extends string,
+  TRoot extends ScalarPrimitive,
+> = keyof ScalarDescriptor<
   TName,
   TRoot
 >;
 
-export type ScalarMethods<TName extends string, TRoot> = Record<
+export type ScalarMethods<
+  TName extends string,
+  TRoot extends ScalarPrimitive,
+> = Record<
   string,
   (value: Scalar<TName, TRoot>, ...args: any[]) => unknown
 >;
@@ -94,7 +155,7 @@ export type InferInvariantsError<
 
 export type ScalarConfig<
   TName extends string,
-  TRoot,
+  TRoot extends ScalarPrimitive,
   TInvariants extends readonly Invariant<TRoot, any>[] = readonly Invariant<
     TRoot,
     any
@@ -155,13 +216,13 @@ export type ScalarConfig<
   };
 };
 
-export function Scalar<const TName extends string, TRoot>(
+export function Scalar<const TName extends string, TRoot extends ScalarPrimitive>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
 ): ScalarDescriptor<TName, TRoot, never>;
 export function Scalar<
   const TName extends string,
-  TRoot,
+  TRoot extends ScalarPrimitive,
   const TInvariants extends readonly Invariant<TRoot, any>[] = readonly [],
   TMethods extends ScalarMethods<TName, TRoot> = Record<never, never>,
   const TConsts extends ScalarConsts = Record<never, never>,
@@ -172,7 +233,7 @@ export function Scalar<
 ): ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>> &
   TMethods &
   TConsts;
-export function Scalar<const TName extends string, TRoot>(
+export function Scalar<const TName extends string, TRoot extends ScalarPrimitive>(
   name: TName,
   decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
   config?: ScalarConfig<TName, TRoot>,
@@ -245,11 +306,13 @@ export function Scalar<const TName extends string, TRoot>(
   return Object.freeze(descriptor);
 }
 
-export type ScalarFactory<TName extends string, TRoot> = typeof Scalar<
-  TName,
-  TRoot
->;
+export type ScalarFactory<
+  TName extends string,
+  TRoot extends ScalarPrimitive,
+> = typeof Scalar<TName, TRoot>;
 
 export type InferScalarError<
-  T extends ScalarDescriptor<string, unknown, unknown>,
-> = T extends ScalarDescriptor<string, unknown, infer TError> ? TError : never;
+  T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
+> = T extends ScalarDescriptor<string, ScalarPrimitive, infer TError>
+  ? TError
+  : never;
