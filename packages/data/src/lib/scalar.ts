@@ -115,24 +115,24 @@ export type InferScalarRoot<
 export type InferScalarInvariantError<
   T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
 > =
-  T extends ScalarDescriptor<string, ScalarPrimitive, infer TError>
-    ? TError
+  T extends ScalarDescriptor<string, ScalarPrimitive, infer TInvariantError>
+    ? TInvariantError
     : never;
 
 export type ScalarDescriptor<
   TName extends string,
   TRoot extends ScalarPrimitive,
-  TError = never,
+  TInvariantError = never,
 > = {
   readonly name: TName;
 
-  of(value: TRoot): Result<Scalar<TName, TRoot>, TError>;
+  of(value: TRoot): Result<Scalar<TName, TRoot>, TInvariantError>;
 
   parse(
     value: unknown,
-  ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown> | TError>;
+  ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown> | TInvariantError>;
 
-  validate(value: TRoot): Result<Scalar<TName, TRoot>, readonly TError[]>;
+  validate(value: TRoot): Result<Scalar<TName, TRoot>, readonly TInvariantError[]>;
 
   is(value: unknown): value is Scalar<TName, TRoot>;
 
@@ -144,7 +144,7 @@ export type ScalarDescriptor<
    *
    * Invariants are **composed**: the derived scalar enforces this scalar's
    * invariants *and* the new ones, so its error channel is the union of both
-   * (`TError | InferInvariantsError<TNewInvariants>`).
+   * (`TInvariantError | InferInvariantsError<TNewInvariants>`).
    *
    * Methods and constants are **not** inherited — the derived scalar carries
    * only those declared here. This scalar's own methods/consts remain reachable
@@ -177,7 +177,7 @@ export type ScalarDescriptor<
   ): ScalarDescriptor<
     TNewName,
     Scalar<TName, TRoot>,
-    TError | InferInvariantsError<TNewInvariants>
+    TInvariantError | InferInvariantsError<TNewInvariants>
   > &
     TNewMethods &
     TNewConsts;
@@ -432,10 +432,3 @@ export type ScalarFactory<
   TName extends string,
   TKind extends ScalarPrimitiveKind,
 > = typeof Scalar<TName, TKind>;
-
-export type InferScalarError<
-  T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
-> =
-  T extends ScalarDescriptor<string, ScalarPrimitive, infer TError>
-    ? TError
-    : never;
