@@ -4,10 +4,8 @@ import {
   Scalar,
   ScalarDescriptor,
   type InferScalarRoot,
-  type InferScalarNames,
   type InferScalarInvariantError,
 } from './scalar.js';
-import { unknownToStringDecoder } from './string.js';
 import { Invariant } from './invariant.js';
 import { assertErr, assertOk, Result } from '@typemint/result';
 import type { TypeMismatchError } from './type-mismatch.js';
@@ -39,54 +37,6 @@ describe('(unit) Scalar', () => {
 
       // Assert
       expectTypeOf<TestScalar>().toEqualTypeOf<never>();
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // MARK: Infer scalar name
-  // ─────────────────────────────────────────────────────────────────────────────
-  describe('Infer scalar name from a scalar', () => {
-    it('should infer the scalar name from the scalar', () => {
-      // Arrange
-      type TestScalar = Scalar<'test', number>;
-
-      // Act
-      type TestScalarName = InferScalarNames<TestScalar>;
-
-      // Assert
-      expectTypeOf<TestScalarName>().toEqualTypeOf<'test'>();
-    });
-
-    it('should not allow to infer a scalar name from a non-scalar', () => {
-      // Arrange
-      type TestScalar = number;
-
-      // Act
-      // @ts-expect-error - test scalar is not a scalar
-      type TestScalarName = InferScalarNames<TestScalar>;
-    });
-
-    it('should infer the scalar name from a composed scalar as union of all the scalar names', () => {
-      // Arrange
-      type Int = Scalar<'int', number>;
-      type UInt = Scalar<'uint', Int>;
-
-      // Act
-      type ComposedScalarName = InferScalarNames<UInt>;
-
-      // Assert
-      expectTypeOf<ComposedScalarName>().toEqualTypeOf<'uint' | 'int'>();
-    });
-
-    it('should infer the scalar name from a scalar descriptor', () => {
-      // Arrange
-      type TestScalarDescriptor = ScalarDescriptor<'test', number>;
-
-      // Act
-      type TestScalarName = InferScalarNames<TestScalarDescriptor>;
-
-      // Assert
-      expectTypeOf<TestScalarName>().toEqualTypeOf<'test'>();
     });
   });
 
@@ -135,7 +85,7 @@ describe('(unit) Scalar', () => {
   describe('Scalar factory', () => {
     it('should infer the scalar descriptor root from the decoder output', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       type MyStringScalar = InferScalarRoot<typeof MyString>;
@@ -144,20 +94,9 @@ describe('(unit) Scalar', () => {
       expectTypeOf<MyStringScalar>().toEqualTypeOf<string>();
     });
 
-    it('should infer the scalar name from the scalar descriptor', () => {
-      // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
-
-      // Act
-      type MyStringScalarName = InferScalarNames<typeof MyString>;
-
-      // Assert
-      expectTypeOf<MyStringScalarName>().toEqualTypeOf<'MyString'>();
-    });
-
     it('should expose the scalar name on the scalar descriptor', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       const myStringScalarName = MyString.name;
@@ -168,7 +107,7 @@ describe('(unit) Scalar', () => {
 
     it('should preserve the scalar name type on the scalar descriptor', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       type MyStringScalarName = typeof MyString.name;
@@ -184,7 +123,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value === 'hello',
         (): HelloStringInvariantError => 'Value must be "hello"',
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [helloStringInvariant],
       });
 
@@ -205,7 +144,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value.length <= 5,
         () => 'TOO_LONG' as const,
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [isHello, isShort],
       });
 
@@ -220,7 +159,7 @@ describe('(unit) Scalar', () => {
 
     it('should prevent the scalar descriptor from being mutated', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       const act = () => {
@@ -238,7 +177,7 @@ describe('(unit) Scalar', () => {
   describe('Scalar of', () => {
     it('should expose the "of" method on the descriptor with the root type as the input and the Result of the scalar as the output', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       type MyStringScalarOf = typeof MyString.of;
@@ -251,7 +190,7 @@ describe('(unit) Scalar', () => {
 
     it('should create a scalar from a value', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       const myStringScalarR = MyString.of('hello');
@@ -263,7 +202,7 @@ describe('(unit) Scalar', () => {
 
     it('should brand the value with the scalar phantom brand', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       const myStringScalarR = MyString.of('hello');
@@ -277,7 +216,7 @@ describe('(unit) Scalar', () => {
 
     it('should not accept a value which is not the root type', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       // @ts-expect-error - test scalar is not a scalar
@@ -291,7 +230,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value === 'hello',
         (): HelloStringInvariantError => 'Value must be "hello"',
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [helloStringInvariant],
       });
 
@@ -313,7 +252,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value.length <= 5,
         () => 'TOO_LONG' as const,
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [isHello, isShort],
       });
 
@@ -334,7 +273,7 @@ describe('(unit) Scalar', () => {
   describe('Scalar parse', () => {
     it('should expose the "parse" method on the descriptor with the unknown type as the input and the Result of the scalar as the output', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       type MyStringScalarParse = typeof MyString.parse;
@@ -351,7 +290,7 @@ describe('(unit) Scalar', () => {
     });
     it('should parse a value into a scalar', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       const myStringScalarR = MyString.parse('hello');
@@ -363,7 +302,7 @@ describe('(unit) Scalar', () => {
 
     it('should brand the value with the scalar phantom brand', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       const myStringScalarR = MyString.parse('hello');
@@ -377,7 +316,7 @@ describe('(unit) Scalar', () => {
 
     it('should return a TypeMismatchError when the value is not the root type', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       const myStringScalarR = MyString.parse(42);
@@ -389,7 +328,7 @@ describe('(unit) Scalar', () => {
 
     it('should return the MismatchError with the received value and the expected type as the details', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       const myStringScalarR = MyString.parse(42);
@@ -401,7 +340,7 @@ describe('(unit) Scalar', () => {
 
     it('should return the MismatchError with the type descriptor of the root type as the expected type', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       const myStringScalarR = MyString.parse(42);
@@ -419,7 +358,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value === 'hello',
         (): HelloStringInvariantError => 'Value must be "hello"',
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [helloStringInvariant],
       });
 
@@ -438,7 +377,7 @@ describe('(unit) Scalar', () => {
   describe('Scalar methods', () => {
     it('should expose the methods on the descriptor', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         methods: (self) => ({
           getDomain: (email: InferScalarType<typeof self>) =>
             email.split('@')[1],
@@ -457,7 +396,7 @@ describe('(unit) Scalar', () => {
     it('should prevent the custom method overriding the key "name" with a compilation error or a runtime error', () => {
       // Arrange & Act
       const act = () => {
-        Scalar('MyString', unknownToStringDecoder, {
+        Scalar('MyString', 'string', {
           // @ts-expect-error - test scalar is not a scalar
           methods: (self) => ({
             name: (value: any): any => value,
@@ -472,7 +411,7 @@ describe('(unit) Scalar', () => {
     it('should prevent the custom method overriding the key "of" with a compilation error', () => {
       // Arrange & Act
       const act = () => {
-        Scalar('MyString', unknownToStringDecoder, {
+        Scalar('MyString', 'string', {
           // @ts-expect-error - test scalar is not a scalar
           methods: (self) => ({
             of: (value: any): any => value,
@@ -487,7 +426,7 @@ describe('(unit) Scalar', () => {
     it('should prevent the custom method overriding the key "parse" with a compilation error', () => {
       // Arrange & Act
       const act = () => {
-        Scalar('MyString', unknownToStringDecoder, {
+        Scalar('MyString', 'string', {
           // @ts-expect-error - test scalar is not a scalar
           methods: (self) => ({
             parse: (value: any): any => value,
@@ -502,7 +441,7 @@ describe('(unit) Scalar', () => {
     it('should prevent the custom method overriding the key "validate" with a compilation error', () => {
       // Arrange & Act
       const act = () => {
-        Scalar('MyString', unknownToStringDecoder, {
+        Scalar('MyString', 'string', {
           // @ts-expect-error - test scalar is not a scalar
           methods: (self) => ({
             validate: (value: any): any => value,
@@ -529,7 +468,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value.length >= 5,
         () => 'TOO_SHORT' as const,
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [helloStringInvariant, minLengthStringInvariant] as const,
       });
 
@@ -557,7 +496,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value.length >= 5,
         () => 'TOO_SHORT' as const,
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [helloStringInvariant, minLengthStringInvariant] as const,
       });
 
@@ -579,7 +518,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value.length >= 6,
         () => 'TOO_SHORT' as const,
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [helloStringInvariant, minLengthStringInvariant] as const,
       });
 
@@ -598,7 +537,7 @@ describe('(unit) Scalar', () => {
   describe('Scalar consts', () => {
     it('should expose the consts on the descriptor', () => {
       // Arrange
-      const Username = Scalar('Username', unknownToStringDecoder, {
+      const Username = Scalar('Username', 'string', {
         consts: { MIN_LENGTH: 3, MAX_LENGTH: 32 },
       });
 
@@ -609,7 +548,7 @@ describe('(unit) Scalar', () => {
 
     it('should preserve the literal type of the consts', () => {
       // Arrange
-      const Username = Scalar('Username', unknownToStringDecoder, {
+      const Username = Scalar('Username', 'string', {
         consts: { MIN_LENGTH: 3 },
       });
 
@@ -622,7 +561,7 @@ describe('(unit) Scalar', () => {
 
     it('should expose consts alongside methods', () => {
       // Arrange
-      const Username = Scalar('Username', unknownToStringDecoder, {
+      const Username = Scalar('Username', 'string', {
         consts: { MIN_LENGTH: 3 },
         methods: (self) => ({
           isLongEnough: (value: InferScalarType<typeof self>) =>
@@ -640,7 +579,7 @@ describe('(unit) Scalar', () => {
     it('should prevent a const overriding a built-in key with a compilation error and a runtime error', () => {
       // Arrange & Act
       const act = () => {
-        Scalar('MyString', unknownToStringDecoder, {
+        Scalar('MyString', 'string', {
           // @ts-expect-error - "of" collides with a built-in descriptor member
           consts: { of: 1 },
         });
@@ -655,7 +594,7 @@ describe('(unit) Scalar', () => {
       // The type guard only forbids built-in keys, so a method/const clash is
       // caught at runtime rather than at compile time.
       const act = () => {
-        Scalar('MyString', unknownToStringDecoder, {
+        Scalar('MyString', 'string', {
           methods: () => ({
             label: (value: Scalar<'MyString', string>) => value,
           }),
@@ -674,7 +613,7 @@ describe('(unit) Scalar', () => {
   describe('Scalar is', () => {
     it('should expose the "is" method on the descriptor with the root type as the input and the boolean as the output', () => {
       // Arrange
-      const MyString = Scalar('MyString', unknownToStringDecoder);
+      const MyString = Scalar('MyString', 'string');
 
       // Act
       type MyStringScalarIs = typeof MyString.is;
@@ -691,7 +630,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value === 'hello',
         () => 'NOT_HELLO' as const,
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [isHelloString],
       });
 
@@ -707,7 +646,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value === 'hello',
         () => 'NOT_HELLO' as const,
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [isHelloString],
       });
 
@@ -723,7 +662,7 @@ describe('(unit) Scalar', () => {
         (value: string) => value === 'hello',
         () => 'NOT_HELLO' as const,
       );
-      const MyString = Scalar('MyString', unknownToStringDecoder, {
+      const MyString = Scalar('MyString', 'string', {
         invariants: [isHelloString],
       });
       const value: unknown = 'hello';

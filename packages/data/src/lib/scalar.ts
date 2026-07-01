@@ -1,8 +1,7 @@
 import { Result } from '@typemint/result';
-import type { Decoder } from './decoder.js';
 import { Invariant, type InferInvariantError } from './invariant.js';
-import type { TypeMismatchError } from './type-mismatch.js';
-import { PanicException } from '@typemint/core';
+import { TypeMismatchError } from './type-mismatch.js';
+import { PanicException, TypeDescriptor, witness } from '@typemint/core';
 
 // Taken from the type-fest "Tagged" type
 declare const tag: unique symbol;
@@ -23,6 +22,28 @@ type Tag<Token extends PropertyKey> = TagContainer<{
  * brand could not even form.
  */
 export type ScalarPrimitive = string | number | bigint | boolean | symbol;
+
+/**
+ * The runtime discriminant identifying which primitive a {@link Scalar}
+ * refines. These are exactly the `typeof` results for the supported primitives,
+ * so recognizing a value at runtime is a direct `typeof` check — no decoder or
+ * codec required.
+ */
+export type ScalarPrimitiveKind =
+  | 'string'
+  | 'number'
+  | 'bigint'
+  | 'boolean'
+  | 'symbol';
+
+/** Maps a {@link ScalarPrimitiveKind} to the primitive type it denotes. */
+export type KindToPrimitive<TKind extends ScalarPrimitiveKind> = {
+  string: string;
+  number: number;
+  bigint: bigint;
+  boolean: boolean;
+  symbol: symbol;
+}[TKind];
 
 /**
  * A `Scalar` is a **pure refinement** of a single primitive value: the
@@ -56,8 +77,10 @@ export type ScalarPrimitive = string | number | bigint | boolean | symbol;
  * const Email = Scalar('Email', stringDecoder, { invariants: [isEmail] });
  * type Email = InferScalarType<typeof Email>; // Scalar<'Email', string>
  */
-export type Scalar<TName extends string, TType extends ScalarPrimitive> = TType &
-  Tag<TName>;
+export type Scalar<
+  TName extends string,
+  TType extends ScalarPrimitive,
+> = TType & Tag<TName>;
 
 type RemoveAllTags<T> =
   T extends Tag<PropertyKey>
@@ -70,19 +93,6 @@ type RemoveAllTags<T> =
           : never;
       }[keyof T[typeof tag]]
     : T;
-
-export type InferScalarNames<
-  T extends
-    | Scalar<string, ScalarPrimitive>
-    | ScalarDescriptor<string, ScalarPrimitive, unknown>,
-> =
-  T extends Scalar<string, ScalarPrimitive>
-    ? T extends Scalar<infer UName, ScalarPrimitive>
-      ? UName
-      : never
-    : T extends ScalarDescriptor<string, ScalarPrimitive, unknown>
-      ? T['name']
-      : never;
 
 export type InferScalarType<
   T extends ScalarDescriptor<string, ScalarPrimitive>,
@@ -104,9 +114,10 @@ export type InferScalarRoot<
 
 export type InferScalarInvariantError<
   T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
-> = T extends ScalarDescriptor<string, ScalarPrimitive, infer TError>
-  ? TError
-  : never;
+> =
+  T extends ScalarDescriptor<string, ScalarPrimitive, infer TError>
+    ? TError
+    : never;
 
 export type ScalarDescriptor<
   TName extends string,
@@ -129,20 +140,14 @@ export type ScalarDescriptor<
 type ReservedScalarKeys<
   TName extends string,
   TRoot extends ScalarPrimitive,
-> = keyof ScalarDescriptor<
-  TName,
-  TRoot
->;
+> = keyof ScalarDescriptor<TName, TRoot>;
 
-export type ScalarMethods<
+export type ScalarCustomMethods<
   TName extends string,
   TRoot extends ScalarPrimitive,
-> = Record<
-  string,
-  (value: Scalar<TName, TRoot>, ...args: any[]) => unknown
->;
+> = Record<string, (value: Scalar<TName, TRoot>, ...args: any[]) => unknown>;
 
-export type ScalarConsts = Record<string, unknown>;
+export type ScalarCustomConsts = Record<string, unknown>;
 
 /**
  * Derives the union of error types produced by a tuple of invariants. This
@@ -160,8 +165,11 @@ export type ScalarConfig<
     TRoot,
     any
   >[],
-  TMethods extends ScalarMethods<TName, TRoot> = ScalarMethods<TName, TRoot>,
-  TConsts extends ScalarConsts = ScalarConsts,
+  TMethods extends ScalarCustomMethods<TName, TRoot> = ScalarCustomMethods<
+    TName,
+    TRoot
+  >,
+  TConsts extends ScalarCustomConsts = ScalarCustomConsts,
 > = {
   /**
    * Invariants enforced on every value produced by this scalar. Declare the
@@ -216,28 +224,61 @@ export type ScalarConfig<
   };
 };
 
-export function Scalar<const TName extends string, TRoot extends ScalarPrimitive>(
-  name: TName,
-  decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-): ScalarDescriptor<TName, TRoot, never>;
+const KIND_DESCRIPTORS: Record<
+  ScalarPrimitiveKind,
+  TypeDescriptor<ScalarPrimitive, string>
+> = {
+  string: TypeDescriptor('string', witness<string>()),
+  number: TypeDescriptor('number', witness<number>()),
+  bigint: TypeDescriptor('bigint', witness<bigint>()),
+  boolean: TypeDescriptor('boolean', witness<boolean>()),
+  symbol: TypeDescriptor('symbol', witness<symbol>()),
+};
+
 export function Scalar<
   const TName extends string,
-  TRoot extends ScalarPrimitive,
-  const TInvariants extends readonly Invariant<TRoot, any>[] = readonly [],
-  TMethods extends ScalarMethods<TName, TRoot> = Record<never, never>,
-  const TConsts extends ScalarConsts = Record<never, never>,
+  const TKind extends ScalarPrimitiveKind,
 >(
   name: TName,
-  decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-  config: ScalarConfig<TName, TRoot, TInvariants, TMethods, TConsts>,
-): ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>> &
+  kind: TKind,
+): ScalarDescriptor<TName, KindToPrimitive<TKind>, never>;
+export function Scalar<
+  const TName extends string,
+  const TKind extends ScalarPrimitiveKind,
+  const TInvariants extends readonly Invariant<KindToPrimitive<TKind>, any>[] =
+    readonly [],
+  TMethods extends ScalarCustomMethods<TName, KindToPrimitive<TKind>> = Record<
+    never,
+    never
+  >,
+  const TConsts extends ScalarCustomConsts = Record<never, never>,
+>(
+  name: TName,
+  kind: TKind,
+  config: ScalarConfig<
+    TName,
+    KindToPrimitive<TKind>,
+    TInvariants,
+    TMethods,
+    TConsts
+  >,
+): ScalarDescriptor<
+  TName,
+  KindToPrimitive<TKind>,
+  InferInvariantsError<TInvariants>
+> &
   TMethods &
   TConsts;
-export function Scalar<const TName extends string, TRoot extends ScalarPrimitive>(
+export function Scalar<
+  const TName extends string,
+  const TKind extends ScalarPrimitiveKind,
+>(
   name: TName,
-  decoder: Decoder<unknown, TRoot, TypeMismatchError<TRoot, unknown>>,
-  config?: ScalarConfig<TName, TRoot>,
-): ScalarDescriptor<TName, TRoot, any> {
+  kind: TKind,
+  config?: ScalarConfig<TName, KindToPrimitive<TKind>>,
+): ScalarDescriptor<TName, KindToPrimitive<TKind>, any> {
+  type TRoot = KindToPrimitive<TKind>;
+
   const [first, ...rest] = config?.invariants ?? [];
   // `of` enforces the invariants fail-fast: the first failure short-circuits.
   const failFastInvariant = first ? Invariant.and(first, ...rest) : undefined;
@@ -253,8 +294,13 @@ export function Scalar<const TName extends string, TRoot extends ScalarPrimitive
       : Result.Ok(value as Scalar<TName, TRoot>);
   }
 
+  // `parse` recognizes the primitive with a direct `typeof` check — no decoder,
+  // no transformation — then runs the invariants via `of`.
   function parse(value: unknown): Result<Scalar<TName, TRoot>, any> {
-    return decoder(value).andThen(of);
+    if (typeof value !== kind) {
+      return Result.Err(TypeMismatchError(KIND_DESCRIPTORS[kind], value));
+    }
+    return of(value as TRoot);
   }
 
   function validate(
@@ -284,7 +330,7 @@ export function Scalar<const TName extends string, TRoot extends ScalarPrimitive
   // Assigns custom members one by one, panicking on any collision with a
   // built-in member or a previously defined custom member. Methods are
   // defined before consts so the check also catches method/const clashes.
-  function define(members: Record<string, unknown>): void {
+  function assignMembers(members: Record<string, unknown>): void {
     for (const [key, value] of Object.entries(members)) {
       if (Object.hasOwn(descriptor, key)) {
         throw new PanicException(
@@ -297,10 +343,10 @@ export function Scalar<const TName extends string, TRoot extends ScalarPrimitive
   }
 
   if (typeof config?.methods === 'function') {
-    define(config.methods(descriptor));
+    assignMembers(config.methods(descriptor));
   }
   if (config?.consts) {
-    define(config.consts);
+    assignMembers(config.consts);
   }
 
   return Object.freeze(descriptor);
@@ -308,11 +354,12 @@ export function Scalar<const TName extends string, TRoot extends ScalarPrimitive
 
 export type ScalarFactory<
   TName extends string,
-  TRoot extends ScalarPrimitive,
-> = typeof Scalar<TName, TRoot>;
+  TKind extends ScalarPrimitiveKind,
+> = typeof Scalar<TName, TKind>;
 
 export type InferScalarError<
   T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
-> = T extends ScalarDescriptor<string, ScalarPrimitive, infer TError>
-  ? TError
-  : never;
+> =
+  T extends ScalarDescriptor<string, ScalarPrimitive, infer TError>
+    ? TError
+    : never;
