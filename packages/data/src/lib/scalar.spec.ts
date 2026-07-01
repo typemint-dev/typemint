@@ -677,4 +677,132 @@ describe('(unit) Scalar', () => {
       }
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar extend
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar extend', () => {
+    const isInteger = Invariant(
+      (value: number) => Number.isInteger(value),
+      () => 'NOT_INTEGER' as const,
+    );
+    const isNonNegative = Invariant(
+      (value: number) => value >= 0,
+      () => 'NEGATIVE' as const,
+    );
+
+    it('should enforce both the base and the new invariants via parse', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act & Assert
+      assertOk(UInt.parse(5));
+      assertErr(UInt.parse(2.5)); // fails the base invariant
+      assertErr(UInt.parse(-3)); // fails the new invariant
+      assertErr(UInt.parse('x')); // fails the base recognizer
+    });
+
+    it('should surface the base invariant error when the base invariant fails', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act
+      const result = UInt.parse(2.5);
+
+      // Assert
+      assertErr(result);
+      expect(result.error).toBe('NOT_INTEGER');
+    });
+
+    it('should surface the new invariant error when only the new invariant fails', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act
+      const result = UInt.parse(-3);
+
+      // Assert
+      assertErr(result);
+      expect(result.error).toBe('NEGATIVE');
+    });
+
+    it('should nest the brand so a derived value is assignable to the base', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act
+      const result = UInt.parse(5);
+
+      // Assert
+      assertOk(result);
+      expectTypeOf<typeof result.value>().toEqualTypeOf<
+        Scalar<'UInt', Scalar<'Int', number>>
+      >();
+      const asInt: Scalar<'Int', number> = result.value; // a UInt is an Int
+      expect(asInt).toBe(5);
+    });
+
+    it('should derive the error type as the union of base and new invariant errors', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act
+      type UIntError = InferScalarInvariantError<typeof UInt>;
+
+      // Assert
+      expectTypeOf<UIntError>().toEqualTypeOf<'NOT_INTEGER' | 'NEGATIVE'>();
+    });
+
+    it('should run only the new invariants on "of", trusting the already-branded base value', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+      const validInt = Int.of(5);
+      const negativeInt = Int.of(-3);
+      assertOk(validInt);
+      assertOk(negativeInt); // -3 is a valid Int...
+
+      // Act & Assert
+      assertOk(UInt.of(validInt.value));
+      assertErr(UInt.of(negativeInt.value)); // ...but not a valid UInt
+    });
+
+    it('should not inherit the base scalar methods or consts', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', {
+        invariants: [isInteger],
+        consts: { ZERO: 0 },
+      });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act & Assert - inherited members are absent on the derived descriptor
+      expect((UInt as Record<string, unknown>)['ZERO']).toBeUndefined();
+    });
+
+    it('should allow the derived scalar to define its own methods and consts', () => {
+      // Arrange
+      type UIntValue = Scalar<'UInt', Scalar<'Int', number>>;
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', {
+        invariants: [isNonNegative],
+        consts: { MIN: 0 },
+        methods: () => ({
+          isZero: (value: UIntValue) => value === 0,
+        }),
+      });
+
+      // Act
+      const result = UInt.parse(0);
+
+      // Assert
+      assertOk(result);
+      expect(UInt.MIN).toBe(0);
+      expect(UInt.isZero(result.value)).toBe(true);
+    });
+  });
 });

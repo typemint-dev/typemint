@@ -135,6 +135,52 @@ export type ScalarDescriptor<
   validate(value: TRoot): Result<Scalar<TName, TRoot>, readonly TError[]>;
 
   is(value: unknown): value is Scalar<TName, TRoot>;
+
+  /**
+   * Refines this scalar into a stricter one. The derived scalar's root is
+   * **this** scalar's branded value (`Scalar<TName, TRoot>`), so its brand
+   * nests (`Scalar<TNewName, Scalar<TName, TRoot>>`) and a derived value stays
+   * assignable to this one — a `UInt` is an `Int`.
+   *
+   * Invariants are **composed**: the derived scalar enforces this scalar's
+   * invariants *and* the new ones, so its error channel is the union of both
+   * (`TError | InferInvariantsError<TNewInvariants>`).
+   *
+   * Methods and constants are **not** inherited — the derived scalar carries
+   * only those declared here. This scalar's own methods/consts remain reachable
+   * on a derived value through this descriptor (subtyping), e.g.
+   * `Int.someMethod(uintValue)`.
+   *
+   * @example
+   * const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+   * const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+   * // UInt: ScalarDescriptor<'UInt', Scalar<'Int', number>, IntError | UIntError>
+   */
+  extend<
+    const TNewName extends string,
+    const TNewInvariants extends readonly Invariant<
+      Scalar<TName, TRoot>,
+      any
+    >[] = readonly [],
+    TNewMethods extends ScalarCustomMethods<TNewName, Scalar<TName, TRoot>> =
+      Record<never, never>,
+    const TNewConsts extends ScalarCustomConsts = Record<never, never>,
+  >(
+    name: TNewName,
+    config?: ScalarConfig<
+      TNewName,
+      Scalar<TName, TRoot>,
+      TNewInvariants,
+      TNewMethods,
+      TNewConsts
+    >,
+  ): ScalarDescriptor<
+    TNewName,
+    Scalar<TName, TRoot>,
+    TError | InferInvariantsError<TNewInvariants>
+  > &
+    TNewMethods &
+    TNewConsts;
 };
 
 type ReservedScalarKeys<
@@ -235,6 +281,94 @@ const KIND_DESCRIPTORS: Record<
   symbol: TypeDescriptor('symbol', witness<symbol>()),
 };
 
+/**
+ * Shared construction for every scalar descriptor. `recognize` turns an unknown
+ * into the recognized (still-unbranded) root value or a decode error: the
+ * top-level factory passes a `typeof` check, while {@link ScalarDescriptor.extend}
+ * passes the parent's `parse` (base recognition + base invariants). `of` and
+ * `validate` then apply this scalar's own invariants, and `parse` recognizes
+ * first.
+ */
+function buildScalar(
+  name: string,
+  recognize: (value: unknown) => Result<any, any>,
+  config: ScalarConfig<any, any> | undefined,
+): ScalarDescriptor<any, any, any> {
+  const [first, ...rest] = (config?.invariants ?? []) as readonly Invariant<
+    any,
+    any
+  >[];
+  const failFastInvariant = first ? Invariant.and(first, ...rest) : undefined;
+  const allSettledInvariant = first
+    ? Invariant.andSettled(first, ...rest)
+    : undefined;
+
+  function of(value: any): Result<any, any> {
+    return failFastInvariant
+      ? failFastInvariant(value).andThen(() => Result.Ok(value))
+      : Result.Ok(value);
+  }
+
+  function parse(value: unknown): Result<any, any> {
+    return recognize(value).andThen(of);
+  }
+
+  function validate(value: any): Result<any, readonly any[]> {
+    return allSettledInvariant
+      ? allSettledInvariant(value).andThen(() => Result.Ok(value))
+      : Result.Ok(value);
+  }
+
+  function is(value: unknown): value is Scalar<string, ScalarPrimitive> {
+    return parse(value).isOk();
+  }
+
+  // Refines this scalar: the derived scalar recognizes via THIS scalar's
+  // `parse` (base recognition + base invariants) and layers the new invariants
+  // on top. Methods and consts are not inherited.
+  function extend(
+    newName: string,
+    newConfig?: ScalarConfig<any, any>,
+  ): ScalarDescriptor<any, any, any> {
+    return buildScalar(newName, parse, newConfig);
+  }
+
+  const descriptor = {
+    name,
+    of,
+    parse,
+    validate,
+    is,
+    extend,
+  } as ScalarDescriptor<any, any, any>;
+
+  const target = descriptor as Record<string, unknown>;
+
+  // Assigns custom members one by one, panicking on any collision with a
+  // built-in member or a previously defined custom member. Methods are defined
+  // before consts so the check also catches method/const clashes.
+  function assignMembers(members: Record<string, unknown>): void {
+    for (const [key, value] of Object.entries(members)) {
+      if (Object.hasOwn(descriptor, key)) {
+        throw new PanicException(
+          `Scalar("${name}"): member "${key}" collides with a built-in ` +
+            `descriptor member or another custom member and cannot be defined`,
+        );
+      }
+      target[key] = value;
+    }
+  }
+
+  if (typeof config?.methods === 'function') {
+    assignMembers(config.methods(descriptor));
+  }
+  if (config?.consts) {
+    assignMembers(config.consts);
+  }
+
+  return Object.freeze(descriptor);
+}
+
 export function Scalar<
   const TName extends string,
   const TKind extends ScalarPrimitiveKind,
@@ -277,79 +411,21 @@ export function Scalar<
   kind: TKind,
   config?: ScalarConfig<TName, KindToPrimitive<TKind>>,
 ): ScalarDescriptor<TName, KindToPrimitive<TKind>, any> {
-  type TRoot = KindToPrimitive<TKind>;
+  const kindDescriptor = KIND_DESCRIPTORS[kind];
 
-  const [first, ...rest] = config?.invariants ?? [];
-  // `of` enforces the invariants fail-fast: the first failure short-circuits.
-  const failFastInvariant = first ? Invariant.and(first, ...rest) : undefined;
-  const allSettledInvariant = first
-    ? Invariant.andSettled(first, ...rest)
-    : undefined;
-
-  function of(value: TRoot): Result<Scalar<TName, TRoot>, any> {
-    return failFastInvariant
-      ? failFastInvariant(value).andThen(() =>
-          Result.Ok(value as Scalar<TName, TRoot>),
-        )
-      : Result.Ok(value as Scalar<TName, TRoot>);
+  // Recognizes the primitive with a direct `typeof` check — no decoder, no
+  // transformation.
+  function recognize(value: unknown): Result<KindToPrimitive<TKind>, any> {
+    return typeof value === kind
+      ? Result.Ok(value as KindToPrimitive<TKind>)
+      : Result.Err(TypeMismatchError(kindDescriptor, value));
   }
 
-  // `parse` recognizes the primitive with a direct `typeof` check — no decoder,
-  // no transformation — then runs the invariants via `of`.
-  function parse(value: unknown): Result<Scalar<TName, TRoot>, any> {
-    if (typeof value !== kind) {
-      return Result.Err(TypeMismatchError(KIND_DESCRIPTORS[kind], value));
-    }
-    return of(value as TRoot);
-  }
-
-  function validate(
-    value: TRoot,
-  ): Result<Scalar<TName, TRoot>, readonly any[]> {
-    return allSettledInvariant
-      ? allSettledInvariant(value).andThen(() =>
-          Result.Ok(value as Scalar<TName, TRoot>),
-        )
-      : Result.Ok(value as Scalar<TName, TRoot>);
-  }
-
-  function is(value: unknown): value is Scalar<TName, TRoot> {
-    return parse(value).isOk();
-  }
-
-  const descriptor: ScalarDescriptor<TName, TRoot, any> = {
-    name,
-    of,
-    parse,
-    validate,
-    is,
-  };
-
-  const target = descriptor as Record<string, unknown>;
-
-  // Assigns custom members one by one, panicking on any collision with a
-  // built-in member or a previously defined custom member. Methods are
-  // defined before consts so the check also catches method/const clashes.
-  function assignMembers(members: Record<string, unknown>): void {
-    for (const [key, value] of Object.entries(members)) {
-      if (Object.hasOwn(descriptor, key)) {
-        throw new PanicException(
-          `Scalar("${name}"): member "${key}" collides with a built-in ` +
-            `descriptor member or another custom member and cannot be defined`,
-        );
-      }
-      target[key] = value;
-    }
-  }
-
-  if (typeof config?.methods === 'function') {
-    assignMembers(config.methods(descriptor));
-  }
-  if (config?.consts) {
-    assignMembers(config.consts);
-  }
-
-  return Object.freeze(descriptor);
+  return buildScalar(name, recognize, config) as ScalarDescriptor<
+    TName,
+    KindToPrimitive<TKind>,
+    any
+  >;
 }
 
 export type ScalarFactory<
