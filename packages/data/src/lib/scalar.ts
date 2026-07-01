@@ -95,9 +95,13 @@ type RemoveAllTags<T> =
     : T;
 
 export type InferScalarType<
-  T extends ScalarDescriptor<string, ScalarPrimitive>,
+  T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
 > =
-  T extends ScalarDescriptor<infer TName, infer TType extends ScalarPrimitive>
+  T extends ScalarDescriptor<
+    infer TName,
+    infer TType extends ScalarPrimitive,
+    unknown
+  >
     ? Scalar<TName, TType>
     : never;
 

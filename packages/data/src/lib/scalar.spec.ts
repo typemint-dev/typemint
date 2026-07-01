@@ -27,6 +27,17 @@ describe('(unit) Scalar', () => {
       expectTypeOf<TestScalar>().toEqualTypeOf<Scalar<'test', number>>();
     });
 
+    it('should infer the scalar from a descriptor that carries an invariant error', () => {
+      // Arrange
+      type TestScalarDescriptor = ScalarDescriptor<'test', number, 'SOME_ERROR'>;
+
+      // Act
+      type TestScalar = InferScalarType<TestScalarDescriptor>;
+
+      // Assert
+      expectTypeOf<TestScalar>().toEqualTypeOf<Scalar<'test', number>>();
+    });
+
     it('should infer to never when the passed type is not a scalar descriptor', () => {
       // Arrange
       type TestScalarDescriptor = number;
