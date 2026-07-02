@@ -153,7 +153,17 @@ export type InferScalarRoot<
 > =
   T extends Scalar<string, ScalarPrimitive>
     ? RemoveAllTags<T>
-    : T extends ScalarDescriptor<string, infer TType, unknown>
+    : // `infer TName`, not a fixed `string`: `TName` is invariant on the
+      // descriptor — it sits contravariantly in `unwrap`'s `Scalar<TName, TRoot>`
+      // parameter and in the `is` predicate — so pinning it to `string` makes a
+      // literal-named descriptor fail to match, and the branch collapses to
+      // `never`. Inferring it lets the pattern line up, exactly as
+      // {@link InferScalarType} does.
+      T extends ScalarDescriptor<
+          infer _TName,
+          infer TType extends ScalarPrimitive,
+          unknown
+        >
       ? TType
       : never;
 
