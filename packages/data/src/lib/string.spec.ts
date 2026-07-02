@@ -275,6 +275,27 @@ describe('(unit) string', () => {
         'My String must be at least 3 characters long. Got 2.',
       );
     });
+
+    it('should measure length in UTF-16 code units', () => {
+      // Arrange — '👍' is a single astral character but two UTF-16 code units.
+      const invariant = StringMinLengthInvariant({ minLength: 2 });
+
+      // Act
+      const result = invariant('👍');
+
+      // Assert
+      assertOk(result);
+    });
+
+    it.each([-1, 1.5, NaN, Infinity])(
+      'should throw a RangeError when minLength is %s',
+      (minLength) => {
+        // Act / Assert
+        expect(() => StringMinLengthInvariant({ minLength })).toThrow(
+          RangeError,
+        );
+      },
+    );
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -346,6 +367,16 @@ describe('(unit) string', () => {
       // Assert
       assertOk(result);
     });
+
+    it.each([-1, 1.5, NaN, Infinity])(
+      'should throw a RangeError when maxLength is %s',
+      (maxLength) => {
+        // Act / Assert
+        expect(() => StringMaxLengthInvariant({ maxLength })).toThrow(
+          RangeError,
+        );
+      },
+    );
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -458,6 +489,41 @@ describe('(unit) string', () => {
       expect(result.error.message).toBe(
         'My String must match the pattern /^[a-z]+$/. Got 3.',
       );
+    });
+
+    it('should be stateless across calls for a pattern with the global flag', () => {
+      // Arrange — a `g`-flagged pattern advances `lastIndex` on each `test`,
+      // which would otherwise make consecutive calls alternate Ok/Err.
+      const invariant = StringPatternInvariant({ pattern: /foo/g });
+
+      // Act / Assert — the same input must produce the same verdict every time.
+      assertOk(invariant('foo'));
+      assertOk(invariant('foo'));
+      assertOk(invariant('foo'));
+    });
+
+    it('should not mutate the caller-supplied pattern', () => {
+      // Arrange
+      const pattern = /foo/g;
+
+      // Act
+      StringPatternInvariant({ pattern })('foo');
+
+      // Assert — the internal normalized copy is used, so the caller's regex is
+      // untouched.
+      expect(pattern.lastIndex).toBe(0);
+    });
+
+    it('should strip the global flag from the stored pattern detail', () => {
+      // Arrange
+      const invariant = StringPatternInvariant({ pattern: /^[a-z]+$/g });
+
+      // Act
+      const result = invariant('123');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.details.pattern.flags).not.toContain('g');
     });
   });
 });

@@ -84,6 +84,24 @@ export const unknownToStringDecoder: UnknownToStringDecoder =
     TypeMismatchError(StringDescriptor, value),
   );
 
+/**
+ * Fail-fast guard for length-bound options. A non-integer, negative, `NaN`, or
+ * infinite bound is a programmer error in the schema definition rather than a
+ * validation failure of some input, so it throws at construction time instead
+ * of silently producing an invariant that rejects (or accepts) everything.
+ *
+ * @param label - The option name, used in the thrown message (e.g. `'minLength'`).
+ * @param bound - The bound to validate.
+ * @throws {RangeError} When `bound` is not a non-negative integer.
+ */
+function assertLengthBound(label: string, bound: number): void {
+  if (!Number.isInteger(bound) || bound < 0) {
+    throw new RangeError(
+      `${label} must be a non-negative integer. Got ${bound}.`,
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // #region StringMinLengthInvariant
 export type StringMinLengthInvariantError =
@@ -113,9 +131,24 @@ export type StringMinLengthInvariant = Invariant<
   StringMinLengthInvariantError
 >;
 
+/**
+ * Builds an {@link Invariant} that holds when a string is at least
+ * `opts.minLength` long.
+ *
+ * Length is measured in **UTF-16 code units** (`String.prototype.length`), not
+ * Unicode code points or grapheme clusters — so an astral character such as
+ * `'👍'` counts as `2`. This matches the platform's native `.length` and is
+ * `O(1)`.
+ *
+ * @param opts - `minLength` (a non-negative integer) and an optional custom
+ * `message`.
+ * @returns An invariant rejecting strings shorter than `minLength`.
+ * @throws {RangeError} When `minLength` is not a non-negative integer.
+ */
 export function StringMinLengthInvariant(
   opts: StringMinLengthInvariantOptions,
 ): StringMinLengthInvariant {
+  assertLengthBound('minLength', opts.minLength);
   return Invariant(
     (value: string) => value.length >= opts.minLength,
     (value: string) =>
@@ -162,9 +195,24 @@ export type StringMaxLengthInvariant = Invariant<
   StringMaxLengthInvariantError
 >;
 
+/**
+ * Builds an {@link Invariant} that holds when a string is at most
+ * `opts.maxLength` long.
+ *
+ * Length is measured in **UTF-16 code units** (`String.prototype.length`), not
+ * Unicode code points or grapheme clusters — so an astral character such as
+ * `'👍'` counts as `2`. This matches the platform's native `.length` and is
+ * `O(1)`.
+ *
+ * @param opts - `maxLength` (a non-negative integer) and an optional custom
+ * `message`.
+ * @returns An invariant rejecting strings longer than `maxLength`.
+ * @throws {RangeError} When `maxLength` is not a non-negative integer.
+ */
 export function StringMaxLengthInvariant(
   opts: StringMaxLengthInvariantOptions,
 ): StringMaxLengthInvariant {
+  assertLengthBound('maxLength', opts.maxLength);
   return Invariant(
     (value: string) => value.length <= opts.maxLength,
     (value: string) =>
@@ -183,7 +231,7 @@ export function StringMaxLengthInvariant(
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #regions NonEmptyStringInvariant
+// #region NonEmptyStringInvariant
 
 export type NonEmptyStringInvariantError =
   Kind<'NonEmptyStringInvariantError'> & WithMessage;
@@ -216,7 +264,7 @@ export function NonEmptyStringInvariant(
         Invariant.resolveMessage(
           opts.message,
           value,
-          () => 'String must not be empty',
+          () => 'String must not be empty.',
         ),
       ),
   );
@@ -272,7 +320,7 @@ export function StringPatternInvariant(
         Invariant.resolveMessage(
           opts.message,
           value,
-          () => `String must match the pattern ${pattern.toString()}`,
+          () => `String must match the pattern ${pattern.toString()}.`,
         ),
       ),
   );
