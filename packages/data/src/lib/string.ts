@@ -1,7 +1,14 @@
 import { Result } from '@typemint/result';
 import type { Decoder } from './decoder.js';
 import { TypeMismatchError } from './type-mismatch.js';
-import { TypeDescriptor, witness } from '@typemint/core';
+import {
+  TypeDescriptor,
+  witness,
+  type Kind,
+  type WithDetail,
+  type WithMessage,
+} from '@typemint/core';
+import { Invariant } from './invariant.js';
 
 /**
  * The canonical {@link TypeDescriptor} for the `string` primitive.
@@ -76,3 +83,51 @@ export const unknownToStringDecoder: UnknownToStringDecoder =
   Result.liftPredicate(isString, (value) =>
     TypeMismatchError(StringDescriptor, value),
   );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #region StringMinLengthInvariant
+export type StringMinLengthInvariantError =
+  Kind<'StringMinLengthInvariantError'> &
+    WithMessage &
+    WithDetail<{
+      minLength: number;
+    }>;
+function ofStringMinLengthInvariant(
+  minLength: number,
+  message: string,
+): StringMinLengthInvariantError {
+  return {
+    kind: 'StringMinLengthInvariantError',
+    message,
+    details: { minLength },
+  };
+}
+
+export type StringMinLengthInvariantOptions = {
+  readonly minLength: number;
+  readonly message?: string | ((value: string) => string);
+};
+
+export type StringMinLengthInvariant = Invariant<
+  string,
+  StringMinLengthInvariantError
+>;
+
+export function StringMinLengthInvariant(
+  opts: StringMinLengthInvariantOptions,
+): StringMinLengthInvariant {
+  return Invariant(
+    (value: string) => value.length >= opts.minLength,
+    (value: string) => {
+      let message = `String must be at least ${opts.minLength} characters long. Got ${value.length}.`;
+      if (typeof opts.message === 'function') {
+        message = opts.message(value);
+      } else if (typeof opts.message === 'string') {
+        message = opts.message;
+      }
+      return ofStringMinLengthInvariant(opts.minLength, message);
+    },
+  );
+}
+// #endregion StringMinLengthInvariant
+// ─────────────────────────────────────────────────────────────────────────────

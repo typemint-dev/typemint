@@ -6,11 +6,13 @@ import {
 } from '@typemint/core';
 import {
   StringDescriptor,
+  StringMinLengthInvariant,
   isString,
   unknownToStringDecoder,
   type UnknownToStringDecoder,
 } from './string.js';
 import type { TypeMismatchError } from './type-mismatch.js';
+import { assertErr } from '@typemint/result';
 
 describe('(unit) string', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -200,6 +202,75 @@ describe('(unit) string', () => {
           TypeMismatchError<string, unknown>
         >();
       }
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: StringMinLengthInvariant
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('StringMinLengthInvariant', () => {
+    it('should return an Ok for a string value that is at least the minimum length', () => {
+      // Arrange
+      const invariant = StringMinLengthInvariant({ minLength: 3 });
+      // Act
+      const result = invariant('hello');
+
+      // Assert
+      expect(result.isOk()).toBe(true);
+    });
+
+    it('should return an Err for a string value that is less than the minimum length', () => {
+      // Arrange
+      const invariant = StringMinLengthInvariant({ minLength: 3 });
+      // Act
+      const result = invariant('hi');
+
+      // Assert
+      assertErr(result);
+    });
+
+    it('should return the correct error for a string value that is less than the minimum length', () => {
+      // Arrange
+      const invariant = StringMinLengthInvariant({ minLength: 3 });
+      // Act
+      const result = invariant('hi');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.details.minLength).toBe(3);
+    });
+
+    it('should use the provided message for the error', () => {
+      // Arrange
+      const invariant = StringMinLengthInvariant({
+        minLength: 3,
+        message: 'My String must be at least 3 characters long.',
+      });
+      // Act
+      const result = invariant('hi');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe(
+        'My String must be at least 3 characters long.',
+      );
+    });
+
+    it('should use the provided message function for the error', () => {
+      // Arrange
+      const invariant = StringMinLengthInvariant({
+        minLength: 3,
+        message: (value) =>
+          `My String must be at least 3 characters long. Got ${value.length}.`,
+      });
+      // Act
+      const result = invariant('hi');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe(
+        'My String must be at least 3 characters long. Got 2.',
+      );
     });
   });
 });
