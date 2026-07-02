@@ -5,6 +5,7 @@ import {
   Kind,
 } from '@typemint/core';
 import {
+  NonEmptyStringInvariant,
   StringDescriptor,
   StringMaxLengthInvariant,
   StringMinLengthInvariant,
@@ -343,6 +344,59 @@ describe('(unit) string', () => {
 
       // Assert
       assertOk(result);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: NonEmptyStringInvariant
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('NonEmptyStringInvariant', () => {
+    it('should return an Ok for a non-empty string value', () => {
+      // Arrange
+      const invariant = NonEmptyStringInvariant();
+
+      // Act
+      const result = invariant('hello');
+
+      // Assert
+      expect(result.isOk()).toBe(true);
+    });
+
+    it('should return an Err for an empty string value', () => {
+      // Arrange
+      const invariant = NonEmptyStringInvariant();
+      // Act
+      const result = invariant('');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.kind).toBe('NonEmptyStringInvariantError');
+    });
+
+    it('should use the provided message for the error', () => {
+      // Arrange
+      const invariant = NonEmptyStringInvariant({
+        message: 'My String must not be empty.',
+      });
+      // Act
+      const result = invariant('');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe('My String must not be empty.');
+    });
+
+    it('should use the provided message function for the error', () => {
+      // Arrange
+      const invariant = NonEmptyStringInvariant({
+        message: (value) => `My String must not be empty. Got ${value.length}.`,
+      });
+      // Act
+      const result = invariant('');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe('My String must not be empty. Got 0.');
     });
   });
 });

@@ -179,3 +179,46 @@ export function StringMaxLengthInvariant(
 }
 // #endregion StringMaxLengthInvariant
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #regions NonEmptyStringInvariant
+
+export type NonEmptyStringInvariantError =
+  Kind<'NonEmptyStringInvariantError'> & WithMessage;
+
+function ofNonEmptyStringInvariant(
+  message: string,
+): NonEmptyStringInvariantError {
+  return {
+    kind: 'NonEmptyStringInvariantError',
+    message,
+  };
+}
+
+export type NonEmptyStringInvariant = Invariant<
+  string,
+  NonEmptyStringInvariantError
+>;
+
+export type NonEmptyStringInvariantOptions = {
+  readonly message?: string | ((value: string) => string);
+};
+
+export function NonEmptyStringInvariant(
+  opts: NonEmptyStringInvariantOptions = {},
+): NonEmptyStringInvariant {
+  return Invariant(
+    (value: string) => value.length > 0,
+    (value: string) => {
+      let message = 'String must not be empty';
+      if (typeof opts.message === 'function') {
+        message = opts.message(value);
+      } else if (typeof opts.message === 'string') {
+        message = opts.message;
+      }
+      return ofNonEmptyStringInvariant(message);
+    },
+  );
+}
+// #endregion NonEmptyStringInvariant
+// ─────────────────────────────────────────────────────────────────────────────
