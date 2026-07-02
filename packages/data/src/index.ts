@@ -7,3 +7,4 @@ export * from './lib/number.js';
 export * from './lib/bigint.js';
 export * from './lib/boolean.js';
 export * from './lib/decoder.js';
+export * from './lib/invariant.js';
