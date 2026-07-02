@@ -222,3 +222,54 @@ export function IsLowerOrEqualNumberInvariant(
 
 // #endregion IsLowerOrEqualNumberInvariant
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #region IsGreaterThenOrEqualNumberInvariant
+const IsGreaterThenOrEqualNumberInvariantErrorKind =
+  'IsGreaterThenOrEqualNumberInvariantError' as const;
+export type IsGreaterThenOrEqualNumberInvariantError = Kind<
+  typeof IsGreaterThenOrEqualNumberInvariantErrorKind
+> &
+  WithMessage &
+  WithDetail<{
+    received: number;
+    lowerBound: number;
+  }>;
+
+function ofIsGreaterThenOrEqualNumberInvariant(
+  received: number,
+  lowerBound: number,
+  message: string,
+): IsGreaterThenOrEqualNumberInvariantError {
+  return {
+    kind: IsGreaterThenOrEqualNumberInvariantErrorKind,
+    message,
+    details: { received, lowerBound },
+  };
+}
+
+export type IsGreaterThenOrEqualNumberInvariantOptions = {
+  readonly message?: Invariant.MessageOption<number>;
+  readonly lowerBound: number;
+};
+export function IsGreaterThenOrEqualNumberInvariant(
+  opts: IsGreaterThenOrEqualNumberInvariantOptions,
+): Invariant<number, IsGreaterThenOrEqualNumberInvariantError> {
+  return Invariant(
+    (value: number) => value >= opts.lowerBound,
+    (value: number) =>
+      ofIsGreaterThenOrEqualNumberInvariant(
+        value,
+        opts.lowerBound,
+        Invariant.resolveMessage(
+          opts.message,
+          value,
+          () =>
+            `Value must be greater than or equal to ${opts.lowerBound}. Got ${value}.`,
+        ),
+      ),
+  );
+}
+
+// #endregion IsGreaterThenOrEqualNumberInvariant
+// ─────────────────────────────────────────────────────────────────────────────
