@@ -117,7 +117,11 @@ type RemoveAllTags<T> =
  * type Email = InferScalarType<typeof Email>; // Scalar<'Email', string>
  */
 export type InferScalarType<
-  T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
+  // `any` (not `ScalarPrimitive`) in the root slot: `of`/`validate` accept
+  // `RemoveAllTags<TRoot>` in a contravariant position, which collapses a wide
+  // `ScalarPrimitive` root to a bare primitive and severs the descriptor's
+  // assignability to a fixed-width instantiation. `any` matches any root.
+  T extends ScalarDescriptor<string, any, unknown>,
 > =
   T extends ScalarDescriptor<
     infer TName,
@@ -143,9 +147,11 @@ export type InferScalarType<
  * type FromDescriptor = InferScalarRoot<typeof MyString>; // string
  */
 export type InferScalarRoot<
+  // `any` in the descriptor root slot — see {@link InferScalarType} for why a
+  // fixed-width `ScalarPrimitive` root no longer matches a concrete descriptor.
   T extends
     | Scalar<string, ScalarPrimitive>
-    | ScalarDescriptor<string, ScalarPrimitive, unknown>,
+    | ScalarDescriptor<string, any, unknown>,
 > =
   T extends Scalar<string, ScalarPrimitive>
     ? RemoveAllTags<T>
@@ -168,9 +174,11 @@ export type InferScalarRoot<
  * type EmailError = InferScalarInvariantError<typeof Email>; // 'NOT_EMAIL'
  */
 export type InferScalarInvariantError<
-  T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
+  // `any` in the root slot — see {@link InferScalarType} for why a fixed-width
+  // `ScalarPrimitive` root no longer matches a concrete descriptor.
+  T extends ScalarDescriptor<string, any, unknown>,
 > =
-  T extends ScalarDescriptor<string, ScalarPrimitive, infer TInvariantError>
+  T extends ScalarDescriptor<string, any, infer TInvariantError>
     ? TInvariantError
     : never;
 
@@ -183,8 +191,10 @@ export type InferScalarInvariantError<
  *
  * Type parameters:
  * - `TName` — the brand name.
- * - `TRoot` — the primitive being refined (for an extended scalar this is the
- *   parent's *branded* type, so brands nest).
+ * - `TRoot` — the type being refined, and the payload of this scalar's brand
+ *   (for an extended scalar this is the parent's *branded* type, so brands
+ *   nest). The constructors (`of`, `validate`) accept the underlying primitive
+ *   beneath every brand (`RemoveAllTags<TRoot>`), not `TRoot` itself.
  * - `TInvariantError` — the union of errors this scalar's invariants can raise.
  *
  * @example
@@ -207,15 +217,24 @@ export type ScalarDescriptor<
 
   /**
    * Brands a value that is **already** the correct primitive, enforcing the
-   * invariants (fail-fast: the first failing invariant short-circuits). Use
-   * this when the input type is statically known to be `TRoot`; use
+   * **full** invariant chain — this scalar's invariants *and* every ancestor's
+   * (fail-fast: the first failing invariant short-circuits). Use this when the
+   * input type is statically known to be the underlying primitive; use
    * {@link ScalarDescriptor.parse} when it is `unknown`.
+   *
+   * The argument is the underlying primitive (`RemoveAllTags<TRoot>`), so an
+   * extended scalar is constructed in one call from the raw value — e.g.
+   * `UInt.of(5)`, never `UInt.of(Int.of(5).value)`. There is no constructor
+   * chain: `of` re-checks the inherited invariants, so a branded base is neither
+   * required nor trusted.
    *
    * @example
    * const r = Email.of('a@b.com'); // Result<Scalar<'Email', string>, 'NOT_EMAIL'>
    * if (r.isOk()) r.value; // branded email
    */
-  of(value: TRoot): Result<Scalar<TName, TRoot>, TInvariantError>;
+  of(
+    value: RemoveAllTags<TRoot>,
+  ): Result<Scalar<TName, TRoot>, TInvariantError>;
 
   /**
    * Recognizes an `unknown` value, then brands it. It first checks the value is
@@ -230,20 +249,23 @@ export type ScalarDescriptor<
     value: unknown,
   ): Result<
     Scalar<TName, TRoot>,
-    TypeMismatchError<TRoot, unknown> | TInvariantError
+    TypeMismatchError<RemoveAllTags<TRoot>, unknown> | TInvariantError
   >;
 
   /**
    * Like {@link ScalarDescriptor.of}, but **collects every** invariant failure
-   * instead of stopping at the first, returning them as a readonly array. Use
-   * it to report all problems with a value at once (e.g. form validation).
+   * instead of stopping at the first, returning them as a readonly array. Runs
+   * the same **full** invariant chain as `of` (this scalar's plus every
+   * ancestor's), so an inherited invariant failure is reported alongside the
+   * rest. Use it to report all problems with a value at once (e.g. form
+   * validation).
    *
    * @example
    * const r = Password.validate(input);
    * if (r.isErr()) r.error; // e.g. ['TOO_SHORT', 'NO_DIGIT']
    */
   validate(
-    value: TRoot,
+    value: RemoveAllTags<TRoot>,
   ): Result<Scalar<TName, TRoot>, readonly TInvariantError[]>;
 
   /**
@@ -266,7 +288,11 @@ export type ScalarDescriptor<
    *
    * Invariants are **composed**: the derived scalar enforces this scalar's
    * invariants *and* the new ones, so its error channel is the union of both
-   * (`TInvariantError | InferInvariantsError<TNewInvariants>`).
+   * (`TInvariantError | InferInvariantsError<TNewInvariants>`). The composed
+   * set runs in `of`, `parse`, and `validate` alike — the derived scalar's
+   * constructors take the underlying primitive and re-check the inherited
+   * invariants, so `UInt.of(2.5)` rejects on the base `isInteger` and there is
+   * no `UInt.of(Int.of(2.5).value)` chain to assemble.
    *
    * Methods and constants are **not** inherited — the derived scalar carries
    * only those declared here. This scalar's own methods/consts remain reachable
@@ -437,21 +463,26 @@ const KIND_DESCRIPTORS: Record<
 
 /**
  * Shared construction for every scalar descriptor. `recognize` turns an unknown
- * into the recognized (still-unbranded) root value or a decode error: the
- * top-level factory passes a `typeof` check, while {@link ScalarDescriptor.extend}
- * passes the parent's `parse` (base recognition + base invariants). `of` and
- * `validate` then apply this scalar's own invariants, and `parse` recognizes
- * first.
+ * into the recognized (still-unbranded) primitive or a type-mismatch error — a
+ * plain `typeof` check that never changes across an `extend` chain (the root
+ * primitive of `UInt` is still `number`). `parentInvariants` carries the
+ * accumulated invariants of every ancestor; this scalar's own invariants are
+ * appended, and the **combined** set is what `of` (fail-fast), `validate`
+ * (all-settled), and `parse` (after recognizing) all enforce. This is what lets
+ * `UInt.of(2.5)` reject on the inherited `isInteger` — the base invariants are
+ * not hidden behind the parent's `parse`, they travel with the descriptor.
  */
 function buildScalar(
   name: string,
   recognize: (value: unknown) => Result<any, any>,
+  parentInvariants: readonly Invariant<any, any>[],
   config: ScalarConfig<any, any> | undefined,
 ): ScalarDescriptor<any, any, any> {
-  const [first, ...rest] = (config?.invariants ?? []) as readonly Invariant<
-    any,
-    any
-  >[];
+  const invariants = [
+    ...parentInvariants,
+    ...((config?.invariants ?? []) as readonly Invariant<any, any>[]),
+  ];
+  const [first, ...rest] = invariants;
   const failFastInvariant = first ? Invariant.and(first, ...rest) : undefined;
   const allSettledInvariant = first
     ? Invariant.andSettled(first, ...rest)
@@ -477,14 +508,15 @@ function buildScalar(
     return parse(value).isOk();
   }
 
-  // Refines this scalar: the derived scalar recognizes via THIS scalar's
-  // `parse` (base recognition + base invariants) and layers the new invariants
-  // on top. Methods and consts are not inherited.
+  // Refines this scalar: the derived scalar shares THIS scalar's raw recognizer
+  // (the root primitive is unchanged) and inherits the full accumulated
+  // invariant set, layering the new invariants on top. Methods and consts are
+  // not inherited.
   function extend(
     newName: string,
     newConfig?: ScalarConfig<any, any>,
   ): ScalarDescriptor<any, any, any> {
-    return buildScalar(newName, parse, newConfig);
+    return buildScalar(newName, recognize, invariants, newConfig);
   }
 
   const descriptor = {
@@ -624,7 +656,7 @@ export function Scalar<
       : Result.Err(TypeMismatchError(kindDescriptor, value));
   }
 
-  return buildScalar(name, recognize, config) as ScalarDescriptor<
+  return buildScalar(name, recognize, [], config) as ScalarDescriptor<
     TName,
     KindToPrimitive<TKind>,
     any

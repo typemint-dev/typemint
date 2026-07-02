@@ -773,18 +773,58 @@ describe('(unit) Scalar', () => {
       expectTypeOf<UIntError>().toEqualTypeOf<'NOT_INTEGER' | 'NEGATIVE'>();
     });
 
-    it('should run only the new invariants on "of", trusting the already-branded base value', () => {
+    it('should run the full invariant chain on "of", accepting the raw primitive', () => {
       // Arrange
       const Int = Scalar('Int', 'number', { invariants: [isInteger] });
       const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
-      const validInt = Int.of(5);
-      const negativeInt = Int.of(-3);
-      assertOk(validInt);
-      assertOk(negativeInt); // -3 is a valid Int...
 
-      // Act & Assert
-      assertOk(UInt.of(validInt.value));
-      assertErr(UInt.of(negativeInt.value)); // ...but not a valid UInt
+      // Act & Assert - constructed in one call from the raw number, no chain
+      assertOk(UInt.of(5));
+      assertErr(UInt.of(-3)); // fails the new invariant
+      const baseFailure = UInt.of(2.5); // fails the INHERITED invariant
+      assertErr(baseFailure);
+      expect(baseFailure.error).toBe('NOT_INTEGER');
+    });
+
+    it('should run the full invariant chain on "validate", collecting inherited failures', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act - -2.5 violates BOTH the inherited and the new invariant
+      const result = UInt.validate(-2.5);
+
+      // Assert - the inherited invariant is not silently dropped
+      assertErr(result);
+      expect(result.error).toStrictEqual(['NOT_INTEGER', 'NEGATIVE']);
+      assertOk(UInt.validate(5));
+    });
+
+    it('should accumulate invariants across a multi-level extend chain', () => {
+      // Arrange
+      const isPositive = Invariant(
+        (value: number) => value > 0,
+        () => 'NOT_POSITIVE' as const,
+      );
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+      const PositiveInt = UInt.extend('PositiveInt', {
+        invariants: [isPositive],
+      });
+
+      // Act & Assert - a single call from the raw number runs all three levels
+      const positiveTwoR = PositiveInt.of(2);
+      assertOk(positiveTwoR);
+      const value: Scalar<'Int', number> = positiveTwoR.value; // still an Int
+      expect(value).toBe(2);
+      expect(PositiveInt.of(2.5).unsafeUnwrapErr()).toBe('NOT_INTEGER'); // Int level
+      expect(PositiveInt.of(-1).unsafeUnwrapErr()).toBe('NEGATIVE'); // UInt level
+      expect(PositiveInt.of(0).unsafeUnwrapErr()).toBe('NOT_POSITIVE'); // own level
+      expect(PositiveInt.validate(-1.5).unsafeUnwrapErr()).toStrictEqual([
+        'NOT_INTEGER',
+        'NEGATIVE',
+        'NOT_POSITIVE',
+      ]);
     });
 
     it('should not inherit the base scalar methods or consts', () => {
