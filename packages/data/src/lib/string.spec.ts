@@ -6,13 +6,14 @@ import {
 } from '@typemint/core';
 import {
   StringDescriptor,
+  StringMaxLengthInvariant,
   StringMinLengthInvariant,
   isString,
   unknownToStringDecoder,
   type UnknownToStringDecoder,
 } from './string.js';
 import type { TypeMismatchError } from './type-mismatch.js';
-import { assertErr } from '@typemint/result';
+import { assertErr, assertOk } from '@typemint/result';
 
 describe('(unit) string', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -271,6 +272,77 @@ describe('(unit) string', () => {
       expect(result.error.message).toBe(
         'My String must be at least 3 characters long. Got 2.',
       );
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: StringMaxLengthInvariant
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('StringMaxLengthInvariant', () => {
+    it('should return an Ok for a string value that is at most the maximum length', () => {
+      // Arrange
+      const invariant = StringMaxLengthInvariant({ maxLength: 3 });
+
+      // Act
+      const result = invariant('abc');
+
+      // Assert
+      expect(result.isOk()).toBe(true);
+    });
+
+    it('should return an Err for a string value that is greater than the maximum length', () => {
+      // Arrange
+      const invariant = StringMaxLengthInvariant({ maxLength: 3 });
+      // Act
+      const result = invariant('hello world');
+
+      // Assert
+      assertErr(result);
+
+      expect(result.error.details.maxLength).toBe(3);
+    });
+
+    it('should use the provided message for the error', () => {
+      // Arrange
+      const invariant = StringMaxLengthInvariant({
+        maxLength: 3,
+        message: 'My String must be at most 3 characters long.',
+      });
+      // Act
+      const result = invariant('hello world');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe(
+        'My String must be at most 3 characters long.',
+      );
+    });
+
+    it('should use the provided message function for the error', () => {
+      // Arrange
+      const invariant = StringMaxLengthInvariant({
+        maxLength: 3,
+        message: (value) =>
+          `My String must be at most 3 characters long. Got ${value.length}.`,
+      });
+      // Act
+      const result = invariant('hello world');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe(
+        'My String must be at most 3 characters long. Got 11.',
+      );
+    });
+
+    it('should allow the maximum length to be 0', () => {
+      // Arrange
+      const invariant = StringMaxLengthInvariant({ maxLength: 0 });
+      // Act
+      const result = invariant('');
+
+      // Assert
+      assertOk(result);
     });
   });
 });

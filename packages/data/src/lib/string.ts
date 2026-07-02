@@ -131,3 +131,51 @@ export function StringMinLengthInvariant(
 }
 // #endregion StringMinLengthInvariant
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #region StringMaxLengthInvariant
+export type StringMaxLengthInvariantError =
+  Kind<'StringMaxLengthInvariantError'> &
+    WithMessage &
+    WithDetail<{
+      maxLength: number;
+    }>;
+function ofStringMaxLengthInvariant(
+  maxLength: number,
+  message: string,
+): StringMaxLengthInvariantError {
+  return {
+    kind: 'StringMaxLengthInvariantError',
+    message,
+    details: { maxLength },
+  };
+}
+
+export type StringMaxLengthInvariantOptions = {
+  readonly maxLength: number;
+  readonly message?: string | ((value: string) => string);
+};
+
+export type StringMaxLengthInvariant = Invariant<
+  string,
+  StringMaxLengthInvariantError
+>;
+
+export function StringMaxLengthInvariant(
+  opts: StringMaxLengthInvariantOptions,
+): StringMaxLengthInvariant {
+  return Invariant(
+    (value: string) => value.length <= opts.maxLength,
+    (value: string) => {
+      let message = `String must be at most ${opts.maxLength} characters long. Got ${value.length}.`;
+      if (typeof opts.message === 'function') {
+        message = opts.message(value);
+      } else if (typeof opts.message === 'string') {
+        message = opts.message;
+      }
+      return ofStringMaxLengthInvariant(opts.maxLength, message);
+    },
+  );
+}
+// #endregion StringMaxLengthInvariant
+// ─────────────────────────────────────────────────────────────────────────────
