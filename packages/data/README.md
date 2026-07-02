@@ -50,6 +50,25 @@ import { LiteralUnion, Dictionary } from '@typemint/data';
   - [Iteration (`Symbol.iterator`)](#iteration-symboliterator-1)
   - [Type helpers](#dictionary-type-helpers)
 - [How `LiteralUnion` and `Dictionary` work together](#how-literalunion-and-dictionary-work-together)
+- [`Invariant`](#invariant)
+  - [Creating an invariant](#creating-an-invariant)
+  - [`Invariant.and`](#invariantandfirst-rest)
+  - [`Invariant.andSettled`](#invariantandsettledfirst-rest)
+  - [`Invariant.or`](#invariantorfirst-rest)
+  - [Type helpers](#invariant-type-helpers)
+- [`Scalar`](#scalar)
+  - [Primitive obsession, and the states it lets in](#primitive-obsession-and-the-states-it-lets-in)
+  - [Creating a scalar](#creating-a-scalar)
+  - [Refine, never transform](#refine-never-transform)
+  - [`of`](#ofvalue-removealltagstroot)
+  - [`parse`](#parsevalue-unknown)
+  - [`validate`](#validatevalue-removealltagstroot)
+  - [`is`](#isvalue-unknown-value-is-scalar)
+  - [`unwrap`](#unwrapvalue-scalar)
+  - [Adding invariants](#adding-invariants)
+  - [Methods and constants](#methods-and-constants)
+  - [`extend`: refining a scalar](#extend-refining-a-scalar)
+  - [Type helpers](#scalar-type-helpers)
 - [License](#license)
 
 ---
@@ -721,8 +740,9 @@ union's members and the exhaustiveness check on every `match`.
 An `Invariant` is a validation rule for an already-typed value: a function
 `(value: TValue) => Result<void, TError>` that returns `Ok` when the value
 satisfies the rule and `Err` when it does not. Invariants are the primary way
-to express domain constraints on a `Scalar` beyond what its decoder can check
-(e.g. "this number must be positive", "this string must not be empty").
+to express domain constraints on a [`Scalar`](#scalar) beyond what its decoder
+can check (e.g. "this number must be positive", "this string must not be
+empty").
 
 ### Creating an invariant
 
@@ -850,6 +870,308 @@ const isPositive = Invariant(
 
 type Error = InferInvariantError<typeof isPositive>;
 // type Error = 'NOT_POSITIVE'
+```
+
+---
+
+## `Scalar`
+
+A `Scalar` is a **branded primitive**: an ordinary `string`, `number`,
+`bigint`, or `boolean` tagged with a phantom brand that makes it a distinct
+nominal type. A `Scalar<'Email', string>` *is* a `string` at runtime — the
+brand exists only in the type system — but the compiler treats it as its own
+type that a plain `string` is not assignable to.
+
+```ts
+import { Scalar, InferScalarType } from '@typemint/data';
+
+const isEmail = Invariant(
+  (value: string) => value.includes('@'),
+  () => 'NOT_EMAIL' as const,
+);
+
+const Email = Scalar('Email', 'string', { invariants: [isEmail] });
+type Email = InferScalarType<typeof Email>; // Scalar<'Email', string>
+
+const result = Email.parse('a@b.com'); // Result<Email, TypeMismatchError<…> | 'NOT_EMAIL'>
+```
+
+### Primitive obsession, and the states it lets in
+
+*Primitive obsession* is modelling domain concepts with raw primitives — a user
+id, an email, an age, and a discount percentage all typed as `string` or
+`number`. The types compile, but they are all the same type, so nothing stops
+you from passing the wrong one:
+
+```ts
+function chargeUser(userId: string, amountCents: number) { /* … */ }
+
+// All four arguments are `string`/`number`, so the compiler is happy —
+// even though the id and the amount are swapped, and the "amount" is negative.
+chargeUser(String(-999), Number(userIdFromSomewhere));
+```
+
+The deeper problem is that a raw primitive can represent states your domain
+never should: an email with no `@`, a negative age, a percentage above 100, an
+empty username. These are **unrepresentable states** — values the type
+*permits* but the domain *forbids* — and every function that receives a raw
+primitive has to re-check for them (or, more often, forgets to).
+
+A `Scalar` closes both gaps at once by tying an **invariant** to a **type**:
+
+- The invariant runs **once**, at the boundary, when the value is constructed.
+- The brand then travels with the value as a *type-level certificate* that the
+  invariant held. A function that asks for an `Email` cannot be handed a raw
+  `string`, a `UserId`, or an unvalidated one — only a value that already went
+  through `Email.parse`/`Email.of`.
+
+```ts
+function chargeUser(userId: UserId, amount: PositiveCents) { /* … */ }
+
+chargeUser(rawString, rawNumber);
+//         ^^^^^^^^^ Argument of type 'string' is not assignable to 'UserId'.
+```
+
+Once a value is branded, the "is this a valid email / positive amount / non-empty
+name" question is answered by the type, not re-litigated at every call site. The
+illegal states stop being representable past the boundary.
+
+### Creating a scalar
+
+Call `Scalar(name, kind, config?)`:
+
+- **`name`** — the brand. Two scalars over the same primitive but with different
+  names are distinct, non-interchangeable types (`Scalar('UserId', 'string')`
+  is not a `Scalar('Email', 'string')`).
+- **`kind`** — the primitive to refine, one of `'string' | 'number' | 'bigint'
+  | 'boolean'`. It is recognized at runtime with a direct `typeof` check — no
+  decoder or codec required.
+- **`config`** — optional; declares `invariants`, custom `methods`, and
+  `consts` (all covered below).
+
+```ts
+// Bare scalar — brands the primitive, checks nothing beyond its `typeof`.
+const UserId = Scalar('UserId', 'string');
+
+const id = UserId.parse(req.params.id);
+// Result<Scalar<'UserId', string>, TypeMismatchError<string, unknown>>
+```
+
+Only `string`, `number`, `bigint`, and `boolean` are allowed. The restriction
+is deliberate: a brand certifies "this value passed its invariants", which is
+only honest if the value **cannot change** after the check. Primitives are
+immutable and compare by value (`===`), so branded scalars are safe as map
+keys, set members, and in equality checks. Mutable value objects (`Date`,
+`URL`, `RegExp`) are excluded — brand their canonical primitive serialization
+instead (e.g. a `BirthDate` as an ISO-8601 `string`) and reconstruct the rich
+object on demand. Plain records belong in a `Struct`, not a `Scalar`.
+
+### Refine, never transform
+
+A scalar **refines** a value; it never **transforms** it. Construction
+validates the input against the invariants and brands it *as-is* — the value is
+never trimmed, lower-cased, parsed, or otherwise normalized. Representation
+changes belong to a codec layer, not to a scalar. This is what keeps the brand
+honest: the branded value is byte-for-byte the value you validated.
+
+### `of(value: RemoveAllTags<TRoot>)`
+
+Brands a value that is **already** the correct primitive, running the full
+invariant chain fail-fast (the first failing invariant short-circuits). Use it
+when the input type is statically known to be the underlying primitive; use
+[`parse`](#parsevalue-unknown) when it is `unknown`.
+
+```ts
+const r = Email.of('a@b.com'); // Result<Email, 'NOT_EMAIL'>
+if (r.isOk()) {
+  r.value; // branded Email
+}
+
+Email.of('nope'); // Err('NOT_EMAIL')
+```
+
+### `parse(value: unknown)`
+
+The entry point for **untrusted input**. It first checks the value is the right
+primitive (returning a `TypeMismatchError` if not), then applies the invariants
+fail-fast. This is `of` preceded by a `typeof` recognition step, so the error
+channel gains the `TypeMismatchError`.
+
+```ts
+const r = Email.parse(JSON.parse(body).email);
+// Result<Email, TypeMismatchError<string, unknown> | 'NOT_EMAIL'>
+
+if (r.isErr()) {
+  // Either "not a string" or "NOT_EMAIL".
+}
+```
+
+### `validate(value: RemoveAllTags<TRoot>)`
+
+Like `of`, but **accumulates every** invariant failure instead of stopping at
+the first, returning them as a `readonly` array. Use it to report all problems
+with a value at once — form validation is the archetypal case.
+
+```ts
+const r = Password.validate(input);
+if (r.isErr()) {
+  r.error; // e.g. ['TOO_SHORT', 'NO_DIGIT'] — every failing rule, not just the first
+}
+```
+
+### `is(value: unknown): value is Scalar`
+
+Type guard that narrows an `unknown` value to the branded scalar when it is both
+the right primitive and satisfies every invariant. Equivalent to
+`parse(value).isOk()`.
+
+```ts
+if (Email.is(x)) {
+  // x: Scalar<'Email', string>
+}
+```
+
+### `unwrap(value: Scalar)`
+
+Strips **every** brand off a value and returns the underlying primitive — the
+inverse of `of`. Because brands are phantom, this is identity at runtime and a
+pure type-level operation; use it to hand a validated value to an API that wants
+the bare primitive, without widening through `as`.
+
+```ts
+const raw: string = Email.unwrap(emailValue); // no cast, no brand
+```
+
+### Adding invariants
+
+Invariants are how a scalar rules out unrepresentable states. Pass them in
+`config.invariants`; they run in `of`, `parse`, and `validate`, and their error
+types flow into the descriptor's error channel automatically. Declare the array
+inline (or `as const`) so it stays a readonly tuple — that is what lets the
+error union be inferred precisely instead of collapsing to `any`.
+
+```ts
+const isNonEmpty = Invariant(
+  (s: string) => s.length > 0,
+  () => 'EMPTY' as const,
+);
+const maxLen = Invariant(
+  (s: string) => s.length <= 32,
+  () => 'TOO_LONG' as const,
+);
+
+const Username = Scalar('Username', 'string', {
+  invariants: [isNonEmpty, maxLen],
+});
+type UsernameError = InferScalarInvariantError<typeof Username>;
+// 'EMPTY' | 'TOO_LONG'
+
+Username.of('');                         // Err('EMPTY')      — fail-fast
+Username.validate('a'.repeat(40));       // Err(['TOO_LONG']) — all failures
+Username.of('alice');                    // Ok(branded Username)
+```
+
+Because invariants are ordinary [`Invariant`](#invariant) values, they compose
+with `Invariant.and`/`or`/`andSettled` before you ever hand them to a scalar:
+
+```ts
+const isPercentage = Invariant.and(
+  Invariant((n: number) => n >= 0,   () => 'BELOW_MIN' as const),
+  Invariant((n: number) => n <= 100, () => 'ABOVE_MAX' as const),
+);
+
+const Percentage = Scalar('Percentage', 'number', {
+  invariants: [isPercentage],
+});
+```
+
+### Methods and constants
+
+`config.methods` hangs extra functions off the descriptor. Each method takes a
+validated branded value as its first argument, so only values that passed the
+invariants can be passed in. The callback receives `self` — the descriptor with
+its built-in members — so a method can reuse `self.of`, `self.parse`, etc.
+
+`config.consts` attaches static data that travels with the type.
+
+```ts
+const Email = Scalar('Email', 'string', {
+  invariants: [isEmail],
+  methods: (self) => ({
+    getDomain: (email: InferScalarType<typeof self>) => email.split('@')[1],
+  }),
+  consts: { MAX_LENGTH: 254 },
+});
+
+Email.MAX_LENGTH; // 254
+
+const parsed = Email.parse('a@b.com');
+if (parsed.isOk()) {
+  Email.getDomain(parsed.value); // 'b.com'
+}
+```
+
+A method or const name that collides with a **built-in** member (`name`, `of`,
+`parse`, `validate`, `is`, `unwrap`, `extend`) is a compile error. A collision
+between a method and a const (the two maps are checked independently) surfaces
+at construction time as a `PanicException`.
+
+### `extend`: refining a scalar
+
+`extend` derives a stricter scalar from an existing one. The derived scalar's
+root is the parent's *branded* type, so brands **nest** and a derived value
+stays assignable to its parent — a `UInt` is still an `Int`. Invariants
+**compose**: the derived scalar enforces the parent's invariants *and* the new
+ones, and its error channel is the union of both.
+
+```ts
+const isInteger = Invariant(
+  (n: number) => Number.isInteger(n),
+  () => 'NOT_INTEGER' as const,
+);
+const isNonNegative = Invariant(
+  (n: number) => n >= 0,
+  () => 'NEGATIVE' as const,
+);
+
+const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+// UInt: ScalarDescriptor<'UInt', Scalar<'Int', number>, 'NOT_INTEGER' | 'NEGATIVE'>
+
+UInt.of(2.5); // Err('NOT_INTEGER') — the inherited invariant still runs
+UInt.of(-1);  // Err('NEGATIVE')
+UInt.of(5);   // Ok(branded UInt)
+```
+
+There is **no constructor chain**: `extend` re-checks the inherited invariants,
+so you build a derived value in one call from the raw primitive
+(`UInt.of(5)`) — never `UInt.of(Int.of(5).value)`. `unwrap` peels every layer,
+so `UInt.unwrap` yields a plain `number`.
+
+Methods and consts are **not** inherited — the derived scalar carries only those
+it declares. The parent's own methods remain reachable on a derived value
+through the parent descriptor (subtyping), e.g. `Int.someMethod(uintValue)`.
+
+### `Scalar` type helpers
+
+| Type | Description |
+| ---- | ----------- |
+| `Scalar<TName, TType>` | The branded value type: `TType & Tag<TName>`. |
+| `ScalarDescriptor<TName, TRoot, TError>` | The runtime handle returned by the factory (`of`, `parse`, …). |
+| `ScalarConfig<…>` | The optional third argument: `invariants`, `methods`, `consts`. |
+| `ScalarPrimitive` | The primitives a scalar may refine (`string \| number \| bigint \| boolean`). |
+| `ScalarPrimitiveKind` | The runtime `kind` discriminant (`'string' \| 'number' \| …`). |
+| `InferScalarType<T>` | The branded `Scalar` type produced by a descriptor. |
+| `InferScalarRoot<T>` | The underlying primitive beneath every brand. |
+| `InferScalarInvariantError<T>` | The union of errors the scalar's invariants can raise. |
+| `ScalarFactory<TName, TKind>` | The type of the `Scalar` factory bound to a name and kind. |
+
+```ts
+const Email = Scalar('Email', 'string', { invariants: [isEmail] });
+
+type Email = InferScalarType<typeof Email>;             // Scalar<'Email', string>
+type Root = InferScalarRoot<typeof Email>;              // string
+type Err = InferScalarInvariantError<typeof Email>;     // 'NOT_EMAIL'
 ```
 
 ## License
