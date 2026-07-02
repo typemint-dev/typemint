@@ -415,6 +415,13 @@ export type ScalarConfig<
    * keeps values as plain primitives while ensuring only branded values can be
    * passed in:
    *
+   * A method name colliding with a **built-in** member (`name`, `of`, `parse`,
+   * `validate`, `is`, `extend`) is a compile error, enforced by the
+   * `{ [K in ReservedScalarKeys]?: never }` guard. A collision with a `const`
+   * declared in the same config is **not** caught statically — the two maps are
+   * checked independently — and surfaces at construction time as a
+   * {@link PanicException} instead.
+   *
    * @example
    * const Email = Scalar('Email', 'string', {
    *   methods: (self) => ({
@@ -434,8 +441,11 @@ export type ScalarConfig<
    * `MyString.MIN_LENGTH`). Declare them inline (or `as const`) so their
    * literal types are preserved.
    *
-   * Constants must not collide with the built-in members or with any declared
-   * method; a clash is a {@link PanicException} at construction time.
+   * A const name colliding with a **built-in** member is a compile error
+   * (the `{ [K in ReservedScalarKeys]?: never }` guard). A collision with a
+   * declared `method`, however, is only caught at runtime — the method and
+   * const maps are validated independently at the type level — and throws a
+   * {@link PanicException} at construction time.
    *
    * @example
    * const Username = Scalar('Username', 'string', {
