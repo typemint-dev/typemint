@@ -5,6 +5,7 @@ import {
   Kind,
 } from '@typemint/core';
 import {
+  IsGreaterThanNumberInvariant,
   IsIntegerInvariant,
   IsLowerThanNumberInvariant,
   NumberDescriptor,
@@ -322,6 +323,67 @@ describe('(unit) number', () => {
       // Assert
       assertErr(result);
       expect(result.error.message).toBe('My Value must be less than 42');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: IsGreaterThanNumberInvariant
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('IsGreaterThanNumberInvariant', () => {
+    it('should return an Ok for a value greater than the lower bound', () => {
+      // Arrange
+      const invariant = IsGreaterThanNumberInvariant({ lowerBound: 42 });
+
+      // Act
+      const result = invariant(43);
+      // Assert
+      expect(result.isOk()).toBe(true);
+    });
+
+    it('should return an Err for a value lower than the lower bound', () => {
+      // Arrange
+      const invariant = IsGreaterThanNumberInvariant({ lowerBound: 42 });
+      // Act
+      const result = invariant(41);
+      // Assert
+      assertErr(result);
+    });
+
+    it('should fail with an IsGreaterThanNumberInvariantError', () => {
+      // Arrange
+      const invariant = IsGreaterThanNumberInvariant({ lowerBound: 42 });
+      // Act
+      const result = invariant(41);
+      // Assert
+      assertErr(result);
+      expect(
+        Kind.isOf(result.unwrapErr(), 'IsGreaterThanNumberInvariantError'),
+      ).toBe(true);
+    });
+
+    it('should use the default message', () => {
+      // Arrange
+      const invariant = IsGreaterThanNumberInvariant({ lowerBound: 42 });
+      // Act
+      const result = invariant(41);
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe(
+        'Value must be greater than 42. Got 41.',
+      );
+    });
+
+    it('should use the provided message', () => {
+      // Arrange
+      const invariant = IsGreaterThanNumberInvariant({
+        lowerBound: 42,
+        message: 'My Value must be greater than 42',
+      });
+      // Act
+      const result = invariant(41);
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe('My Value must be greater than 42');
     });
   });
 });
