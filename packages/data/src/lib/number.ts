@@ -71,3 +71,53 @@ export function IsIntegerInvariant(
 //
 // #endregion IsIntegerInvariant
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #region IsLowerThanNumberInvariant
+const IsLowerThanNumberInvariantErrorKind =
+  'IsLowerThanNumberInvariantError' as const;
+export type IsLowerThanNumberInvariantError = Kind<
+  typeof IsLowerThanNumberInvariantErrorKind
+> &
+  WithMessage &
+  WithDetail<{
+    received: number;
+    lowerBound: number;
+  }>;
+
+function ofIsLowerThanNumberInvariant(
+  received: number,
+  lowerBound: number,
+  message: string,
+): IsLowerThanNumberInvariantError {
+  return {
+    kind: IsLowerThanNumberInvariantErrorKind,
+    message,
+    details: { received, lowerBound },
+  };
+}
+
+export type IsLowerThanNumberInvariantOptions = {
+  readonly message?: Invariant.MessageOption<number>;
+  readonly lowerBound: number;
+};
+export function IsLowerThanNumberInvariant(
+  opts: IsLowerThanNumberInvariantOptions,
+): Invariant<number, IsLowerThanNumberInvariantError> {
+  return Invariant(
+    (value: number) => value < opts.lowerBound,
+    (value: number) =>
+      ofIsLowerThanNumberInvariant(
+        value,
+        opts.lowerBound,
+        Invariant.resolveMessage(
+          opts.message,
+          value,
+          () => `Value must be less than ${opts.lowerBound}. Got ${value}.`,
+        ),
+      ),
+  );
+}
+
+// #endregion IsLowerThanNumberInvariant
+// ─────────────────────────────────────────────────────────────────────────────
