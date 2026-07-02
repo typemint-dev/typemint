@@ -387,6 +387,41 @@ describe('(unit) Scalar', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar primitive kinds
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar primitive kinds', () => {
+    it('should recognize a bigint scalar and reject a non-bigint', () => {
+      // Arrange
+      const Big = Scalar('Big', 'bigint');
+
+      // Act & Assert
+      const branded = Big.of(1n);
+      assertOk(branded);
+      expect(branded.value).toBe(1n);
+      expectTypeOf(branded.value).toEqualTypeOf<Scalar<'Big', bigint>>();
+      assertOk(Big.parse(42n));
+      assertErr(Big.parse(42)); // a number is not a bigint
+      expect(Big.is(1n)).toBe(true);
+      expect(Big.is(1)).toBe(false);
+    });
+
+    it('should recognize a boolean scalar and reject a non-boolean', () => {
+      // Arrange
+      const Flag = Scalar('Flag', 'boolean');
+
+      // Act & Assert
+      const branded = Flag.of(true);
+      assertOk(branded);
+      expect(branded.value).toBe(true);
+      expectTypeOf(branded.value).toEqualTypeOf<Scalar<'Flag', boolean>>();
+      assertOk(Flag.parse(false));
+      assertErr(Flag.parse('true')); // a string is not a boolean
+      expect(Flag.is(false)).toBe(true);
+      expect(Flag.is(0)).toBe(false);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // MARK: Scalar methods
   // ─────────────────────────────────────────────────────────────────────────────
   describe('Scalar methods', () => {
@@ -544,6 +579,18 @@ describe('(unit) Scalar', () => {
       assertErr(myStringScalarR);
       expect(myStringScalarR.error).toEqual(['NOT_HELLO', 'TOO_SHORT']);
     });
+
+    it('should return Ok when the scalar declares no invariants', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+
+      // Act
+      const myStringScalarR = MyString.validate('anything');
+
+      // Assert - nothing to check, so the value passes through branded
+      assertOk(myStringScalarR);
+      expect(myStringScalarR.value).toBe('anything');
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -669,6 +716,15 @@ describe('(unit) Scalar', () => {
       const isMyString = MyString.is('not hello');
       // Assert
       expect(isMyString).toBe(false);
+    });
+
+    it('should return false when the value is the wrong primitive', () => {
+      // Arrange - no invariants, so only the primitive recognition can fail
+      const MyString = Scalar('MyString', 'string');
+
+      // Act & Assert
+      expect(MyString.is(123)).toBe(false); // fails type recognition, not an invariant
+      expect(MyString.is('hello')).toBe(true);
     });
 
     it('should infer the scalar type when the value is a scalar', () => {
