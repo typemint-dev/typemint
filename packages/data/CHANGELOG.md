@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.5.2
+
+### Patch Changes
+
+- Describe built-in invariants for String and Number based scalar types.
+
 ## 0.5.1
 
 ### Patch Changes
