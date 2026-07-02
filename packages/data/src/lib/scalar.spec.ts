@@ -1095,21 +1095,19 @@ describe('(unit) Scalar', () => {
     });
 
     it('should pin the extended contract: raw input, nested brand, composed error', () => {
+      const isInteger = Invariant(
+        (value: number) => Number.isInteger(value),
+        () => 'NOT_INTEGER' as const,
+      );
+      const isNonNegative = Invariant(
+        (value: number) => value >= 0,
+        () => 'NEGATIVE' as const,
+      );
       const Int = Scalar('Int', 'number', {
-        invariants: [
-          Invariant(
-            (v: number) => Number.isInteger(v),
-            () => 'NOT_INTEGER' as const,
-          ),
-        ],
+        invariants: [isInteger],
       });
       const UInt = Int.extend('UInt', {
-        invariants: [
-          Invariant(
-            (v: number) => v >= 0,
-            () => 'NEGATIVE' as const,
-          ),
-        ],
+        invariants: [isNonNegative],
       });
 
       // `of` takes the underlying primitive (not the branded parent), returns
