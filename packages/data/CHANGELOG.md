@@ -1,5 +1,26 @@
 # @typemint/data
 
+## 0.5.0
+
+### Minor Changes
+
+- Add Scalar.of method
+- Add Scalar.parse method
+- Add Scalar.validate method
+- Add concept of Scalar methods
+- Add concept of Scalar constants
+- Add concept of Scalar is type guard
+- Add Scalar.extend method
+- Add StringMinLengthInvariant
+- Add StringMaxLengthInvariant
+- Add NonEmptyStringInvariant
+- Add StringPatternInvariant
+- Add IsIntegerInvariant
+- Add IsLowerThanNumberInvariant
+- Add IsGreaterThanNumberInvariant
+- Add IsLowerThenOrEqualNumberInvariant
+- Add IsGreaterThenOrEqualNumberInvariant
+
 ## 0.4.0
 
 ### Minor Changes
