@@ -56,6 +56,10 @@ import { LiteralUnion, Dictionary } from '@typemint/data';
   - [`Invariant.andSettled`](#invariantandsettledfirst-rest)
   - [`Invariant.or`](#invariantorfirst-rest)
   - [Type helpers](#invariant-type-helpers)
+- [Built-in invariants](#built-in-invariants)
+  - [Custom messages](#custom-messages)
+  - [String invariants](#string-invariants)
+  - [Number invariants](#number-invariants)
 - [`Scalar`](#scalar)
   - [Primitive obsession, and the states it lets in](#primitive-obsession-and-the-states-it-lets-in)
   - [Creating a scalar](#creating-a-scalar)
@@ -870,6 +874,133 @@ const isPositive = Invariant(
 
 type Error = InferInvariantError<typeof isPositive>;
 // type Error = 'NOT_POSITIVE'
+```
+
+---
+
+## Built-in invariants
+
+The examples above build invariants by hand, and their errors are bare string
+literals (`'NOT_EMAIL'`). For the two primitives that most often need refining —
+`string` and `number` — `@typemint/data` ships a set of **ready-made invariant
+factories**. Each one takes an options object and returns an ordinary
+[`Invariant`](#invariant), so it drops straight into a
+[`Scalar`](#scalar)'s `invariants` array or composes with
+`Invariant.and`/`or`/`andSettled`:
+
+```ts
+import {
+  Scalar,
+  NonEmptyStringInvariant,
+  StringMaxLengthInvariant,
+} from '@typemint/data';
+
+const Username = Scalar('Username', 'string', {
+  invariants: [
+    NonEmptyStringInvariant(),
+    StringMaxLengthInvariant({ maxLength: 32 }),
+  ],
+});
+```
+
+Unlike the hand-rolled invariants above, the built-ins fail with a
+**structured error object** rather than a string. Every error carries:
+
+- **`kind`** — a discriminant string (e.g. `'StringMinLengthInvariantError'`)
+  you can switch on;
+- **`message`** — a human-readable description (see [Custom
+  messages](#custom-messages));
+- **`details`** — the offending `received` value plus whatever bound was
+  violated (`minLength`, `maxLength`, `pattern`, `lowerBound`).
+
+```ts
+const r = StringMinLengthInvariant({ minLength: 3 })('hi');
+// Err({
+//   kind: 'StringMinLengthInvariantError',
+//   message: 'String must be at least 3 characters long. Got 2.',
+//   details: { minLength: 3, received: 'hi' },
+// })
+```
+
+### Custom messages
+
+Every built-in accepts an optional `message` in its options. It is a
+`MessageOption` — either a fixed string, or a function computed from the
+offending value — and it replaces only the default `message` text; the `kind`
+and `details` are unaffected. When omitted, a sensible default message is used.
+
+```ts
+// Fixed string.
+StringMinLengthInvariant({ minLength: 8, message: 'Too short!' });
+
+// Computed from the offending value.
+StringMinLengthInvariant({
+  minLength: 8,
+  message: (value) => `"${value}" is only ${value.length} characters.`,
+});
+```
+
+### String invariants
+
+| Factory | Options | Holds when | Error `kind` |
+| --- | --- | --- | --- |
+| `NonEmptyStringInvariant` | `{ message? }` | `value.length > 0` | `NonEmptyStringInvariantError` |
+| `StringMinLengthInvariant` | `{ minLength, message? }` | `value.length >= minLength` | `StringMinLengthInvariantError` |
+| `StringMaxLengthInvariant` | `{ maxLength, message? }` | `value.length <= maxLength` | `StringMaxLengthInvariantError` |
+| `StringPatternInvariant` | `{ pattern, message? }` | `pattern.test(value)` | `StringPatternInvariantError` |
+
+```ts
+NonEmptyStringInvariant()('');                       // Err(NonEmptyStringInvariantError)
+StringMinLengthInvariant({ minLength: 3 })('ok');    // Err — details: { minLength: 3, received: 'ok' }
+StringMaxLengthInvariant({ maxLength: 5 })('hello'); // Ok(void)
+StringPatternInvariant({ pattern: /^\d+$/ })('12a'); // Err — details: { pattern: /^\d+$/, received: '12a' }
+```
+
+Two behaviours worth knowing:
+
+- **Length is measured in UTF-16 code units** (`String.prototype.length`), not
+  Unicode code points or grapheme clusters — so an astral character such as
+  `'👍'` counts as `2`. This is `O(1)` and matches the platform's native
+  `.length`.
+- **`minLength` / `maxLength` must be non-negative integers.** A non-integer,
+  negative, `NaN`, or infinite bound is a programmer error in the schema, so it
+  throws a `RangeError` at construction time rather than silently producing an
+  invariant that accepts or rejects everything.
+- **`StringPatternInvariant` is stateless.** The `g` and `y` flags are stripped
+  from the supplied `pattern` (they mutate `lastIndex` and would make a reusable
+  invariant return alternating results), and the normalized copy is stored — the
+  caller's `RegExp` instance is never mutated.
+
+### Number invariants
+
+| Factory | Options | Holds when | Error `kind` |
+| --- | --- | --- | --- |
+| `IsIntegerInvariant` | `{ message? }` | `Number.isInteger(value)` | `IsIntegerInvariantError` |
+| `IsGreaterThanNumberInvariant` | `{ lowerBound, message? }` | `value > lowerBound` | `IsGreaterThanNumberInvariantError` |
+| `IsGreaterThenOrEqualNumberInvariant` | `{ lowerBound, message? }` | `value >= lowerBound` | `IsGreaterThenOrEqualNumberInvariantError` |
+| `IsLowerThanNumberInvariant` | `{ lowerBound, message? }` | `value < lowerBound` | `IsLowerThanNumberInvariantError` |
+| `IsLowerThenOrEqualNumberInvariant` | `{ lowerBound, message? }` | `value <= lowerBound` | `IsLowerThenOrEqualNumberInvariantError` |
+
+Every comparison factory takes its bound under the `lowerBound` key (regardless
+of the comparison direction), and reports both `received` and `lowerBound` in
+its error `details`.
+
+```ts
+IsIntegerInvariant()(2.5);                            // Err(IsIntegerInvariantError)
+IsGreaterThanNumberInvariant({ lowerBound: 0 })(-1);  // Err — details: { received: -1, lowerBound: 0 }
+IsLowerThenOrEqualNumberInvariant({ lowerBound: 100 })(100); // Ok(void)
+```
+
+They compose naturally into range checks with `Invariant.and`, ready to hand to
+a scalar:
+
+```ts
+const isPercentage = Invariant.and(
+  IsGreaterThenOrEqualNumberInvariant({ lowerBound: 0 }),
+  IsLowerThenOrEqualNumberInvariant({ lowerBound: 100 }),
+);
+
+const Percentage = Scalar('Percentage', 'number', { invariants: [isPercentage] });
 ```
 
 ---
