@@ -222,3 +222,51 @@ export function NonEmptyStringInvariant(
 }
 // #endregion NonEmptyStringInvariant
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #region StringPatternInvariant
+export type StringPatternInvariantError = Kind<'StringPatternInvariantError'> &
+  WithMessage &
+  WithDetail<{
+    pattern: RegExp;
+  }>;
+function ofStringPatternInvariant(
+  pattern: RegExp,
+  message: string,
+): StringPatternInvariantError {
+  return {
+    kind: 'StringPatternInvariantError',
+    message,
+    details: { pattern },
+  };
+}
+
+export type StringPatternInvariant = Invariant<
+  string,
+  StringPatternInvariantError
+>;
+
+export type StringPatternInvariantOptions = {
+  readonly pattern: RegExp;
+  readonly message?: string | ((value: string) => string);
+};
+
+export function StringPatternInvariant(
+  opts: StringPatternInvariantOptions,
+): StringPatternInvariant {
+  return Invariant(
+    (value: string) => opts.pattern.test(value),
+    (value: string) => {
+      let message = `String must match the pattern ${opts.pattern.toString()}`;
+      if (typeof opts.message === 'function') {
+        message = opts.message(value);
+      } else if (typeof opts.message === 'string') {
+        message = opts.message;
+      }
+      return ofStringPatternInvariant(opts.pattern, message);
+    },
+  );
+}
+
+// #endregion StringPatternInvariant
+// ─────────────────────────────────────────────────────────────────────────────

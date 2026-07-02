@@ -9,6 +9,7 @@ import {
   StringDescriptor,
   StringMaxLengthInvariant,
   StringMinLengthInvariant,
+  StringPatternInvariant,
   isString,
   unknownToStringDecoder,
   type UnknownToStringDecoder,
@@ -397,6 +398,66 @@ describe('(unit) string', () => {
       // Assert
       assertErr(result);
       expect(result.error.message).toBe('My String must not be empty. Got 0.');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: StringPatternInvariant
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('StringPatternInvariant', () => {
+    it('should return an Ok for a string value that matches the pattern', () => {
+      // Arrange
+      const invariant = StringPatternInvariant({ pattern: /^[a-z]+$/ });
+      // Act
+      const result = invariant('hello');
+
+      // Assert
+      expect(result.isOk()).toBe(true);
+    });
+
+    it('should return an Err for a string value that does not match the pattern', () => {
+      // Arrange
+      const invariant = StringPatternInvariant({ pattern: /^[a-z]+$/ });
+      // Act
+      const result = invariant('123');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.details.pattern).toEqual(/^[a-z]+$/);
+    });
+
+    it('should use the provided message for the error', () => {
+      // Arrange
+      const invariant = StringPatternInvariant({
+        pattern: /^[a-z]+$/,
+        message: 'My String must match the pattern /^[a-z]+$/.',
+      });
+      // Act
+      const result = invariant('123');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe(
+        'My String must match the pattern /^[a-z]+$/.',
+      );
+    });
+
+    it('should use the provided message function for the error', () => {
+      // Arrange
+      const invariant = StringPatternInvariant({
+        pattern: /^[a-z]+$/,
+        message: (value) =>
+          `My String must match the pattern /^[a-z]+$/. Got ${value.length}.`,
+      });
+
+      // Act
+      const result = invariant('123');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe(
+        'My String must match the pattern /^[a-z]+$/. Got 3.',
+      );
     });
   });
 });
