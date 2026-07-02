@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.5.1
+
+### Patch Changes
+
+- expose Invariant module
+
 ## 0.5.0
 
 ### Minor Changes
