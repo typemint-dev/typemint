@@ -503,7 +503,10 @@ describe('(unit) number', () => {
       // Assert
       assertErr(result);
       expect(
-        Kind.isOf(result.unwrapErr(), 'IsGreaterThenOrEqualNumberInvariantError'),
+        Kind.isOf(
+          result.unwrapErr(),
+          'IsGreaterThenOrEqualNumberInvariantError',
+        ),
       ).toBe(true);
     });
 
