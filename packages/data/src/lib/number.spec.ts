@@ -5,12 +5,14 @@ import {
   Kind,
 } from '@typemint/core';
 import {
+  IsIntegerInvariant,
   NumberDescriptor,
   isNumber,
   unknownToNumberDecoder,
   type UnknownToNumberDecoder,
 } from './number.js';
 import type { TypeMismatchError } from './type-mismatch.js';
+import { assertErr } from '@typemint/result';
 describe('(unit) number', () => {
   // ─────────────────────────────────────────────────────────────────────────────
   // MARK: NumberDescriptor
@@ -179,6 +181,77 @@ describe('(unit) number', () => {
           TypeMismatchError<number, unknown>
         >();
       }
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: IsIntegerInvariant
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('IsIntegerInvariant', () => {
+    it('should return an Ok for an integer value', () => {
+      // Arrange
+      const invariant = IsIntegerInvariant();
+      // Act
+      const result = invariant(42);
+      // Assert
+      expect(result.isOk()).toBe(true);
+    });
+
+    it('should return an Err for a non-integer value', () => {
+      // Arrange
+      const invariant = IsIntegerInvariant();
+      // Act
+      const result = invariant(42.5);
+      // Assert
+      expect(result.isErr()).toBe(true);
+    });
+
+    it('should fail with an IsIntegerInvariantError', () => {
+      // Arrange
+      const invariant = IsIntegerInvariant();
+      // Act
+      const result = invariant(42.5);
+      // Assert
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(Kind.isOf(result.unwrapErr(), 'IsIntegerInvariantError')).toBe(
+          true,
+        );
+      }
+    });
+
+    it('should use the default message', () => {
+      // Arrange
+      const invariant = IsIntegerInvariant();
+      // Act
+      const result = invariant(42.5);
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe('Value must be an integer');
+    });
+
+    it('should use the provided message', () => {
+      // Arrange
+      const invariant = IsIntegerInvariant({
+        message: 'My Value must be an integer',
+      });
+      // Act
+      const result = invariant(42.5);
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe('My Value must be an integer');
+    });
+
+    it('should use the provided message function', () => {
+      // Arrange
+      const invariant = IsIntegerInvariant({
+        message: (value) => `My Value ${value} must be an integer`,
+      });
+      // Act
+      const result = invariant(42.5);
+      // Assert
+      assertErr(result);
+      expect(result.error.message).toBe('My Value 42.5 must be an integer');
     });
   });
 });
