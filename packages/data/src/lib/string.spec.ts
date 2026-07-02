@@ -243,6 +243,17 @@ describe('(unit) string', () => {
       expect(result.error.details.minLength).toBe(3);
     });
 
+    it('should preserve the received value in the error details', () => {
+      // Arrange
+      const invariant = StringMinLengthInvariant({ minLength: 3 });
+      // Act
+      const result = invariant('hi');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.details.received).toBe('hi');
+    });
+
     it('should use the provided message for the error', () => {
       // Arrange
       const invariant = StringMinLengthInvariant({
@@ -325,6 +336,17 @@ describe('(unit) string', () => {
       expect(result.error.details.maxLength).toBe(3);
     });
 
+    it('should preserve the received value in the error details', () => {
+      // Arrange
+      const invariant = StringMaxLengthInvariant({ maxLength: 3 });
+      // Act
+      const result = invariant('hello world');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.details.received).toBe('hello world');
+    });
+
     it('should use the provided message for the error', () => {
       // Arrange
       const invariant = StringMaxLengthInvariant({
@@ -405,6 +427,17 @@ describe('(unit) string', () => {
       expect(result.error.kind).toBe('NonEmptyStringInvariantError');
     });
 
+    it('should preserve the received value in the error details', () => {
+      // Arrange
+      const invariant = NonEmptyStringInvariant();
+      // Act
+      const result = invariant('');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.details.received).toBe('');
+    });
+
     it('should use the provided message for the error', () => {
       // Arrange
       const invariant = NonEmptyStringInvariant({
@@ -455,6 +488,17 @@ describe('(unit) string', () => {
       // Assert
       assertErr(result);
       expect(result.error.details.pattern).toEqual(/^[a-z]+$/);
+    });
+
+    it('should preserve the received value in the error details', () => {
+      // Arrange
+      const invariant = StringPatternInvariant({ pattern: /^[a-z]+$/ });
+      // Act
+      const result = invariant('123');
+
+      // Assert
+      assertErr(result);
+      expect(result.error.details.received).toBe('123');
     });
 
     it('should use the provided message for the error', () => {

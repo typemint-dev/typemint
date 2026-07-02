@@ -2,6 +2,7 @@ import {
   TypeDescriptor,
   witness,
   type Kind,
+  type WithDetail,
   type WithMessage,
 } from '@typemint/core';
 import { Result } from '@typemint/result';
@@ -32,12 +33,19 @@ export const unknownToNumberDecoder: UnknownToNumberDecoder =
 // #region IsIntegerInvariant
 const IsIntegerInvariantErrorKind = 'IsIntegerInvariantError' as const;
 export type IsIntegerInvariantError = Kind<typeof IsIntegerInvariantErrorKind> &
-  WithMessage;
+  WithMessage &
+  WithDetail<{
+    received: number;
+  }>;
 
-function ofIsIntegerInvariant(message: string): IsIntegerInvariantError {
+function ofIsIntegerInvariant(
+  received: number,
+  message: string,
+): IsIntegerInvariantError {
   return {
     kind: IsIntegerInvariantErrorKind,
     message,
+    details: { received },
   };
 }
 
@@ -51,6 +59,7 @@ export function IsIntegerInvariant(
     (value: number) => Number.isInteger(value),
     (value: number) =>
       ofIsIntegerInvariant(
+        value,
         Invariant.resolveMessage(
           opts.message,
           value,

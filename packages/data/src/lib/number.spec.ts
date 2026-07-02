@@ -253,5 +253,15 @@ describe('(unit) number', () => {
       assertErr(result);
       expect(result.error.message).toBe('My Value 42.5 must be an integer');
     });
+
+    it('should preserve the received value in the error details', () => {
+      // Arrange
+      const invariant = IsIntegerInvariant();
+      // Act
+      const result = invariant(42.5);
+      // Assert
+      assertErr(result);
+      expect(result.error.details.received).toBe(42.5);
+    });
   });
 });

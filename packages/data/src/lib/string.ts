@@ -109,15 +109,17 @@ export type StringMinLengthInvariantError =
     WithMessage &
     WithDetail<{
       minLength: number;
+      received: string;
     }>;
 function ofStringMinLengthInvariant(
   minLength: number,
+  received: string,
   message: string,
 ): StringMinLengthInvariantError {
   return {
     kind: 'StringMinLengthInvariantError',
     message,
-    details: { minLength },
+    details: { minLength, received },
   };
 }
 
@@ -154,6 +156,7 @@ export function StringMinLengthInvariant(
     (value: string) =>
       ofStringMinLengthInvariant(
         opts.minLength,
+        value,
         Invariant.resolveMessage(
           opts.message,
           value,
@@ -173,15 +176,17 @@ export type StringMaxLengthInvariantError =
     WithMessage &
     WithDetail<{
       maxLength: number;
+      received: string;
     }>;
 function ofStringMaxLengthInvariant(
   maxLength: number,
+  received: string,
   message: string,
 ): StringMaxLengthInvariantError {
   return {
     kind: 'StringMaxLengthInvariantError',
     message,
-    details: { maxLength },
+    details: { maxLength, received },
   };
 }
 
@@ -218,6 +223,7 @@ export function StringMaxLengthInvariant(
     (value: string) =>
       ofStringMaxLengthInvariant(
         opts.maxLength,
+        value,
         Invariant.resolveMessage(
           opts.message,
           value,
@@ -234,14 +240,20 @@ export function StringMaxLengthInvariant(
 // #region NonEmptyStringInvariant
 
 export type NonEmptyStringInvariantError =
-  Kind<'NonEmptyStringInvariantError'> & WithMessage;
+  Kind<'NonEmptyStringInvariantError'> &
+    WithMessage &
+    WithDetail<{
+      received: string;
+    }>;
 
 function ofNonEmptyStringInvariant(
+  received: string,
   message: string,
 ): NonEmptyStringInvariantError {
   return {
     kind: 'NonEmptyStringInvariantError',
     message,
+    details: { received },
   };
 }
 
@@ -261,6 +273,7 @@ export function NonEmptyStringInvariant(
     (value: string) => value.length > 0,
     (value: string) =>
       ofNonEmptyStringInvariant(
+        value,
         Invariant.resolveMessage(
           opts.message,
           value,
@@ -278,15 +291,17 @@ export type StringPatternInvariantError = Kind<'StringPatternInvariantError'> &
   WithMessage &
   WithDetail<{
     pattern: RegExp;
+    received: string;
   }>;
 function ofStringPatternInvariant(
   pattern: RegExp,
+  received: string,
   message: string,
 ): StringPatternInvariantError {
   return {
     kind: 'StringPatternInvariantError',
     message,
-    details: { pattern },
+    details: { pattern, received },
   };
 }
 
@@ -317,6 +332,7 @@ export function StringPatternInvariant(
     (value: string) =>
       ofStringPatternInvariant(
         pattern,
+        value,
         Invariant.resolveMessage(
           opts.message,
           value,
