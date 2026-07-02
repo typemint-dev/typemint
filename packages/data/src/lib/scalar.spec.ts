@@ -750,6 +750,100 @@ describe('(unit) Scalar', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar unwrap
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar unwrap', () => {
+    const isInteger = Invariant(
+      (value: number) => Number.isInteger(value),
+      () => 'NOT_INTEGER' as const,
+    );
+    const isNonNegative = Invariant(
+      (value: number) => value >= 0,
+      () => 'NEGATIVE' as const,
+    );
+    const isPositive = Invariant(
+      (value: number) => value > 0,
+      () => 'NOT_POSITIVE' as const,
+    );
+
+    it('should expose the "unwrap" method taking the branded value and returning the root primitive', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+
+      // Act
+      type MyStringUnwrap = typeof MyString.unwrap;
+
+      // Assert
+      expectTypeOf<MyStringUnwrap>().toEqualTypeOf<
+        (value: Scalar<'MyString', string>) => string
+      >();
+    });
+
+    it('should return the underlying value unchanged for a base scalar', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+      const branded = MyString.of('hello');
+      assertOk(branded);
+
+      // Act
+      const raw = MyString.unwrap(branded.value);
+
+      // Assert
+      expect(raw).toBe('hello');
+      expectTypeOf(raw).toEqualTypeOf<string>();
+    });
+
+    it('should peel every brand from a multi-level extended scalar back to the raw primitive', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+      const PositiveInt = UInt.extend('PositiveInt', {
+        invariants: [isPositive],
+      });
+      const branded = PositiveInt.of(2);
+      assertOk(branded);
+      expectTypeOf<typeof branded.value>().toEqualTypeOf<
+        Scalar<'PositiveInt', Scalar<'UInt', Scalar<'Int', number>>>
+      >();
+
+      // Act
+      const raw = PositiveInt.unwrap(branded.value);
+
+      // Assert - regardless of extension depth, the result is a plain number
+      expect(raw).toBe(2);
+      expectTypeOf(raw).toEqualTypeOf<number>();
+    });
+
+    it('should let an intermediate descriptor unwrap a more-derived value', () => {
+      // Arrange - a PositiveInt is a UInt is an Int (nested brand), so any
+      // ancestor descriptor can unwrap it back to the same raw primitive.
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+      const PositiveInt = UInt.extend('PositiveInt', {
+        invariants: [isPositive],
+      });
+      const branded = PositiveInt.of(7);
+      assertOk(branded);
+
+      // Act
+      const raw = Int.unwrap(branded.value);
+
+      // Assert
+      expect(raw).toBe(7);
+      expectTypeOf(raw).toEqualTypeOf<number>();
+    });
+
+    it('should only accept a branded value of this scalar', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+
+      // Act & Assert
+      // @ts-expect-error - a raw primitive is not the branded scalar value
+      MyString.unwrap('hello');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // MARK: Scalar extend
   // ─────────────────────────────────────────────────────────────────────────────
   describe('Scalar extend', () => {

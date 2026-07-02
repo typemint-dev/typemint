@@ -279,6 +279,22 @@ export type ScalarDescriptor<
   is(value: unknown): value is Scalar<TName, TRoot>;
 
   /**
+   * Strips **every** brand off a branded value and returns the underlying
+   * primitive — the inverse of {@link ScalarDescriptor.of}. Regardless of how
+   * many times the scalar was extended, the result is the raw root primitive
+   * (`RemoveAllTags<TRoot>`), so `UInt.unwrap` and `PositiveInt.unwrap` both
+   * yield a plain `number`.
+   *
+   * This is a pure type-level operation: brands are phantom, so at runtime the
+   * value is returned unchanged. Use it to hand a validated value to an API
+   * that wants the bare primitive without widening through `as`.
+   *
+   * @example
+   * const n: number = UInt.unwrap(uintValue); // no cast, no brand
+   */
+  unwrap(value: Scalar<TName, TRoot>): RemoveAllTags<TRoot>;
+
+  /**
    * Refines this scalar into a stricter one. The derived scalar's root is
    * **this** scalar's branded value (`Scalar<TName, TRoot>`), so its brand
    * nests (`Scalar<TNewName, Scalar<TName, TRoot>>`) and a derived value stays
@@ -416,7 +432,7 @@ export type ScalarConfig<
    * passed in:
    *
    * A method name colliding with a **built-in** member (`name`, `of`, `parse`,
-   * `validate`, `is`, `extend`) is a compile error, enforced by the
+   * `validate`, `is`, `unwrap`, `extend`) is a compile error, enforced by the
    * `{ [K in ReservedScalarKeys]?: never }` guard. A collision with a `const`
    * declared in the same config is **not** caught statically — the two maps are
    * checked independently — and surfaces at construction time as a
@@ -515,6 +531,12 @@ function buildScalar(
     return parse(value).isOk();
   }
 
+  // Brands are phantom, so unwrapping is identity at runtime — only the static
+  // type changes, from the branded scalar back to its underlying primitive.
+  function unwrap(value: any): any {
+    return value;
+  }
+
   // Refines this scalar: the derived scalar shares THIS scalar's raw recognizer
   // (the root primitive is unchanged) and inherits the full accumulated
   // invariant set, layering the new invariants on top. Methods and consts are
@@ -540,6 +562,7 @@ function buildScalar(
     parse,
     validate,
     is,
+    unwrap,
     // `unknown` (not `never`) as the error channel: these functions genuinely
     // return `Err`, and `Result<_, never>` would collapse to `Ok`-only.
   } satisfies Omit<
@@ -592,7 +615,7 @@ function buildScalar(
  * @param config - Optional {@link ScalarConfig} declaring `invariants`, custom
  *   `methods`, and `consts`.
  * @returns A frozen descriptor exposing `of`, `parse`, `validate`, `is`,
- *   `extend`, and any declared custom members.
+ *   `unwrap`, `extend`, and any declared custom members.
  * @throws {PanicException} if a custom method or const name collides with a
  *   built-in descriptor member or another custom member.
  *
