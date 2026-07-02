@@ -171,3 +171,54 @@ export function IsGreaterThanNumberInvariant(
 
 // #endregion IsGreaterThanNumberInvariant
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #region IsLowerOrEqualNumberInvariant
+const IsLowerOrEqualNumberInvariantErrorKind =
+  'IsLowerOrEqualNumberInvariantError' as const;
+export type IsLowerOrEqualNumberInvariantError = Kind<
+  typeof IsLowerOrEqualNumberInvariantErrorKind
+> &
+  WithMessage &
+  WithDetail<{
+    received: number;
+    lowerBound: number;
+  }>;
+
+function ofIsLowerOrEqualNumberInvariant(
+  received: number,
+  lowerBound: number,
+  message: string,
+): IsLowerOrEqualNumberInvariantError {
+  return {
+    kind: IsLowerOrEqualNumberInvariantErrorKind,
+    message,
+    details: { received, lowerBound },
+  };
+}
+
+export type IsLowerOrEqualNumberInvariantOptions = {
+  readonly message?: Invariant.MessageOption<number>;
+  readonly lowerBound: number;
+};
+export function IsLowerOrEqualNumberInvariant(
+  opts: IsLowerOrEqualNumberInvariantOptions,
+): Invariant<number, IsLowerOrEqualNumberInvariantError> {
+  return Invariant(
+    (value: number) => value <= opts.lowerBound,
+    (value: number) =>
+      ofIsLowerOrEqualNumberInvariant(
+        value,
+        opts.lowerBound,
+        Invariant.resolveMessage(
+          opts.message,
+          value,
+          () =>
+            `Value must be less than or equal to ${opts.lowerBound}. Got ${value}.`,
+        ),
+      ),
+  );
+}
+
+// #endregion IsLowerOrEqualNumberInvariant
+// ─────────────────────────────────────────────────────────────────────────────
