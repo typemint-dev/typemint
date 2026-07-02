@@ -774,6 +774,32 @@ describe('(unit) Scalar', () => {
       assertErr(UInt.parse('x')); // fails the base recognizer
     });
 
+    it('should keep the extended parse mismatch in sync between type and runtime', () => {
+      // Arrange - the root primitive never changes across `extend`, so both the
+      // static expected type and the runtime descriptor must describe `number`,
+      // not the branded parent Scalar<'Int', number>.
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act
+      const result = UInt.parse('not a number');
+
+      // Assert - runtime: the recognizer describes the underlying primitive.
+      assertErr(result);
+      const error = result.error;
+      if (typeof error !== 'object') {
+        throw new Error('expected a TypeMismatchError, got an invariant error');
+      }
+      expect(error.kind).toBe('TypeMismatchError');
+      expect(error.details.expected.name).toBe('number');
+
+      // Assert - type: the phantom expected type is the underlying `number`,
+      // matching the runtime name above (no drift to Scalar<'Int', number>).
+      expectTypeOf<typeof error.details.expected>().toEqualTypeOf<
+        TypeDescriptor<number, string>
+      >();
+    });
+
     it('should surface the base invariant error when the base invariant fails', () => {
       // Arrange
       const Int = Scalar('Int', 'number', { invariants: [isInteger] });
