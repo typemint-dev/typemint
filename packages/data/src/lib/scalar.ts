@@ -516,12 +516,29 @@ function buildScalar(
     return buildScalar(newName, recognize, invariants, newConfig);
   }
 
-  const descriptor = {
+  // Compile-time guard: the non-generic built-ins must match the public
+  // contract for a representative instantiation *before* the `any` cast (which
+  // the phantom brand and dynamically-assigned custom members make
+  // unavoidable) widens the type and erases all checking. This catches a
+  // renamed, removed, or mis-shaped core member at typecheck time. `extend`'s
+  // generic `& TMethods & TConsts` return cannot satisfy a concrete
+  // instantiation, so it is excluded here and covered by the contract type
+  // tests instead.
+  const builtIns = {
     name,
     of,
     parse,
     validate,
     is,
+    // `unknown` (not `never`) as the error channel: these functions genuinely
+    // return `Err`, and `Result<_, never>` would collapse to `Ok`-only.
+  } satisfies Omit<
+    ScalarDescriptor<string, ScalarPrimitive, unknown>,
+    'extend'
+  >;
+
+  const descriptor = {
+    ...builtIns,
     extend,
   } as ScalarDescriptor<any, any, any>;
 

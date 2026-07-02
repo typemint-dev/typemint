@@ -916,4 +916,98 @@ describe('(unit) Scalar', () => {
       expect(UInt.isZero(result.value)).toBe(true);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar public contract
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Contract-level type tests. `buildScalar` is intentionally `any`-typed
+  // internally — the phantom brand forces a cast at the `of` boundary, so the
+  // implementation is not checked against its own public type. These assertions
+  // are that guard: they pin the *public* shape so a refactor that quietly
+  // changes a member's signature fails typecheck. Enforced by `pnpm test:types`
+  // (wired into `precommit:check`), since `expectTypeOf` is a runtime no-op.
+  describe('Scalar public contract', () => {
+    const isEmail = Invariant(
+      (value: string) => value.includes('@'),
+      () => 'NOT_EMAIL' as const,
+    );
+
+    it('should expose exactly the built-in members for a bare scalar', () => {
+      const Id = Scalar('Id', 'string');
+      expectTypeOf(Id).toEqualTypeOf<ScalarDescriptor<'Id', string, never>>();
+    });
+
+    it('should pin the full member shape of a configured scalar', () => {
+      const Email = Scalar('Email', 'string', {
+        invariants: [isEmail],
+        methods: (self) => ({
+          getDomain: (email: InferScalarType<typeof self>) =>
+            email.split('@')[1],
+        }),
+        consts: { MAX_LENGTH: 254 },
+      });
+
+      expectTypeOf(Email.name).toEqualTypeOf<'Email'>();
+      expectTypeOf(Email.of).toEqualTypeOf<
+        (value: string) => Result<Scalar<'Email', string>, 'NOT_EMAIL'>
+      >();
+      expectTypeOf(Email.parse).toEqualTypeOf<
+        (
+          value: unknown,
+        ) => Result<
+          Scalar<'Email', string>,
+          TypeMismatchError<string, unknown> | 'NOT_EMAIL'
+        >
+      >();
+      expectTypeOf(Email.validate).toEqualTypeOf<
+        (
+          value: string,
+        ) => Result<Scalar<'Email', string>, readonly 'NOT_EMAIL'[]>
+      >();
+      expectTypeOf(Email.is).toEqualTypeOf<
+        (value: unknown) => value is Scalar<'Email', string>
+      >();
+      // Custom members travel on the descriptor type.
+      expectTypeOf(Email.MAX_LENGTH).toEqualTypeOf<254>();
+      expectTypeOf(Email.getDomain)
+        .parameter(0)
+        .toEqualTypeOf<Scalar<'Email', string>>();
+    });
+
+    it('should pin the extended contract: raw input, nested brand, composed error', () => {
+      const Int = Scalar('Int', 'number', {
+        invariants: [
+          Invariant(
+            (v: number) => Number.isInteger(v),
+            () => 'NOT_INTEGER' as const,
+          ),
+        ],
+      });
+      const UInt = Int.extend('UInt', {
+        invariants: [
+          Invariant(
+            (v: number) => v >= 0,
+            () => 'NEGATIVE' as const,
+          ),
+        ],
+      });
+
+      // `of` takes the underlying primitive (not the branded parent), returns
+      // the nested brand, and carries the union of both levels' errors.
+      expectTypeOf(UInt.of).toEqualTypeOf<
+        (
+          value: number,
+        ) => Result<
+          Scalar<'UInt', Scalar<'Int', number>>,
+          'NOT_INTEGER' | 'NEGATIVE'
+        >
+      >();
+      expectTypeOf<InferScalarInvariantError<typeof UInt>>().toEqualTypeOf<
+        'NOT_INTEGER' | 'NEGATIVE'
+      >();
+      expectTypeOf<InferScalarType<typeof UInt>>().toEqualTypeOf<
+        Scalar<'UInt', Scalar<'Int', number>>
+      >();
+    });
+  });
 });
