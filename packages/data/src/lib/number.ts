@@ -42,22 +42,21 @@ function ofIsIntegerInvariant(message: string): IsIntegerInvariantError {
 }
 
 export type IsIntegerInvariantOptions = {
-  readonly message?: string | ((value: number) => string);
+  readonly message?: Invariant.MessageOption<number>;
 };
 export function IsIntegerInvariant(
   opts: IsIntegerInvariantOptions = {},
 ): Invariant<number, IsIntegerInvariantError> {
   return Invariant(
     (value: number) => Number.isInteger(value),
-    (value: number) => {
-      let message = 'Value must be an integer';
-      if (typeof opts.message === 'function') {
-        message = opts.message(value);
-      } else if (typeof opts.message === 'string') {
-        message = opts.message;
-      }
-      return ofIsIntegerInvariant(message);
-    },
+    (value: number) =>
+      ofIsIntegerInvariant(
+        Invariant.resolveMessage(
+          opts.message,
+          value,
+          () => 'Value must be an integer',
+        ),
+      ),
   );
 }
 //

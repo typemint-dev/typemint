@@ -291,4 +291,83 @@ describe('(unit) invariant', () => {
       >();
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Invariant.resolveMessage
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Invariant.resolveMessage', () => {
+    it('should return the fallback when no message is supplied', () => {
+      // Act
+      const message = Invariant.resolveMessage(undefined, 5, () => 'fallback');
+
+      // Assert
+      expect(message).toBe('fallback');
+    });
+
+    it('should return a string message verbatim', () => {
+      // Act
+      const message = Invariant.resolveMessage('custom', 5, () => 'fallback');
+
+      // Assert
+      expect(message).toBe('custom');
+    });
+
+    it('should return an empty string message verbatim rather than the fallback', () => {
+      // Act
+      const message = Invariant.resolveMessage('', 5, () => 'fallback');
+
+      // Assert
+      expect(message).toBe('');
+    });
+
+    it('should call a function message with the offending value', () => {
+      // Act
+      const message = Invariant.resolveMessage(
+        (value: number) => `got ${value}`,
+        42,
+        () => 'fallback',
+      );
+
+      // Assert
+      expect(message).toBe('got 42');
+    });
+
+    it('should not invoke the fallback when a message is supplied', () => {
+      // Arrange
+      let fallbackCalls = 0;
+      const fallback = () => {
+        fallbackCalls++;
+        return 'fallback';
+      };
+
+      // Act
+      Invariant.resolveMessage('custom', 5, fallback);
+      Invariant.resolveMessage((value: number) => `got ${value}`, 5, fallback);
+
+      // Assert
+      expect(fallbackCalls).toBe(0);
+    });
+
+    it('should invoke the fallback exactly once when no message is supplied', () => {
+      // Arrange
+      let fallbackCalls = 0;
+      const fallback = () => {
+        fallbackCalls++;
+        return 'fallback';
+      };
+
+      // Act
+      Invariant.resolveMessage(undefined, 5, fallback);
+
+      // Assert
+      expect(fallbackCalls).toBe(1);
+    });
+
+    it('should accept a string or a value-to-string function as a MessageOption', () => {
+      // Assert
+      expectTypeOf<Invariant.MessageOption<string>>().toEqualTypeOf<
+        string | ((value: string) => string)
+      >();
+    });
+  });
 });

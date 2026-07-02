@@ -18,6 +18,50 @@ export type InferInvariantError<T extends AnyInvariant> =
 
 export namespace Invariant {
   /**
+   * A customizable error message for an invariant: either a fixed string or a
+   * function that computes the message from the offending value.
+   *
+   * Shared by every invariant's `*Options` type so the "string or factory"
+   * shape is declared in exactly one place.
+   */
+  export type MessageOption<TValue> = string | ((value: TValue) => string);
+
+  /**
+   * Resolves a {@link MessageOption} against the offending value.
+   *
+   * - A function message is called with `value`.
+   * - A string message is returned verbatim (including the empty string).
+   * - When no custom message was supplied, `fallback` is invoked to build the
+   *   default. `fallback` is only called in this last case, so the default
+   *   message is never computed when a custom one overrides it.
+   *
+   * @param message - The caller-supplied message option, or `undefined`.
+   * @param value - The value that failed the invariant.
+   * @param fallback - Lazily produces the default message.
+   * @returns The resolved message string.
+   *
+   * @example
+   * ```ts
+   * Invariant.resolveMessage(undefined, 5, () => 'too small'); // 'too small'
+   * Invariant.resolveMessage('nope', 5, () => 'too small');    // 'nope'
+   * Invariant.resolveMessage((n) => `got ${n}`, 5, () => '');  // 'got 5'
+   * ```
+   */
+  export function resolveMessage<TValue>(
+    message: MessageOption<TValue> | undefined,
+    value: TValue,
+    fallback: () => string,
+  ): string {
+    if (typeof message === 'function') {
+      return message(value);
+    }
+    if (typeof message === 'string') {
+      return message;
+    }
+    return fallback();
+  }
+
+  /**
    * Combines invariants with an **accumulating AND**: runs every invariant
    * regardless of earlier failures and collects all errors into an array.
    * Returns `Ok` only when every invariant passes; otherwise returns

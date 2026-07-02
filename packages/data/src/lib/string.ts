@@ -105,7 +105,7 @@ function ofStringMinLengthInvariant(
 
 export type StringMinLengthInvariantOptions = {
   readonly minLength: number;
-  readonly message?: string | ((value: string) => string);
+  readonly message?: Invariant.MessageOption<string>;
 };
 
 export type StringMinLengthInvariant = Invariant<
@@ -118,15 +118,16 @@ export function StringMinLengthInvariant(
 ): StringMinLengthInvariant {
   return Invariant(
     (value: string) => value.length >= opts.minLength,
-    (value: string) => {
-      let message = `String must be at least ${opts.minLength} characters long. Got ${value.length}.`;
-      if (typeof opts.message === 'function') {
-        message = opts.message(value);
-      } else if (typeof opts.message === 'string') {
-        message = opts.message;
-      }
-      return ofStringMinLengthInvariant(opts.minLength, message);
-    },
+    (value: string) =>
+      ofStringMinLengthInvariant(
+        opts.minLength,
+        Invariant.resolveMessage(
+          opts.message,
+          value,
+          () =>
+            `String must be at least ${opts.minLength} characters long. Got ${value.length}.`,
+        ),
+      ),
   );
 }
 // #endregion StringMinLengthInvariant
@@ -153,7 +154,7 @@ function ofStringMaxLengthInvariant(
 
 export type StringMaxLengthInvariantOptions = {
   readonly maxLength: number;
-  readonly message?: string | ((value: string) => string);
+  readonly message?: Invariant.MessageOption<string>;
 };
 
 export type StringMaxLengthInvariant = Invariant<
@@ -166,15 +167,16 @@ export function StringMaxLengthInvariant(
 ): StringMaxLengthInvariant {
   return Invariant(
     (value: string) => value.length <= opts.maxLength,
-    (value: string) => {
-      let message = `String must be at most ${opts.maxLength} characters long. Got ${value.length}.`;
-      if (typeof opts.message === 'function') {
-        message = opts.message(value);
-      } else if (typeof opts.message === 'string') {
-        message = opts.message;
-      }
-      return ofStringMaxLengthInvariant(opts.maxLength, message);
-    },
+    (value: string) =>
+      ofStringMaxLengthInvariant(
+        opts.maxLength,
+        Invariant.resolveMessage(
+          opts.message,
+          value,
+          () =>
+            `String must be at most ${opts.maxLength} characters long. Got ${value.length}.`,
+        ),
+      ),
   );
 }
 // #endregion StringMaxLengthInvariant
@@ -201,7 +203,7 @@ export type NonEmptyStringInvariant = Invariant<
 >;
 
 export type NonEmptyStringInvariantOptions = {
-  readonly message?: string | ((value: string) => string);
+  readonly message?: Invariant.MessageOption<string>;
 };
 
 export function NonEmptyStringInvariant(
@@ -209,15 +211,14 @@ export function NonEmptyStringInvariant(
 ): NonEmptyStringInvariant {
   return Invariant(
     (value: string) => value.length > 0,
-    (value: string) => {
-      let message = 'String must not be empty';
-      if (typeof opts.message === 'function') {
-        message = opts.message(value);
-      } else if (typeof opts.message === 'string') {
-        message = opts.message;
-      }
-      return ofNonEmptyStringInvariant(message);
-    },
+    (value: string) =>
+      ofNonEmptyStringInvariant(
+        Invariant.resolveMessage(
+          opts.message,
+          value,
+          () => 'String must not be empty',
+        ),
+      ),
   );
 }
 // #endregion NonEmptyStringInvariant
@@ -248,23 +249,32 @@ export type StringPatternInvariant = Invariant<
 
 export type StringPatternInvariantOptions = {
   readonly pattern: RegExp;
-  readonly message?: string | ((value: string) => string);
+  readonly message?: Invariant.MessageOption<string>;
 };
 
 export function StringPatternInvariant(
   opts: StringPatternInvariantOptions,
 ): StringPatternInvariant {
+  // `RegExp.prototype.test` mutates `lastIndex` when the pattern carries the
+  // global (`g`) or sticky (`y`) flag, which would make this reusable
+  // invariant return alternating results across calls. Rebuild the pattern
+  // without those flags so the test is stateless, and store the normalized
+  // copy rather than the caller's mutable instance.
+  const pattern = new RegExp(
+    opts.pattern.source,
+    opts.pattern.flags.replace(/[gy]/g, ''),
+  );
   return Invariant(
-    (value: string) => opts.pattern.test(value),
-    (value: string) => {
-      let message = `String must match the pattern ${opts.pattern.toString()}`;
-      if (typeof opts.message === 'function') {
-        message = opts.message(value);
-      } else if (typeof opts.message === 'string') {
-        message = opts.message;
-      }
-      return ofStringPatternInvariant(opts.pattern, message);
-    },
+    (value: string) => pattern.test(value),
+    (value: string) =>
+      ofStringPatternInvariant(
+        pattern,
+        Invariant.resolveMessage(
+          opts.message,
+          value,
+          () => `String must match the pattern ${pattern.toString()}`,
+        ),
+      ),
   );
 }
 
