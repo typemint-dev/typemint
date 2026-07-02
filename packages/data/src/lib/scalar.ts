@@ -36,7 +36,15 @@ export type ScalarPrimitiveKind =
   | 'boolean'
   | 'symbol';
 
-/** Maps a {@link ScalarPrimitiveKind} to the primitive type it denotes. */
+/**
+ * Maps a {@link ScalarPrimitiveKind} to the primitive type it denotes. Used by
+ * the {@link Scalar} factory to turn the runtime `kind` argument into the
+ * compile-time root type of the descriptor.
+ *
+ * @example
+ * type A = KindToPrimitive<'string'>; // string
+ * type B = KindToPrimitive<'bigint'>; // bigint
+ */
 export type KindToPrimitive<TKind extends ScalarPrimitiveKind> = {
   string: string;
   number: number;
@@ -74,7 +82,11 @@ export type KindToPrimitive<TKind extends ScalarPrimitiveKind> = {
  *   object on demand via a method or codec. Prefer immutable representations.
  *
  * @example
- * const Email = Scalar('Email', stringDecoder, { invariants: [isEmail] });
+ * const isEmail = Invariant(
+ *   (value: string) => value.includes('@'),
+ *   () => 'NOT_EMAIL' as const,
+ * );
+ * const Email = Scalar('Email', 'string', { invariants: [isEmail] });
  * type Email = InferScalarType<typeof Email>; // Scalar<'Email', string>
  */
 export type Scalar<
@@ -94,6 +106,16 @@ type RemoveAllTags<T> =
       }[keyof T[typeof tag]]
     : T;
 
+/**
+ * Extracts the branded {@link Scalar} type produced by a {@link ScalarDescriptor}.
+ * Given the descriptor's static type, this yields the nominal value type its
+ * `of` / `parse` / `validate` methods return on success. Resolves to `never`
+ * for anything that is not a descriptor.
+ *
+ * @example
+ * const Email = Scalar('Email', 'string');
+ * type Email = InferScalarType<typeof Email>; // Scalar<'Email', string>
+ */
 export type InferScalarType<
   T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
 > =
@@ -105,6 +127,21 @@ export type InferScalarType<
     ? Scalar<TName, TType>
     : never;
 
+/**
+ * Recovers the underlying primitive of a scalar — the raw {@link ScalarPrimitive}
+ * beneath all brands. Accepts either a {@link Scalar} value type or a
+ * {@link ScalarDescriptor}. For a nested/extended scalar every layer of brand is
+ * peeled away, so a `Scalar<'UInt', Scalar<'Int', number>>` resolves to `number`.
+ * Resolves to `never` for anything else.
+ *
+ * @example
+ * type Int = Scalar<'Int', number>;
+ * type UInt = Scalar<'UInt', Int>;
+ * type Root = InferScalarRoot<UInt>; // number
+ *
+ * const MyString = Scalar('MyString', 'string');
+ * type FromDescriptor = InferScalarRoot<typeof MyString>; // string
+ */
 export type InferScalarRoot<
   T extends
     | Scalar<string, ScalarPrimitive>
@@ -116,6 +153,20 @@ export type InferScalarRoot<
       ? TType
       : never;
 
+/**
+ * Extracts the invariant error channel of a {@link ScalarDescriptor} — the union
+ * of every error its invariants can produce (the `TInvariantError` returned by
+ * `of` and `validate`, and part of the error union returned by `parse`).
+ * Resolves to `never` when the descriptor declares no invariants.
+ *
+ * @example
+ * const isEmail = Invariant(
+ *   (value: string) => value.includes('@'),
+ *   () => 'NOT_EMAIL' as const,
+ * );
+ * const Email = Scalar('Email', 'string', { invariants: [isEmail] });
+ * type EmailError = InferScalarInvariantError<typeof Email>; // 'NOT_EMAIL'
+ */
 export type InferScalarInvariantError<
   T extends ScalarDescriptor<string, ScalarPrimitive, unknown>,
 > =
@@ -123,21 +174,88 @@ export type InferScalarInvariantError<
     ? TInvariantError
     : never;
 
+/**
+ * The runtime handle for a scalar type, returned by the {@link Scalar} factory
+ * and by {@link ScalarDescriptor.extend}. It bundles the scalar's name with the
+ * constructors and guards used to move between raw primitives and branded
+ * {@link Scalar} values, and carries any custom `methods` / `consts` declared in
+ * its {@link ScalarConfig}.
+ *
+ * Type parameters:
+ * - `TName` — the brand name.
+ * - `TRoot` — the primitive being refined (for an extended scalar this is the
+ *   parent's *branded* type, so brands nest).
+ * - `TInvariantError` — the union of errors this scalar's invariants can raise.
+ *
+ * @example
+ * const isEmail = Invariant(
+ *   (value: string) => value.includes('@'),
+ *   () => 'NOT_EMAIL' as const,
+ * );
+ * const Email = Scalar('Email', 'string', { invariants: [isEmail] });
+ * // Email: ScalarDescriptor<'Email', string, 'NOT_EMAIL'>
+ *
+ * const result = Email.parse(userInput); // Result<Scalar<'Email', string>, …>
+ */
 export type ScalarDescriptor<
   TName extends string,
   TRoot extends ScalarPrimitive,
   TInvariantError = never,
 > = {
+  /** The scalar's brand name, available at runtime and in the type. */
   readonly name: TName;
 
+  /**
+   * Brands a value that is **already** the correct primitive, enforcing the
+   * invariants (fail-fast: the first failing invariant short-circuits). Use
+   * this when the input type is statically known to be `TRoot`; use
+   * {@link ScalarDescriptor.parse} when it is `unknown`.
+   *
+   * @example
+   * const r = Email.of('a@b.com'); // Result<Scalar<'Email', string>, 'NOT_EMAIL'>
+   * if (r.isOk()) r.value; // branded email
+   */
   of(value: TRoot): Result<Scalar<TName, TRoot>, TInvariantError>;
 
+  /**
+   * Recognizes an `unknown` value, then brands it. It first checks the value is
+   * the right primitive (a `TypeMismatchError` otherwise) and then applies the
+   * invariants fail-fast. This is the entry point for untrusted input.
+   *
+   * @example
+   * const r = Email.parse(JSON.parse(body).email);
+   * // Result<Scalar<'Email', string>, TypeMismatchError<string, unknown> | 'NOT_EMAIL'>
+   */
   parse(
     value: unknown,
-  ): Result<Scalar<TName, TRoot>, TypeMismatchError<TRoot, unknown> | TInvariantError>;
+  ): Result<
+    Scalar<TName, TRoot>,
+    TypeMismatchError<TRoot, unknown> | TInvariantError
+  >;
 
-  validate(value: TRoot): Result<Scalar<TName, TRoot>, readonly TInvariantError[]>;
+  /**
+   * Like {@link ScalarDescriptor.of}, but **collects every** invariant failure
+   * instead of stopping at the first, returning them as a readonly array. Use
+   * it to report all problems with a value at once (e.g. form validation).
+   *
+   * @example
+   * const r = Password.validate(input);
+   * if (r.isErr()) r.error; // e.g. ['TOO_SHORT', 'NO_DIGIT']
+   */
+  validate(
+    value: TRoot,
+  ): Result<Scalar<TName, TRoot>, readonly TInvariantError[]>;
 
+  /**
+   * Type guard: narrows an `unknown` value to the branded {@link Scalar} when it
+   * both is the right primitive and satisfies every invariant. Equivalent to
+   * `parse(value).isOk()`.
+   *
+   * @example
+   * if (Email.is(x)) {
+   *   // x: Scalar<'Email', string>
+   * }
+   */
   is(value: unknown): value is Scalar<TName, TRoot>;
 
   /**
@@ -192,11 +310,26 @@ type ReservedScalarKeys<
   TRoot extends ScalarPrimitive,
 > = keyof ScalarDescriptor<TName, TRoot>;
 
+/**
+ * Shape of the custom methods attachable to a descriptor via
+ * {@link ScalarConfig.methods}. Each method takes a validated branded value as
+ * its first argument (so only values that passed the invariants can be passed
+ * in) followed by any extra arguments.
+ *
+ * @example
+ * type EmailMethods = ScalarCustomMethods<'Email', string>;
+ * // e.g. { getDomain: (value: Scalar<'Email', string>) => string | undefined }
+ */
 export type ScalarCustomMethods<
   TName extends string,
   TRoot extends ScalarPrimitive,
 > = Record<string, (value: Scalar<TName, TRoot>, ...args: any[]) => unknown>;
 
+/**
+ * Shape of the custom constants attachable to a descriptor via
+ * {@link ScalarConfig.consts} — an arbitrary record of static data that travels
+ * with the type (e.g. `{ MIN_LENGTH: 3 }`).
+ */
 export type ScalarCustomConsts = Record<string, unknown>;
 
 /**
@@ -208,6 +341,22 @@ export type InferInvariantsError<
   TInvariants extends readonly Invariant<any, any>[],
 > = InferInvariantError<TInvariants[number]>;
 
+/**
+ * Optional configuration for a scalar, passed as the third argument to the
+ * {@link Scalar} factory (and to {@link ScalarDescriptor.extend}). It declares
+ * the scalar's `invariants`, plus any custom `methods` and `consts` to hang off
+ * the descriptor. Every field is optional; an empty/absent config yields a
+ * scalar that only checks the primitive kind.
+ *
+ * @example
+ * const Email = Scalar('Email', 'string', {
+ *   invariants: [isEmail],
+ *   methods: (self) => ({
+ *     getDomain: (email: InferScalarType<typeof self>) => email.split('@')[1],
+ *   }),
+ *   consts: { MAX_LENGTH: 254 },
+ * });
+ */
 export type ScalarConfig<
   TName extends string,
   TRoot extends ScalarPrimitive,
@@ -243,12 +392,13 @@ export type ScalarConfig<
    * passed in:
    *
    * @example
-   * const Email = Scalar('Email', stringDecoder, {
+   * const Email = Scalar('Email', 'string', {
    *   methods: (self) => ({
-   *     getDomain: (email) => email.split('@')[1],
+   *     getDomain: (email: InferScalarType<typeof self>) => email.split('@')[1],
    *   }),
    * });
-   * Email.getDomain(parsedEmail);
+   * const parsedEmail = Email.parse('a@b.com');
+   * if (parsedEmail.isOk()) Email.getDomain(parsedEmail.value); // 'b.com'
    */
   readonly methods?: (
     self: ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>>,
@@ -264,7 +414,7 @@ export type ScalarConfig<
    * method; a clash is a {@link PanicException} at construction time.
    *
    * @example
-   * const Username = Scalar('Username', stringDecoder, {
+   * const Username = Scalar('Username', 'string', {
    *   consts: { MIN_LENGTH: 3, MAX_LENGTH: 32 },
    * });
    * Username.MIN_LENGTH; // 3
@@ -373,6 +523,49 @@ function buildScalar(
   return Object.freeze(descriptor);
 }
 
+/**
+ * Creates a {@link ScalarDescriptor} — the factory for a branded primitive type.
+ * A scalar is a pure refinement: it validates a value of the given primitive
+ * `kind` against its invariants and brands it as-is, never transforming it (see
+ * {@link Scalar the Scalar type} for the rationale and constraints).
+ *
+ * @param name - The brand name. Two scalars with the same underlying primitive
+ *   but different names are distinct nominal types.
+ * @param kind - The {@link ScalarPrimitiveKind} to refine, recognized at runtime
+ *   with a direct `typeof` check.
+ * @param config - Optional {@link ScalarConfig} declaring `invariants`, custom
+ *   `methods`, and `consts`.
+ * @returns A frozen descriptor exposing `of`, `parse`, `validate`, `is`,
+ *   `extend`, and any declared custom members.
+ * @throws {PanicException} if a custom method or const name collides with a
+ *   built-in descriptor member or another custom member.
+ *
+ * @example
+ * // Bare scalar — only checks the primitive kind.
+ * const UserId = Scalar('UserId', 'string');
+ * const id = UserId.parse(req.params.id); // Result<Scalar<'UserId', string>, …>
+ *
+ * @example
+ * // With invariants, methods, and consts.
+ * const isEmail = Invariant(
+ *   (value: string) => value.includes('@'),
+ *   () => 'NOT_EMAIL' as const,
+ * );
+ * const Email = Scalar('Email', 'string', {
+ *   invariants: [isEmail],
+ *   methods: (self) => ({
+ *     getDomain: (email: InferScalarType<typeof self>) => email.split('@')[1],
+ *   }),
+ *   consts: { MAX_LENGTH: 254 },
+ * });
+ * const parsed = Email.parse('a@b.com');
+ * if (parsed.isOk()) Email.getDomain(parsed.value); // 'b.com'
+ *
+ * @example
+ * // Refine an existing scalar with `extend`; invariants compose.
+ * const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+ * const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+ */
 export function Scalar<
   const TName extends string,
   const TKind extends ScalarPrimitiveKind,
@@ -380,6 +573,12 @@ export function Scalar<
   name: TName,
   kind: TKind,
 ): ScalarDescriptor<TName, KindToPrimitive<TKind>, never>;
+/**
+ * Overload with a {@link ScalarConfig} — the invariant, method, and const types
+ * are inferred from `config` so the returned descriptor carries a precise error
+ * channel and the declared custom members. See the primary overload above for
+ * details and examples.
+ */
 export function Scalar<
   const TName extends string,
   const TKind extends ScalarPrimitiveKind,
@@ -432,6 +631,15 @@ export function Scalar<
   >;
 }
 
+/**
+ * The type of the {@link Scalar} factory itself, bound to a specific name and
+ * primitive kind. Useful for typing a variable or parameter that should hold or
+ * receive the factory for a particular scalar rather than a built descriptor.
+ *
+ * @example
+ * const makeString: ScalarFactory<'MyString', 'string'> = Scalar;
+ * const MyString = makeString('MyString', 'string');
+ */
 export type ScalarFactory<
   TName extends string,
   TKind extends ScalarPrimitiveKind,

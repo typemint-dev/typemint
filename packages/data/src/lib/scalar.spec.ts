@@ -29,7 +29,11 @@ describe('(unit) Scalar', () => {
 
     it('should infer the scalar from a descriptor that carries an invariant error', () => {
       // Arrange
-      type TestScalarDescriptor = ScalarDescriptor<'test', number, 'SOME_ERROR'>;
+      type TestScalarDescriptor = ScalarDescriptor<
+        'test',
+        number,
+        'SOME_ERROR'
+      >;
 
       // Act
       type TestScalar = InferScalarType<TestScalarDescriptor>;
