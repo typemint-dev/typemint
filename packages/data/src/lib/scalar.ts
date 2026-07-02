@@ -20,8 +20,12 @@ type Tag<Token extends PropertyKey> = TagContainer<{
  * `null` and `undefined` are intentionally excluded: a scalar of them is
  * degenerate, and `null & Tag` / `undefined & Tag` collapse to `never`, so the
  * brand could not even form.
+ *
+ * `symbol` is excluded too, despite being an immutable primitive: it is neither
+ * value-equal (`Symbol('x') !== Symbol('x')`) nor serializable, which defeats
+ * the two properties this restriction exists to guarantee (see {@link Scalar}).
  */
-export type ScalarPrimitive = string | number | bigint | boolean | symbol;
+export type ScalarPrimitive = string | number | bigint | boolean;
 
 /**
  * The runtime discriminant identifying which primitive a {@link Scalar}
@@ -29,12 +33,7 @@ export type ScalarPrimitive = string | number | bigint | boolean | symbol;
  * so recognizing a value at runtime is a direct `typeof` check — no decoder or
  * codec required.
  */
-export type ScalarPrimitiveKind =
-  | 'string'
-  | 'number'
-  | 'bigint'
-  | 'boolean'
-  | 'symbol';
+export type ScalarPrimitiveKind = 'string' | 'number' | 'bigint' | 'boolean';
 
 /**
  * Maps a {@link ScalarPrimitiveKind} to the primitive type it denotes. Used by
@@ -50,7 +49,6 @@ export type KindToPrimitive<TKind extends ScalarPrimitiveKind> = {
   number: number;
   bigint: bigint;
   boolean: boolean;
-  symbol: symbol;
 }[TKind];
 
 /**
@@ -458,7 +456,6 @@ const KIND_DESCRIPTORS: Record<
   number: TypeDescriptor('number', witness<number>()),
   bigint: TypeDescriptor('bigint', witness<bigint>()),
   boolean: TypeDescriptor('boolean', witness<boolean>()),
-  symbol: TypeDescriptor('symbol', witness<symbol>()),
 };
 
 /**
