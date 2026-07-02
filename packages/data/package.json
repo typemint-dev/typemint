@@ -39,13 +39,14 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest --run --dir src",
+    "test:types": "vitest --run --typecheck --dir src",
     "test:coverage": "vitest --run --dir src --coverage",
     "lint": "oxlint src",
     "format": "oxfmt --write src",
     "format:check": "oxfmt --check src",
     "typecheck": "tsc --noEmit",
-    "precommit:check": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test",
-    "prepublishOnly": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test"
+    "precommit:check": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test:types",
+    "prepublishOnly": "pnpm run lint && pnpm run format && pnpm run typecheck && pnpm run test:types"
   },
   "dependencies": {
     "@typemint/core": "^0.16.1",
