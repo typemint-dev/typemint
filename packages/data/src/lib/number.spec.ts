@@ -8,7 +8,7 @@ import {
   IsGreaterThenOrEqualNumberInvariant,
   IsGreaterThanNumberInvariant,
   IsIntegerInvariant,
-  IsLowerOrEqualNumberInvariant,
+  IsLowerThenOrEqualNumberInvariant,
   IsLowerThanNumberInvariant,
   NumberDescriptor,
   isNumber,
@@ -390,12 +390,12 @@ describe('(unit) number', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // MARK: IsLowerOrEqualNumberInvariant
+  // MARK: IsLowerThenOrEqualNumberInvariant
   // ─────────────────────────────────────────────────────────────────────────────
-  describe('IsLowerOrEqualNumberInvariant', () => {
+  describe('IsLowerThenOrEqualNumberInvariant', () => {
     it('should return an Ok for a value less than the lower bound', () => {
       // Arrange
-      const invariant = IsLowerOrEqualNumberInvariant({ lowerBound: 42 });
+      const invariant = IsLowerThenOrEqualNumberInvariant({ lowerBound: 42 });
 
       // Act
       const result = invariant(41);
@@ -405,7 +405,7 @@ describe('(unit) number', () => {
 
     it('should return an Ok for a value equal to the lower bound', () => {
       // Arrange
-      const invariant = IsLowerOrEqualNumberInvariant({ lowerBound: 42 });
+      const invariant = IsLowerThenOrEqualNumberInvariant({ lowerBound: 42 });
 
       // Act
       const result = invariant(42);
@@ -415,28 +415,28 @@ describe('(unit) number', () => {
 
     it('should return an Err for a value greater than the lower bound', () => {
       // Arrange
-      const invariant = IsLowerOrEqualNumberInvariant({ lowerBound: 42 });
+      const invariant = IsLowerThenOrEqualNumberInvariant({ lowerBound: 42 });
       // Act
       const result = invariant(43);
       // Assert
       assertErr(result);
     });
 
-    it('should fail with an IsLowerOrEqualNumberInvariantError', () => {
+    it('should fail with an IsLowerThenOrEqualNumberInvariantError', () => {
       // Arrange
-      const invariant = IsLowerOrEqualNumberInvariant({ lowerBound: 42 });
+      const invariant = IsLowerThenOrEqualNumberInvariant({ lowerBound: 42 });
       // Act
       const result = invariant(43);
       // Assert
       assertErr(result);
       expect(
-        Kind.isOf(result.unwrapErr(), 'IsLowerOrEqualNumberInvariantError'),
+        Kind.isOf(result.unwrapErr(), 'IsLowerThenOrEqualNumberInvariantError'),
       ).toBe(true);
     });
 
     it('should use the default message', () => {
       // Arrange
-      const invariant = IsLowerOrEqualNumberInvariant({ lowerBound: 42 });
+      const invariant = IsLowerThenOrEqualNumberInvariant({ lowerBound: 42 });
       // Act
       const result = invariant(43);
       // Assert
@@ -448,7 +448,7 @@ describe('(unit) number', () => {
 
     it('should use the provided message', () => {
       // Arrange
-      const invariant = IsLowerOrEqualNumberInvariant({
+      const invariant = IsLowerThenOrEqualNumberInvariant({
         lowerBound: 42,
         message: 'My Value must be less than or equal to 42',
       });

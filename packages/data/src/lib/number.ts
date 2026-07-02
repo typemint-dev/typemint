@@ -173,11 +173,11 @@ export function IsGreaterThanNumberInvariant(
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #region IsLowerOrEqualNumberInvariant
-const IsLowerOrEqualNumberInvariantErrorKind =
-  'IsLowerOrEqualNumberInvariantError' as const;
-export type IsLowerOrEqualNumberInvariantError = Kind<
-  typeof IsLowerOrEqualNumberInvariantErrorKind
+// #region IsLowerThenOrEqualNumberInvariant
+const IsLowerThenOrEqualNumberInvariantErrorKind =
+  'IsLowerThenOrEqualNumberInvariantError' as const;
+export type IsLowerThenOrEqualNumberInvariantError = Kind<
+  typeof IsLowerThenOrEqualNumberInvariantErrorKind
 > &
   WithMessage &
   WithDetail<{
@@ -185,29 +185,29 @@ export type IsLowerOrEqualNumberInvariantError = Kind<
     lowerBound: number;
   }>;
 
-function ofIsLowerOrEqualNumberInvariant(
+function ofIsLowerThenOrEqualNumberInvariant(
   received: number,
   lowerBound: number,
   message: string,
-): IsLowerOrEqualNumberInvariantError {
+): IsLowerThenOrEqualNumberInvariantError {
   return {
-    kind: IsLowerOrEqualNumberInvariantErrorKind,
+    kind: IsLowerThenOrEqualNumberInvariantErrorKind,
     message,
     details: { received, lowerBound },
   };
 }
 
-export type IsLowerOrEqualNumberInvariantOptions = {
+export type IsLowerThenOrEqualNumberInvariantOptions = {
   readonly message?: Invariant.MessageOption<number>;
   readonly lowerBound: number;
 };
-export function IsLowerOrEqualNumberInvariant(
-  opts: IsLowerOrEqualNumberInvariantOptions,
-): Invariant<number, IsLowerOrEqualNumberInvariantError> {
+export function IsLowerThenOrEqualNumberInvariant(
+  opts: IsLowerThenOrEqualNumberInvariantOptions,
+): Invariant<number, IsLowerThenOrEqualNumberInvariantError> {
   return Invariant(
     (value: number) => value <= opts.lowerBound,
     (value: number) =>
-      ofIsLowerOrEqualNumberInvariant(
+      ofIsLowerThenOrEqualNumberInvariant(
         value,
         opts.lowerBound,
         Invariant.resolveMessage(
@@ -220,7 +220,7 @@ export function IsLowerOrEqualNumberInvariant(
   );
 }
 
-// #endregion IsLowerOrEqualNumberInvariant
+// #endregion IsLowerThenOrEqualNumberInvariant
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
