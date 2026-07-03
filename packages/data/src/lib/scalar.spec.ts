@@ -844,6 +844,121 @@ describe('(unit) Scalar', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar ofUnsafe
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar ofUnsafe', () => {
+    const isInteger = Invariant(
+      (value: number) => Number.isInteger(value),
+      () => 'NOT_INTEGER' as const,
+    );
+    const isNonNegative = Invariant(
+      (value: number) => value >= 0,
+      () => 'NEGATIVE' as const,
+    );
+
+    it('should expose the "ofUnsafe" method taking the raw primitive and returning the branded value directly', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+
+      // Act
+      type MyStringOfUnsafe = typeof MyString.ofUnsafe;
+
+      // Assert - no Result wrapper: it cannot fail.
+      expectTypeOf<MyStringOfUnsafe>().toEqualTypeOf<
+        (value: string) => Scalar<'MyString', string>
+      >();
+    });
+
+    it('should return the value unchanged at runtime (identity)', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+
+      // Act
+      const branded = MyString.ofUnsafe('hello');
+
+      // Assert
+      expect(branded).toBe('hello');
+      expectTypeOf(branded).toEqualTypeOf<Scalar<'MyString', string>>();
+    });
+
+    it('should throw a PanicException carrying the first failing invariant as its cause', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      // Sanity: the checked constructor returns Err rather than throwing.
+      assertErr(Int.of(2.5));
+
+      // Act - unlike `of`, ofUnsafe throws instead of returning an Err.
+      let thrown: unknown;
+      try {
+        Int.ofUnsafe(2.5);
+      } catch (error) {
+        thrown = error;
+      }
+
+      // Assert - the first failing invariant's error is attached as `cause`.
+      expect(thrown).toBeInstanceOf(PanicException);
+      expect((thrown as PanicException).cause).toBe('NOT_INTEGER');
+    });
+
+    it('should be the exact inverse of unwrap', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+
+      // Act
+      const branded = MyString.ofUnsafe('hello');
+      const raw = MyString.unwrap(branded);
+
+      // Assert
+      expect(raw).toBe('hello');
+      expectTypeOf(raw).toEqualTypeOf<string>();
+    });
+
+    it('should return the nested brand directly when every invariant of an extended scalar passes', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act - the full inherited chain runs and passes, so the value is branded.
+      const branded = UInt.ofUnsafe(5);
+
+      // Assert - no Result to unwrap; the nested brand is produced in one call.
+      expect(branded).toBe(5);
+      expectTypeOf(branded).toEqualTypeOf<
+        Scalar<'UInt', Scalar<'Int', number>>
+      >();
+    });
+
+    it('should run the full inherited chain and throw on the first failing invariant of an extended scalar', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act - -2.5 fails the inherited `isInteger` first (fail-fast), before
+      // `isNonNegative` is ever reached.
+      let thrown: unknown;
+      try {
+        UInt.ofUnsafe(-2.5);
+      } catch (error) {
+        thrown = error;
+      }
+
+      // Assert - the inherited invariant's error is the one carried as `cause`.
+      expect(thrown).toBeInstanceOf(PanicException);
+      expect((thrown as PanicException).cause).toBe('NOT_INTEGER');
+    });
+
+    it('should reject a value of the wrong primitive, unlike an "as" cast', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+
+      // Act & Assert - it is typed to the underlying primitive, so it cannot
+      // brand the wrong primitive (the whole safety edge over `as`).
+      // @ts-expect-error - a number is not the string root
+      MyString.ofUnsafe(123);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // MARK: Scalar extend
   // ─────────────────────────────────────────────────────────────────────────────
   describe('Scalar extend', () => {
@@ -1070,6 +1185,9 @@ describe('(unit) Scalar', () => {
       expectTypeOf(Email.name).toEqualTypeOf<'Email'>();
       expectTypeOf(Email.of).toEqualTypeOf<
         (value: string) => Result<Scalar<'Email', string>, 'NOT_EMAIL'>
+      >();
+      expectTypeOf(Email.ofUnsafe).toEqualTypeOf<
+        (value: string) => Scalar<'Email', string>
       >();
       expectTypeOf(Email.parse).toEqualTypeOf<
         (

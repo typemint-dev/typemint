@@ -245,6 +245,34 @@ export type ScalarDescriptor<
   ): Result<Scalar<TName, TRoot>, TInvariantError>;
 
   /**
+   * The **throwing** counterpart to {@link ScalarDescriptor.of}. Runs the same
+   * full, fail-fast invariant chain, but instead of returning a `Result` it
+   * returns the branded {@link Scalar} **directly** on success and **throws a
+   * {@link PanicException}** on the first failing invariant — that invariant's
+   * error is attached as the exception's `cause` so it stays inspectable.
+   *
+   * A thrown invariant failure signals a bug: the value was asserted to be
+   * valid but was not. Use this only where a violation is unrecoverable and
+   * should crash rather than be handled — asserting a value from a trusted,
+   * already-validated source (a persisted row, a prior `parse`/`of` result
+   * whose brand was erased in transit, a test fixture). For untrusted input use
+   * {@link ScalarDescriptor.parse}; to handle failure as a value use `of`.
+   *
+   * Prefer this over an `as` cast: it re-checks the invariants, is easy to
+   * search for, and is correctly typed (it accepts only the underlying
+   * primitive `RemoveAllTags<TRoot>`, so it cannot brand the wrong primitive).
+   *
+   * @throws {PanicException} if any invariant fails; the first failing
+   *   invariant's error is the exception's `cause`.
+   *
+   * @example
+   * // Re-hydrating a value validated when it was persisted — throws if the
+   * // stored value has since drifted out of the domain.
+   * const email = Email.ofUnsafe(row.email); // Scalar<'Email', string>
+   */
+  ofUnsafe(value: RemoveAllTags<TRoot>): Scalar<TName, TRoot>;
+
+  /**
    * Recognizes an `unknown` value, then brands it. It first checks the value is
    * the right primitive (a `TypeMismatchError` otherwise) and then applies the
    * invariants fail-fast. This is the entry point for untrusted input.
@@ -527,6 +555,22 @@ function buildScalar(
       : Result.Ok(value);
   }
 
+  // Runs the same fail-fast invariant chain as `of`, but throws on the first
+  // failure instead of returning an `Err`, and returns the branded value
+  // directly on success. The offending invariant's error is attached as the
+  // exception's `cause` so it stays inspectable.
+  function ofUnsafe(value: any): any {
+    const valueR = of(value);
+    if (valueR.isErr()) {
+      throw new PanicException(
+        `Scalar("${name}"): value does not satisfy its invariants ` +
+          `(first failing invariant attached as \`cause\`)`,
+        valueR.error,
+      );
+    }
+    return valueR.value;
+  }
+
   function parse(value: unknown): Result<any, any> {
     return recognize(value).andThen(of);
   }
@@ -569,6 +613,7 @@ function buildScalar(
   const builtIns = {
     name,
     of,
+    ofUnsafe,
     parse,
     validate,
     is,

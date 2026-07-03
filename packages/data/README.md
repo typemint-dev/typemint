@@ -65,6 +65,7 @@ import { LiteralUnion, Dictionary } from '@typemint/data';
   - [Creating a scalar](#creating-a-scalar)
   - [Refine, never transform](#refine-never-transform)
   - [`of`](#ofvalue-removealltagstroot)
+  - [`ofUnsafe`](#ofunsafevalue-removealltagstroot)
   - [`parse`](#parsevalue-unknown)
   - [`validate`](#validatevalue-removealltagstroot)
   - [`is`](#isvalue-unknown-value-is-scalar)
@@ -1120,6 +1121,53 @@ if (r.isOk()) {
 
 Email.of('nope'); // Err('NOT_EMAIL')
 ```
+
+### `ofUnsafe(value: RemoveAllTags<TRoot>)`
+
+The **throwing** counterpart to [`of`](#ofvalue-removealltagstroot). It runs the
+same full, fail-fast invariant chain, but instead of returning a `Result` it
+returns the branded `Scalar` **directly** on success and **throws a
+`PanicException`** on the first failing invariant — that invariant's error is
+attached as the exception's `cause`, so it stays inspectable.
+
+```ts
+const email = Email.ofUnsafe('a@b.com'); // Scalar<'Email', string> — no Result to unwrap
+
+try {
+  Email.ofUnsafe('nope');
+} catch (err) {
+  // err instanceof PanicException
+  // err.cause === 'NOT_EMAIL'  ← the first failing invariant's error
+}
+```
+
+A thrown failure signals a **bug**: the value was asserted to be valid and was
+not. Reach for `ofUnsafe` only where a violation is unrecoverable and should
+crash rather than be handled — asserting a value from a trusted,
+already-validated source:
+
+- **Re-hydrating persisted data** — rows written *after* passing `parse`/`of`.
+  It re-checks on the way in, so a store that has drifted (bad migrations,
+  hand-edited rows) surfaces as a crash instead of a silently-invalid brand. If
+  you want to *handle* that case, use `parse` and inspect the `Result` instead.
+- **A prior `parse`/`of` result** whose brand was erased at a boundary (e.g.
+  JSON transport) and is being restored.
+- **Test fixtures**, to build branded values without threading `Result`.
+
+Prefer `ofUnsafe` over an `as` cast for these cases: unlike a cast it re-checks
+the invariants, is easy to grep for, and is correctly typed — it accepts only
+the underlying primitive (`RemoveAllTags<TRoot>`), so it can never brand the
+wrong primitive:
+
+```ts
+Email.ofUnsafe(123);
+//             ^^^ Argument of type 'number' is not assignable to 'string'.
+```
+
+For an extended scalar it runs the full inherited chain in one call —
+`UInt.ofUnsafe(-2.5)` throws with `cause` `'NOT_INTEGER'` (the inherited
+`isInteger` fails first, fail-fast), while `UInt.ofUnsafe(5)` returns a
+`Scalar<'UInt', Scalar<'Int', number>>` directly.
 
 ### `parse(value: unknown)`
 
