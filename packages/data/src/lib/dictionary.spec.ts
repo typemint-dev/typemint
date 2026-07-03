@@ -22,6 +22,27 @@ describe('(unit) Dictionary', () => {
       // Assert
       expectTypeOf<Keys>().toEqualTypeOf<'a' | 'b' | 'c'>();
     });
+
+    it('should infer the keys from a dictionary descriptor', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+      type Descriptor = DictionaryDescriptor<typeof record>;
+
+      // Act
+      type Keys = InferDictionaryKeys<Descriptor>;
+      // Assert
+      expectTypeOf<Keys>().toEqualTypeOf<'a' | 'b' | 'c'>();
+    });
+
+    it('should infer the keys from a live descriptor instance without leaking reserved keys', () => {
+      // Arrange
+      const descriptor = Dictionary({ a: 1, b: 2, c: 3 } as const);
+
+      // Act
+      type Keys = InferDictionaryKeys<typeof descriptor>;
+      // Assert
+      expectTypeOf<Keys>().toEqualTypeOf<'a' | 'b' | 'c'>();
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -34,6 +55,27 @@ describe('(unit) Dictionary', () => {
 
       // Act
       type Values = InferDictionaryValues<typeof record>;
+      // Assert
+      expectTypeOf<Values>().toEqualTypeOf<1 | 2 | 3>();
+    });
+
+    it('should infer the values from a dictionary descriptor', () => {
+      // Arrange
+      const record = { a: 1, b: 2, c: 3 } as const;
+      type Descriptor = DictionaryDescriptor<typeof record>;
+
+      // Act
+      type Values = InferDictionaryValues<Descriptor>;
+      // Assert
+      expectTypeOf<Values>().toEqualTypeOf<1 | 2 | 3>();
+    });
+
+    it('should infer the values from a live descriptor instance without leaking method types', () => {
+      // Arrange
+      const descriptor = Dictionary({ a: 1, b: 2, c: 3 } as const);
+
+      // Act
+      type Values = InferDictionaryValues<typeof descriptor>;
       // Assert
       expectTypeOf<Values>().toEqualTypeOf<1 | 2 | 3>();
     });

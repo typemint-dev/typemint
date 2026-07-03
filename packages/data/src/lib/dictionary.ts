@@ -12,11 +12,31 @@ export type DictionaryKeyBase = string;
 
 export type DictionarySource<T> = Readonly<Record<DictionaryKeyBase, T>>;
 
-export type InferDictionaryKeys<T extends DictionarySource<unknown>> = keyof T &
-  string;
+// A `DictionaryDescriptor` cannot be named in the conditionals below without
+// creating a circular type reference — the descriptor is itself defined in terms
+// of these inference helpers (via `DictionaryMembers`/`DictionaryMethods`), and
+// `InferDictionaryKeys` is consumed as a mapped-type key, which forces eager
+// resolution. Instead we detect a descriptor structurally through its accessor
+// methods and recover the keys/values from their return types. A plain
+// `DictionarySource` has no such methods and falls through to the direct lookup.
 
-export type InferDictionaryValues<T extends DictionarySource<unknown>> =
-  T[keyof T & string];
+export type InferDictionaryKeys<
+  T extends
+    | DictionarySource<unknown>
+    | { keys(): NonEmptyReadonlyArray<DictionaryKeyBase> },
+> = T extends {
+  keys(): NonEmptyReadonlyArray<infer K extends DictionaryKeyBase>;
+}
+  ? K
+  : keyof T & string;
+
+export type InferDictionaryValues<
+  T extends
+    | DictionarySource<unknown>
+    | { values(): NonEmptyReadonlyArray<unknown> },
+> = T extends { values(): NonEmptyReadonlyArray<infer V> }
+  ? V
+  : T[keyof T & string];
 
 export type DictionaryEntry<T extends DictionarySource<unknown>> = {
   [K in InferDictionaryKeys<T>]: readonly [K, T[K]];
@@ -74,7 +94,7 @@ function memoizeKeys<T extends DictionarySource<unknown>>(
 ): NonEmptyReadonlyArray<InferDictionaryKeys<T>> {
   const memoKeys: readonly InferDictionaryKeys<T>[] = Object.freeze(
     Object.keys(source),
-  );
+  ) as readonly InferDictionaryKeys<T>[];
 
   if (!isNonEmptyArray(memoKeys)) {
     throw new PanicException('Dictionary requires at least one key');
