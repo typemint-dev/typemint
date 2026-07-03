@@ -1,5 +1,15 @@
 # @typemint/data
 
+## 0.6.0
+
+### Minor Changes
+
+- Add Scalar.ofUnsafe method
+
+### Patch Changes
+
+- Fix type inference for Dictionary descriptor methods
+
 ## 0.5.2
 
 ### Patch Changes
