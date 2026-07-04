@@ -32,11 +32,19 @@ import { LiteralUnion, Dictionary } from '@typemint/data';
   - [Creating a union](#creating-a-union)
   - [Member access](#member-access)
   - [`isOfType`](#isoftypevalue-unknown-value-is-t)
+  - [`of`](#ofvalue-string)
+  - [`ofUnsafe`](#ofunsafevalue-string)
+  - [`parse`](#parsevalue-unknown)
+  - [`parseUnsafe`](#parseunsafevalue-unknown)
+  - [`parseOr`](#parseorvalue-unknown-fallback)
+  - [`LiteralUnionMismatchError`](#literalunionmismatcherror)
   - [`toArray`](#toarray-nonemptyreadonlyarrayt)
+  - [`toSet`](#toset-readonlysett)
   - [`size`](#size)
   - [Iteration (`Symbol.iterator`)](#iteration-symboliterator)
   - [`match`](#matchvalue-handlers--matchhandlers)
   - [`matchResult`](#matchresultresult-handlers--matchresulthandlers)
+  - [`assertLiteralUnionMember`](#assertliteralunionmember)
   - [Type helpers](#literalunion-type-helpers)
 - [`Dictionary`](#dictionary)
   - [Creating a dictionary](#creating-a-dictionary)
@@ -66,7 +74,8 @@ import { LiteralUnion, Dictionary } from '@typemint/data';
   - [Refine, never transform](#refine-never-transform)
   - [`of`](#ofvalue-removealltagstroot)
   - [`ofUnsafe`](#ofunsafevalue-removealltagstroot)
-  - [`parse`](#parsevalue-unknown)
+  - [`parse`](#parsevalue-unknown-1)
+  - [`parseUnsafe`](#parseunsafevalue-unknown-1)
   - [`validate`](#validatevalue-removealltagstroot)
   - [`is`](#isvalue-unknown-value-is-scalar)
   - [`unwrap`](#unwrapvalue-scalar)
@@ -145,9 +154,9 @@ Some rules enforced at construction time:
 
 - The tuple must contain **at least one** member, otherwise a `PanicException`
   is thrown.
-- Member names must not collide with the reserved descriptor keys
-  (`isOfType`, `toArray`, `size`, `match`, `matchResult`). A collision throws a
-  `PanicException`.
+- Member names must not collide with the reserved descriptor keys (`isOfType`,
+  `of`, `ofUnsafe`, `parse`, `parseUnsafe`, `parseOr`, `toArray`, `toSet`,
+  `size`, `match`, `matchResult`). A collision throws a `PanicException`.
 - Only `string` members are allowed by design — see the rationale in
   [How they work together](#how-literalunion-and-dictionary-work-together).
 
@@ -198,6 +207,143 @@ const valid = raw.filter(Status.isOfType);
 Note: `isOfType` only proves membership in the union *as a whole*. To narrow to
 a single member, compare directly afterwards (`value === Country.germany`).
 
+### `of(value: string)`
+
+Validate that a `string` you already hold is a declared member, returning it —
+narrowed to the union — on success, or a
+[`LiteralUnionMismatchError`](#literalunionmismatcherror) on failure. Use it when
+the value is statically a `string` but not yet known to be a member (an
+environment variable, a `VARCHAR` column, a CLI argument); the "is it a string"
+question is already answered by the type system, so `of` only checks membership.
+It never throws and never mutates — the success value is the *same* string,
+re-typed as the union member (a literal union is structural, so there is no
+branding).
+
+```ts
+const LogLevel = LiteralUnion(['debug', 'info', 'warn', 'error']);
+
+const level = LogLevel.of(process.env.LOG_LEVEL ?? 'info');
+if (level.isOk()) {
+  level.value; // 'debug' | 'info' | 'warn' | 'error'
+} else {
+  level.error.message; // 'Expected one of "debug", … but got "verbose"'
+}
+```
+
+For `unknown` input from a trust boundary, use [`parse`](#parsevalue-unknown),
+which recognizes the `string` first.
+
+### `ofUnsafe(value: string)`
+
+The **throwing** counterpart to [`of`](#ofvalue-string). It returns the value —
+narrowed to the union — **directly** on success, and **throws a
+`PanicException`** when the value is not a member, with the
+`LiteralUnionMismatchError` attached as the exception's `cause`.
+
+```ts
+const country = Country.ofUnsafe(row.country); // 'germany' | 'france' | 'usa'
+
+try {
+  Country.ofUnsafe('belgium');
+} catch (err) {
+  // err instanceof PanicException
+  // err.cause.kind === 'LiteralUnionMismatchError'
+}
+```
+
+A thrown failure signals a **bug**: the value was asserted to be a member and
+was not. Reach for it only for values from a trusted source (a persisted row, a
+prior result whose narrowing was lost in transit, a test fixture). Prefer it
+over an `as` cast — it re-checks membership, is easy to grep for, and accepts
+only a `string`.
+
+### `parse(value: unknown)`
+
+The entry point for **untrusted input**. It first recognizes the value as a
+`string` (returning a `TypeMismatchError` if not), then checks membership
+(returning a [`LiteralUnionMismatchError`](#literalunionmismatcherror) if the
+string is not a member). The two failures are kept as separate error `kind`s so
+you can tell them apart.
+
+```ts
+const result = Country.parse(JSON.parse(body).country);
+// Result<
+//   'germany' | 'france' | 'usa',
+//   TypeMismatchError<string, unknown> | LiteralUnionMismatchError<'germany' | 'france' | 'usa'>
+// >
+
+if (result.isErr()) {
+  if (Kind.isOf(result.error, 'TypeMismatchError')) {
+    // input was not a string at all
+  } else {
+    // input was a string, just not a declared member
+  }
+}
+```
+
+### `parseUnsafe(value: unknown)`
+
+The **throwing** counterpart to [`parse`](#parsevalue-unknown). It returns the
+narrowed value on success, or throws a `PanicException` on failure with the
+underlying error (`TypeMismatchError` or `LiteralUnionMismatchError`) attached as
+`cause`.
+
+```ts
+const country = Country.parseUnsafe(config.country); // 'germany' | 'france' | 'usa'
+```
+
+Use it only for input from a source you fully trust to be well-formed; for
+untrusted input use [`parse`](#parsevalue-unknown) and handle the `Result`.
+
+### `parseOr(value: unknown, fallback)`
+
+Parse an `unknown` value, returning it — narrowed to the union — when it is a
+member, or `fallback` otherwise. The result is **always** a member, so it never
+fails and never throws. This is the ergonomic form of the read-a-value-with-a
+default pattern; `fallback` is constrained to a union member, which is what
+guarantees the return type is the union regardless of the input.
+
+```ts
+const LogLevel = LiteralUnion(['debug', 'info', 'warn', 'error']);
+
+const level = LogLevel.parseOr(process.env.LOG_LEVEL, 'info');
+// level: 'debug' | 'info' | 'warn' | 'error' — always valid
+```
+
+It is equivalent to `LogLevel.isOfType(x) ? x : 'info'`, spelled as one call.
+When you need to *distinguish* "a default was used" from "the input was valid",
+use [`parse`](#parsevalue-unknown) and inspect the `Result`.
+
+### `LiteralUnionMismatchError`
+
+The structured error returned (by [`of`](#ofvalue-string) /
+[`parse`](#parsevalue-unknown)) or thrown as a `cause` (by
+[`ofUnsafe`](#ofunsafevalue-string) /
+[`parseUnsafe`](#parseunsafevalue-unknown)) when a `string` is not a declared
+member. It is built from the same core mixins as `TypeMismatchError` — a `kind`
+discriminant, a human-readable `message`, and structured `details`:
+
+```ts
+LiteralUnionMismatchError(['germany', 'france', 'usa'], 'belgium');
+// {
+//   kind: 'LiteralUnionMismatchError',
+//   message: 'Expected one of "germany", "france", "usa" but got "belgium"',
+//   details: { expected: ['germany', 'france', 'usa'], received: 'belgium' },
+// }
+```
+
+The discriminant is deliberately scoped to this primitive (rather than a generic
+name like `'NotAMemberError'`) so it never collides with a structurally similar
+"value not in a closed set" error from a sibling primitive.
+`details.expected` always holds the **full** member list even when the `message`
+truncates it for readability. Narrow on `kind` to handle it:
+
+```ts
+if (Kind.isOf(error, 'LiteralUnionMismatchError')) {
+  error.details.expected; // the allowed members
+}
+```
+
 ### `toArray(): NonEmptyReadonlyArray<T>`
 
 Returns the union's members as a non-empty `readonly` tuple, in declaration
@@ -229,6 +375,28 @@ const Role = LiteralUnion(['admin', 'editor', 'viewer']);
 const RoleSchema = z.enum(Role.toArray());
 // RoleSchema: z.ZodEnum<['admin', 'editor', 'viewer']>
 ```
+
+### `toSet(): ReadonlySet<T>`
+
+Returns the union's members as a `Set`, for **membership semantics** rather than
+an ordered list — `O(1)` `has` lookups or set algebra (union / intersection /
+difference) against another collection. Unlike
+[`toArray`](#toarray-nonemptyreadonlyarrayt) (which returns a cached, frozen
+array), a **fresh, independent copy is returned on every call**: a JavaScript
+`Set` cannot be frozen, so `toSet` never exposes the descriptor's internal
+membership store. Mutating the returned set is safe and never affects the union.
+
+```ts
+const Country = LiteralUnion(['germany', 'france', 'usa']);
+
+const requested = new Set(userInput);
+const known = Country.toSet();
+const unknownOnes = [...requested].filter((c) => !known.has(c));
+```
+
+Its type is `ReadonlySet<T>` to signal that the members *are* the union's, but
+since the value is already your own copy you may freely build a mutable set from
+it.
 
 ### `size`
 
@@ -382,6 +550,38 @@ const b = parseCountry(input).andThen((country) =>
 );
 ```
 
+### `assertLiteralUnionMember`
+
+`assertLiteralUnionMember(union, value, message?)` is the assertion-function
+companion to [`isOfType`](#isoftypevalue-unknown-value-is-t): it narrows `value`
+to the union's member type **in place** (rather than returning a new binding
+like [`parseUnsafe`](#parseunsafevalue-unknown)), throwing an `AssertException`
+when `value` is not a member.
+
+```ts
+import { assertLiteralUnionMember } from '@typemint/data';
+
+const Country = LiteralUnion(['germany', 'france', 'usa']);
+
+function handle(input: unknown) {
+  assertLiteralUnionMember(Country, input);
+  // input is now 'germany' | 'france' | 'usa' — same variable, no re-binding
+  return Country.match(input, {
+    germany: () => 'DE',
+    france:  () => 'FR',
+    usa:     () => 'US',
+  });
+}
+```
+
+It is a **standalone function, not a descriptor method**, by necessity:
+TypeScript only honours an assertion signature when every name in the call
+target is explicitly typed (TS2775) — which a method reached through an inferred
+`const` binding is not. A top-level function sidesteps that, matching the
+convention of `assertKind`, `assertWithCode`, and `assertOk`/`assertErr`. The
+optional `message` accepts a string or a lazy `() => string`; the default lists
+the members.
+
 ### `LiteralUnion` type helpers
 
 | Type | Description |
@@ -393,6 +593,7 @@ const b = parseCountry(input).andThen((country) =>
 | `LiteralUnionMethods<T>` | The method portion of the descriptor. |
 | `LiteralUnionMatchHandlers<T, U>` | Exhaustive handler map for `match`. |
 | `LiteralUnionResultHandlers<T, A, E>` | Exhaustive handler map for `matchResult`. |
+| `LiteralUnionMismatchError<T>` | The structured error for a non-member `string` (also the runtime constructor). |
 | `LiteralUnionMemberBase` | The base constraint for members (`string`). |
 
 ```ts
@@ -1111,7 +1312,7 @@ honest: the branded value is byte-for-byte the value you validated.
 Brands a value that is **already** the correct primitive, running the full
 invariant chain fail-fast (the first failing invariant short-circuits). Use it
 when the input type is statically known to be the underlying primitive; use
-[`parse`](#parsevalue-unknown) when it is `unknown`.
+[`parse`](#parsevalue-unknown-1) when it is `unknown`.
 
 ```ts
 const r = Email.of('a@b.com'); // Result<Email, 'NOT_EMAIL'>
@@ -1184,6 +1385,31 @@ if (r.isErr()) {
   // Either "not a string" or "NOT_EMAIL".
 }
 ```
+
+### `parseUnsafe(value: unknown)`
+
+The **throwing** counterpart to [`parse`](#parsevalue-unknown-1). It runs the
+same recognize-then-validate pipeline, but returns the branded `Scalar`
+**directly** on success and **throws a `PanicException`** on failure — whichever
+error `parse` would have returned (a `TypeMismatchError` for the wrong
+primitive, or the first failing invariant's error) is attached as the
+exception's `cause`.
+
+```ts
+const email = Email.parseUnsafe(config.adminEmail); // Scalar<'Email', string>
+
+try {
+  Email.parseUnsafe(42);
+} catch (err) {
+  // err instanceof PanicException
+  // err.cause.kind === 'TypeMismatchError'
+}
+```
+
+Like [`ofUnsafe`](#ofunsafevalue-removealltagstroot), a thrown failure signals a
+**bug** — use it only for input from a source you fully trust to be well-formed;
+for untrusted input use [`parse`](#parsevalue-unknown-1) and inspect the
+`Result`.
 
 ### `validate(value: RemoveAllTags<TRoot>)`
 
