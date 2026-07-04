@@ -625,6 +625,45 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   toArray: () => NonEmptyReadonlyArray<T>;
 
   /**
+   * Return the declared members of the union as a `Set`, for **membership
+   * semantics** rather than an ordered list — `O(1)` `has` lookups or set
+   * algebra (union / intersection / difference) against another collection.
+   * When you need order or indexing, use {@link toArray} instead.
+   *
+   * **A fresh, independent copy is returned on every call.** Unlike
+   * {@link toArray} (which hands back a cached, frozen array), a JavaScript
+   * `Set` cannot be frozen — so `toSet` deliberately does *not* expose the set
+   * the descriptor uses internally for {@link isOfType}. You get your own copy:
+   * mutating it (`add` / `delete`) is perfectly safe and never affects the
+   * union or any other caller.
+   *
+   * The return type is `ReadonlySet<T>` to signal that the members *are* the
+   * union's, but since the value is already a private copy you may freely build
+   * a mutable set from it if you need one.
+   *
+   * @returns A new `ReadonlySet` of the union's members, independent of the
+   *   descriptor's internal state.
+   *
+   * @example Set algebra against external input
+   *
+   * ```ts
+   * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   *
+   * const requested = new Set(req.query.countries);
+   * const known = Country.toSet();
+   * const unknownOnes = [...requested].filter((c) => !known.has(c));
+   * ```
+   *
+   * @example Freely extend the returned set — it is your own copy
+   *
+   * ```ts
+   * const set = Country.toSet() as Set<string>;
+   * set.add('spain'); // safe — the union is untouched
+   * ```
+   */
+  toSet: () => ReadonlySet<T>;
+
+  /**
    * The number of members in the union.
    */
   size: number;
@@ -1020,6 +1059,7 @@ const reservedKeys = new Set([
   'parse',
   'parseUnsafe',
   'toArray',
+  'toSet',
   'size',
   'match',
   'matchResult',
@@ -1209,6 +1249,14 @@ export function LiteralUnion<
     return literalsCopy;
   }
 
+  // Returns a fresh, independent copy of the members on every call. A `Set`
+  // cannot be frozen, so handing back the internal `memoSet` (or any shared
+  // instance) would let a caller corrupt the descriptor's membership store via
+  // `.add`/`.delete`. Copying keeps the returned set the caller's own.
+  function toSet(): ReadonlySet<T[number]> {
+    return new Set(literalsCopy);
+  }
+
   // Use Object.assign to create the descriptor object to avoid
   // prototype pollution. (No __proto__ or constructor pollution.)
   const descriptor: LiteralUnionDescriptor<LiteralUnionFrom<T>> = Object.assign(
@@ -1230,6 +1278,7 @@ export function LiteralUnion<
       parse,
       parseUnsafe,
       toArray,
+      toSet,
       match,
       matchResult,
     },

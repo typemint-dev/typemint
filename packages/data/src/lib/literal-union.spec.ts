@@ -1283,6 +1283,73 @@ describe('(unit) LiteralUnion', () => {
       expect(act).toThrow(PanicException);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: toSet
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('toSet', () => {
+    it('should return a set containing every declared member', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const set = union.toSet();
+      // Assert
+      expect([...set]).toEqual(['germany', 'france', 'usa']);
+      expect(set.has('france')).toBe(true);
+    });
+
+    it('should report false for a non-member', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act — widen to string so a non-member can be probed at all
+      const set: ReadonlySet<string> = union.toSet();
+      // Assert
+      expect(set.has('belgium')).toBe(false);
+    });
+
+    it('should return a fresh, independent copy on every call', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act & Assert — a new set each time, unlike toArray's cached reference
+      expect(union.toSet()).not.toBe(union.toSet());
+    });
+
+    it('should not affect the union when the returned set is mutated', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act — mutate the returned copy (a Set cannot be frozen)
+      const set = union.toSet() as Set<string>;
+      set.add('z');
+      // Assert — the guard and a fresh set are untouched by the mutation
+      expect(union.isOfType('z')).toBe(false);
+      expect(union.toSet().has('z' as never)).toBe(false);
+    });
+
+    it('should have the same size as the union', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act & Assert
+      expect(union.toSet().size).toBe(union.size);
+    });
+
+    it('should type the set members as the union', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act & Assert
+      expectTypeOf(union.toSet()).toEqualTypeOf<
+        ReadonlySet<'germany' | 'france' | 'usa'>
+      >();
+    });
+
+    it('should throw a PanicException if the member name collides with the reserved key "toSet"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'toSet'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
 });
 
 describe('(unit) LiteralUnionMismatchError', () => {
