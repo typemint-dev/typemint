@@ -237,26 +237,51 @@ export function LiteralUnionMismatchError<T extends LiteralUnionMemberBase>(
 }
 
 /**
- * Extract the {@link LiteralUnionMismatchError} type for a given
- * {@link LiteralUnionDescriptor} — the error `of` / `parse` return in their
- * `Err` channel (and `ofUnsafe` / `parseUnsafe` throw as a `cause`), specialized
- * to that union's members. Resolves to `never` for anything that is not a
- * descriptor.
+ * Extract the {@link LiteralUnionMismatchError} type for a literal union — the
+ * error `of` / `parse` return in their `Err` channel (and `ofUnsafe` /
+ * `parseUnsafe` throw as a `cause`), specialized to that union's members.
  *
- * @typeParam T - The descriptor to read from.
+ * Accepts **either** a {@link LiteralUnionDescriptor} (from which the members
+ * are recovered) **or** a bare member union (a
+ * {@link LiteralUnionMemberBase} union such as `'a' | 'b'`), so it is usable
+ * both from a descriptor value and from a member type you already hold.
  *
- * @example
+ * `T` is **constrained** to those two forms, so passing anything else (a
+ * `number`, an object, …) is a compile error at the use site rather than a
+ * silent `never`.
+ *
+ * @typeParam T - A {@link LiteralUnionDescriptor} or a member union.
+ *
+ * @example From a descriptor
  *
  * ```ts
  * const Country = LiteralUnion(['germany', 'france', 'usa']);
  * type Err = InferLiteralUnionMismatchError<typeof Country>;
  * // LiteralUnionMismatchError<'germany' | 'france' | 'usa'>
  * ```
+ *
+ * @example From a bare member union
+ *
+ * ```ts
+ * type Err = InferLiteralUnionMismatchError<'germany' | 'france' | 'usa'>;
+ * // LiteralUnionMismatchError<'germany' | 'france' | 'usa'>
+ * ```
  */
-export type InferLiteralUnionMismatchError<T> =
-  T extends LiteralUnionDescriptor<infer U>
+export type InferLiteralUnionMismatchError<
+  // `any` in the descriptor slot (not `LiteralUnionMemberBase`): the member type
+  // sits in contravariant positions on the descriptor (`match(value: T)`,
+  // `parseOr(_, fallback: T)`), so a fixed-width instantiation like
+  // `LiteralUnionDescriptor<string>` is not a supertype of a concrete
+  // descriptor and would reject it. `any` matches any member type.
+  T extends LiteralUnionDescriptor<any> | LiteralUnionMemberBase,
+> =
+  // Tuple-wrap to suppress distribution — a bare member union must yield one
+  // `LiteralUnionMismatchError<'a' | 'b'>`, not `…<'a'> | …<'b'>`.
+  [T] extends [LiteralUnionDescriptor<infer U>]
     ? LiteralUnionMismatchError<U>
-    : never;
+    : [T] extends [LiteralUnionMemberBase]
+      ? LiteralUnionMismatchError<T>
+      : never;
 
 /**
  * Exhaustive handler set for {@link LiteralUnionMatchFn}.

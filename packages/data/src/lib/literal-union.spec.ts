@@ -1573,6 +1573,17 @@ describe('(unit) LiteralUnionMismatchError', () => {
       >();
     });
 
+    it('should infer the mismatch error type from a bare member union', () => {
+      // Act — a member union yields a single error over the whole union,
+      // not a distributed union of per-member errors.
+      type Err = InferLiteralUnionMismatchError<'germany' | 'france' | 'usa'>;
+
+      // Assert
+      expectTypeOf<Err>().toEqualTypeOf<
+        LiteralUnionMismatchError<'germany' | 'france' | 'usa'>
+      >();
+    });
+
     it('should match the error channel of the descriptor of method', () => {
       // Arrange
       const Country = LiteralUnion(['germany', 'france', 'usa'] as const);
@@ -1585,12 +1596,10 @@ describe('(unit) LiteralUnionMismatchError', () => {
       >();
     });
 
-    it('should resolve to never for a non-descriptor', () => {
-      // Act
+    it('should reject a type that is neither a descriptor nor a member union', () => {
+      // Act & Assert — the constraint makes an incompatible type a compile error
+      // @ts-expect-error - number is not a descriptor or a member union
       type Err = InferLiteralUnionMismatchError<number>;
-
-      // Assert
-      expectTypeOf<Err>().toEqualTypeOf<never>();
     });
   });
 });
