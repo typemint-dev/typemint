@@ -1,11 +1,14 @@
 import {
   Kind,
   PanicException,
+  TypeDescriptor,
   WithDetail,
   WithMessage,
+  witness,
   type NonEmptyReadonlyArray,
 } from '@typemint/core';
 import { Result } from '@typemint/result';
+import { TypeMismatchError } from './type-mismatch.js';
 
 /**
  * The type of literal union members which the union can be built from.
@@ -421,6 +424,67 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * ```
    */
   ofUnsafe(value: LiteralUnionMemberBase): T;
+
+  /**
+   * Recognize an `unknown` value, then check membership — the entry point for
+   * untrusted input. It first proves the value is a `string` (a
+   * {@link TypeMismatchError} otherwise) and only then checks that it is a
+   * declared member (a {@link LiteralUnionMismatchError} otherwise), returning
+   * the value narrowed to the union type on success.
+   *
+   * Use `parse` at the boundary of your system — a JSON payload, a request
+   * body, a value typed `unknown` or `any` from an external source. When the
+   * input is already statically a `string`, {@link of} skips the redundant
+   * primitive check; when you want a boolean guard instead of a
+   * {@link Result}, use {@link isOfType}.
+   *
+   * The two failures are kept in separate error kinds on purpose: a non-string
+   * input is a *type* problem ({@link TypeMismatchError}), while a string that
+   * is not a member is a *membership* problem
+   * ({@link LiteralUnionMismatchError}). Narrow on the `kind` discriminant to
+   * tell them apart.
+   *
+   * `parse` never throws and never mutates — it returns the outcome as a
+   * {@link Result}, and the success value is the same string re-typed as the
+   * union member (no branding or transformation).
+   *
+   * @param value - The `unknown` value to recognize and validate.
+   * @returns `Ok` with `value` narrowed to the union member, or `Err` carrying
+   *   a {@link TypeMismatchError} (not a string) or a
+   *   {@link LiteralUnionMismatchError} (string, but not a member).
+   *
+   * @example Parse a value from a JSON payload
+   *
+   * ```ts
+   * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   *
+   * const result = Country.parse(JSON.parse(body).country);
+   * // result: Result<
+   * //   'germany' | 'france' | 'usa',
+   * //   TypeMismatchError<string, unknown> | LiteralUnionMismatchError<'germany' | 'france' | 'usa'>
+   * // >
+   * if (result.isOk()) result.value; // 'germany' | 'france' | 'usa'
+   * ```
+   *
+   * @example Distinguish the two failure modes
+   *
+   * ```ts
+   * const result = Country.parse(input);
+   * if (result.isErr()) {
+   *   if (Kind.isOf(result.error, 'TypeMismatchError')) {
+   *     // input was not a string at all
+   *   } else {
+   *     // input was a string, just not a declared member
+   *   }
+   * }
+   * ```
+   */
+  parse(
+    value: unknown,
+  ): Result<
+    T,
+    TypeMismatchError<string, unknown> | LiteralUnionMismatchError<T>
+  >;
 
   /**
    * Return the declared members of the union as a non-empty `readonly` tuple,
@@ -908,10 +972,19 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
 export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
   LiteralUnionMembers<T> & LiteralUnionMethods<T>;
 
+/**
+ * The expected-type descriptor for {@link parse}'s primitive-recognition step.
+ * A literal union's base is always `string`, so a non-string input fails with a
+ * {@link TypeMismatchError} against this descriptor before membership is ever
+ * checked.
+ */
+const STRING_DESCRIPTOR = TypeDescriptor('string', witness<string>());
+
 const reservedKeys = new Set([
   'isOfType',
   'of',
   'ofUnsafe',
+  'parse',
   'toArray',
   'size',
   'match',
@@ -1056,6 +1129,19 @@ export function LiteralUnion<
       : Result.Err(LiteralUnionMismatchError(literalsCopy, value));
   }
 
+  // Boundary entry point: recognize the `string` primitive first (a
+  // `TypeMismatchError` otherwise), then delegate to `of` for membership.
+  function parse(
+    value: unknown,
+  ): Result<
+    T[number],
+    TypeMismatchError<string, unknown> | LiteralUnionMismatchError<T[number]>
+  > {
+    return typeof value === 'string'
+      ? of(value)
+      : Result.Err(TypeMismatchError(STRING_DESCRIPTOR, value));
+  }
+
   // Throwing counterpart to `of`: returns the narrowed value on success, or
   // panics on a miss with the `LiteralUnionMismatchError` attached as `cause`.
   function ofUnsafe(value: LiteralUnionMemberBase): T[number] {
@@ -1092,6 +1178,7 @@ export function LiteralUnion<
       isOfType,
       of,
       ofUnsafe,
+      parse,
       toArray,
       match,
       matchResult,

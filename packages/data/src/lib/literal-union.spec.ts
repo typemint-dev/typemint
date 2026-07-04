@@ -13,6 +13,7 @@ import {
   type NonEmptyReadonlyArray,
 } from '@typemint/core';
 import { assertErr, assertOk, Result } from '@typemint/result';
+import { TypeMismatchError } from './type-mismatch.js';
 
 describe('(unit) LiteralUnion', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1104,6 +1105,96 @@ describe('(unit) LiteralUnion', () => {
     it('should throw a PanicException if the member name collides with the reserved key "ofUnsafe"', () => {
       // Arrange
       const literals = ['a', 'b', 'c', 'ofUnsafe'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: parse
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('parse', () => {
+    it('should return Ok with the value when it is a member', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const result = union.parse('france');
+      // Assert
+      assertOk(result);
+      expect(result.value).toBe('france');
+    });
+
+    it('should narrow the Ok value to the union member type', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const result = union.parse('france');
+      // Assert
+      assertOk(result);
+      expectTypeOf(result.value).toEqualTypeOf<'germany' | 'france' | 'usa'>();
+    });
+
+    it('should return Err with a LiteralUnionMismatchError when the value is a non-member string', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const result = union.parse('belgium');
+      // Assert
+      assertErr(result);
+      expect(result.error.kind).toBe('LiteralUnionMismatchError');
+      expect(result.error.details.received).toBe('belgium');
+    });
+
+    it('should return Err with a TypeMismatchError when the value is not a string', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const result = union.parse(42);
+      // Assert
+      assertErr(result);
+      expect(result.error.kind).toBe('TypeMismatchError');
+      expect(result.error.message).toBe('Expected string but got number');
+    });
+
+    it('should report a TypeMismatchError for common non-string inputs', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b'] as const);
+      // Act & Assert — null, arrays, and objects are all type mismatches
+      for (const input of [null, undefined, [1, 2], { a: 1 }, true]) {
+        const result = union.parse(input);
+        assertErr(result);
+        expect(result.error.kind).toBe('TypeMismatchError');
+      }
+    });
+
+    it('should preserve the received value in the TypeMismatchError details', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b'] as const);
+      // Act
+      const result = union.parse(42);
+      // Assert
+      assertErr(result);
+      expect(result.error.details.received).toBe(42);
+    });
+
+    it('should type the Err channel as TypeMismatchError | LiteralUnionMismatchError', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const result = union.parse('belgium');
+      // Assert
+      assertErr(result);
+      expectTypeOf(result.error).toEqualTypeOf<
+        | TypeMismatchError<string, unknown>
+        | LiteralUnionMismatchError<'germany' | 'france' | 'usa'>
+      >();
+    });
+
+    it('should throw a PanicException if the member name collides with the reserved key "parse"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'parse'] as const;
       // Act
       const act = () => LiteralUnion(literals);
       // Assert
