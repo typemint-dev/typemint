@@ -4,6 +4,7 @@ import {
   LiteralUnion,
   LiteralUnionMismatchError,
   type InferLiteralUnion,
+  type InferLiteralUnionMismatchError,
   type LiteralUnionDescriptor,
   type LiteralUnionFrom,
   type LiteralUnionMembers,
@@ -1557,6 +1558,39 @@ describe('(unit) LiteralUnionMismatchError', () => {
       expectTypeOf<Default['details']['expected']>().toEqualTypeOf<
         NonEmptyReadonlyArray<string>
       >();
+    });
+
+    it('should infer the mismatch error type from a descriptor', () => {
+      // Arrange
+      const Country = LiteralUnion(['germany', 'france', 'usa'] as const);
+
+      // Act
+      type Err = InferLiteralUnionMismatchError<typeof Country>;
+
+      // Assert
+      expectTypeOf<Err>().toEqualTypeOf<
+        LiteralUnionMismatchError<'germany' | 'france' | 'usa'>
+      >();
+    });
+
+    it('should match the error channel of the descriptor of method', () => {
+      // Arrange
+      const Country = LiteralUnion(['germany', 'france', 'usa'] as const);
+      const result = Country.of('belgium');
+
+      // Act & Assert — the helper names exactly what `of` returns on failure
+      assertErr(result);
+      expectTypeOf(result.error).toEqualTypeOf<
+        InferLiteralUnionMismatchError<typeof Country>
+      >();
+    });
+
+    it('should resolve to never for a non-descriptor', () => {
+      // Act
+      type Err = InferLiteralUnionMismatchError<number>;
+
+      // Assert
+      expectTypeOf<Err>().toEqualTypeOf<never>();
     });
   });
 });

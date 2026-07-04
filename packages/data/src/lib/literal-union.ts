@@ -237,6 +237,28 @@ export function LiteralUnionMismatchError<T extends LiteralUnionMemberBase>(
 }
 
 /**
+ * Extract the {@link LiteralUnionMismatchError} type for a given
+ * {@link LiteralUnionDescriptor} — the error `of` / `parse` return in their
+ * `Err` channel (and `ofUnsafe` / `parseUnsafe` throw as a `cause`), specialized
+ * to that union's members. Resolves to `never` for anything that is not a
+ * descriptor.
+ *
+ * @typeParam T - The descriptor to read from.
+ *
+ * @example
+ *
+ * ```ts
+ * const Country = LiteralUnion(['germany', 'france', 'usa']);
+ * type Err = InferLiteralUnionMismatchError<typeof Country>;
+ * // LiteralUnionMismatchError<'germany' | 'france' | 'usa'>
+ * ```
+ */
+export type InferLiteralUnionMismatchError<T> =
+  T extends LiteralUnionDescriptor<infer U>
+    ? LiteralUnionMismatchError<U>
+    : never;
+
+/**
  * Exhaustive handler set for {@link LiteralUnionMatchFn}.
  *
  * Every member of the union must have a handler. Each handler receives the

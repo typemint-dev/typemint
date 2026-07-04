@@ -594,6 +594,7 @@ the members.
 | `LiteralUnionMatchHandlers<T, U>` | Exhaustive handler map for `match`. |
 | `LiteralUnionResultHandlers<T, A, E>` | Exhaustive handler map for `matchResult`. |
 | `LiteralUnionMismatchError<T>` | The structured error for a non-member `string` (also the runtime constructor). |
+| `InferLiteralUnionMismatchError<typeof U>` | The `LiteralUnionMismatchError` type for a descriptor's members. |
 | `LiteralUnionMemberBase` | The base constraint for members (`string`). |
 
 ```ts
