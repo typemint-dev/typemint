@@ -1,4 +1,5 @@
 import {
+  assert,
   Kind,
   PanicException,
   TypeDescriptor,
@@ -1325,4 +1326,54 @@ export function LiteralUnion<
   );
 
   return descriptor;
+}
+
+/**
+ * Assert that an `unknown` value is a declared member of the given literal
+ * union, narrowing it to the union's member type in the surrounding scope.
+ *
+ * This is the assertion-function companion to the descriptor's `isOfType` (the
+ * boolean guard) and `parseUnsafe` (which returns the value). Unlike
+ * `parseUnsafe`, it narrows the *existing* binding in place rather than
+ * producing a new one, so you keep using the same variable.
+ *
+ * It is a **standalone function**, not a method on the descriptor, by
+ * necessity: TypeScript only honors an assertion signature when every name in
+ * the call target is explicitly typed (TS2775) — which a descriptor method
+ * reached through an inferred `const` binding is not. A top-level function
+ * sidesteps that, matching the convention of `assertKind`, `assertWithCode`,
+ * and `assertOk`/`assertErr`.
+ *
+ * @typeParam T - The union's member type, inferred from `union`.
+ * @param union - The literal union descriptor to check against.
+ * @param value - The value to assert. Accepts `unknown` so it can sit at a
+ *   trust boundary without a pre-cast.
+ * @param message - The message to throw if `value` is not a member. Accepts a
+ *   string or a lazy `() => string`; the default lazily lists the members.
+ * @throws {AssertException} If `value` is not a declared member of `union`.
+ *
+ * @example Narrow at a boundary
+ *
+ * ```ts
+ * const Country = LiteralUnion(['germany', 'france', 'usa']);
+ *
+ * function handle(input: unknown) {
+ *   assertLiteralUnionMember(Country, input);
+ *   // input is now 'germany' | 'france' | 'usa' — same variable, no re-binding
+ *   return Country.match(input, {
+ *     germany: () => 'DE',
+ *     france: () => 'FR',
+ *     usa: () => 'US',
+ *   });
+ * }
+ * ```
+ */
+export function assertLiteralUnionMember<T extends LiteralUnionMemberBase>(
+  union: LiteralUnionDescriptor<T>,
+  value: unknown,
+  message: string | (() => string) = () =>
+    `Value is not a member of the literal union ` +
+    `(expected one of ${formatMembers(union.toArray())}).`,
+): asserts value is T {
+  assert(union.isOfType(value), message);
 }

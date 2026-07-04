@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
+  assertLiteralUnionMember,
   LiteralUnion,
   LiteralUnionMismatchError,
   type InferLiteralUnion,
@@ -8,6 +9,7 @@ import {
   type LiteralUnionMembers,
 } from './literal-union.js';
 import {
+  AssertException,
   Kind,
   PanicException,
   type NonEmptyReadonlyArray,
@@ -1556,5 +1558,79 @@ describe('(unit) LiteralUnionMismatchError', () => {
         NonEmptyReadonlyArray<string>
       >();
     });
+  });
+});
+
+describe('(unit) assertLiteralUnionMember', () => {
+  it('should not throw when the value is a member', () => {
+    // Arrange
+    const Country = LiteralUnion(['germany', 'france', 'usa'] as const);
+    // Act & Assert
+    expect(() => assertLiteralUnionMember(Country, 'france')).not.toThrow();
+  });
+
+  it('should narrow the value to the union member type', () => {
+    // Arrange
+    const Country = LiteralUnion(['germany', 'france', 'usa'] as const);
+    const value: unknown = 'france';
+    // Act
+    assertLiteralUnionMember(Country, value);
+    // Assert — the binding is narrowed in place, no re-assignment
+    expectTypeOf(value).toEqualTypeOf<'germany' | 'france' | 'usa'>();
+    expect(value).toBe('france');
+  });
+
+  it('should throw an AssertException when the value is a non-member string', () => {
+    // Arrange
+    const Country = LiteralUnion(['germany', 'france', 'usa'] as const);
+    // Act
+    const act = () => assertLiteralUnionMember(Country, 'belgium');
+    // Assert
+    expect(act).toThrow(AssertException);
+  });
+
+  it('should throw an AssertException when the value is not a string', () => {
+    // Arrange
+    const Country = LiteralUnion(['germany', 'france', 'usa'] as const);
+    // Act & Assert
+    expect(() => assertLiteralUnionMember(Country, 42)).toThrow(
+      AssertException,
+    );
+  });
+
+  it('should list the members in the default message', () => {
+    // Arrange
+    const Country = LiteralUnion(['germany', 'france', 'usa'] as const);
+    // Act
+    let message = '';
+    try {
+      assertLiteralUnionMember(Country, 'belgium');
+    } catch (error) {
+      message = (error as AssertException).message;
+    }
+    // Assert
+    expect(message).toContain('"germany"');
+    expect(message).toContain('"france"');
+    expect(message).toContain('"usa"');
+  });
+
+  it('should use a custom string message when provided', () => {
+    // Arrange
+    const Country = LiteralUnion(['germany', 'france', 'usa'] as const);
+    // Act
+    const act = () =>
+      assertLiteralUnionMember(Country, 'belgium', 'bad country');
+    // Assert
+    expect(act).toThrow('bad country');
+  });
+
+  it('should accept a lazy custom message', () => {
+    // Arrange
+    const Country = LiteralUnion(['germany', 'france', 'usa'] as const);
+    // Act
+    const act = () =>
+      assertLiteralUnionMember(Country, 'belgium', () => 'lazy message');
+    // Assert
+    expect(act).toThrow('lazy message');
   });
 });
