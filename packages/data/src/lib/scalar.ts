@@ -289,6 +289,33 @@ export type ScalarDescriptor<
   >;
 
   /**
+   * The **throwing** counterpart to {@link ScalarDescriptor.parse}. Runs the
+   * same recognize-then-validate pipeline — the primitive-kind check followed
+   * by the full, fail-fast invariant chain — but returns the branded
+   * {@link Scalar} **directly** on success and **throws a
+   * {@link PanicException}** on failure. Whichever error `parse` would have
+   * returned (a {@link TypeMismatchError} for the wrong primitive, or the first
+   * failing invariant's error) is attached as the exception's `cause` so it
+   * stays inspectable.
+   *
+   * A failure signals a bug: an `unknown` was asserted to be a valid value of
+   * this scalar but was not. Use this only where a violation is unrecoverable
+   * and should crash rather than be handled — a value from a source you fully
+   * trust to be well-formed. For untrusted input you want to handle on failure,
+   * use {@link ScalarDescriptor.parse}; when the input type is already the
+   * underlying primitive, use {@link ScalarDescriptor.ofUnsafe}.
+   *
+   * @throws {PanicException} if the value is the wrong primitive or any
+   *   invariant fails; the underlying error is the exception's `cause`.
+   *
+   * @example
+   * // Asserting a value from a trusted config source — throws if it is
+   * // missing, the wrong type, or out of the scalar's domain.
+   * const email = Email.parseUnsafe(config.adminEmail); // Scalar<'Email', string>
+   */
+  parseUnsafe(value: unknown): Scalar<TName, TRoot>;
+
+  /**
    * Like {@link ScalarDescriptor.of}, but **collects every** invariant failure
    * instead of stopping at the first, returning them as a readonly array. Runs
    * the same **full** invariant chain as `of` (this scalar's plus every
@@ -575,6 +602,22 @@ function buildScalar(
     return recognize(value).andThen(of);
   }
 
+  // Runs the same recognize-then-validate pipeline as `parse`, but throws on
+  // failure instead of returning an `Err`, and returns the branded value
+  // directly on success. The offending error — a type mismatch or the first
+  // failing invariant — is attached as the exception's `cause`.
+  function parseUnsafe(value: unknown): any {
+    const valueR = parse(value);
+    if (valueR.isErr()) {
+      throw new PanicException(
+        `Scalar("${name}"): value could not be parsed ` +
+          `(a type mismatch or failing invariant attached as \`cause\`)`,
+        valueR.error,
+      );
+    }
+    return valueR.value;
+  }
+
   function validate(value: any): Result<any, readonly any[]> {
     return allSettledInvariant
       ? allSettledInvariant(value).andThen(() => Result.Ok(value))
@@ -615,6 +658,7 @@ function buildScalar(
     of,
     ofUnsafe,
     parse,
+    parseUnsafe,
     validate,
     is,
     unwrap,

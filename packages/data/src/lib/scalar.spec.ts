@@ -959,6 +959,107 @@ describe('(unit) Scalar', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar parseUnsafe
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar parseUnsafe', () => {
+    const isEmail = Invariant(
+      (value: string) => value.includes('@'),
+      () => 'NOT_EMAIL' as const,
+    );
+
+    it('should expose the "parseUnsafe" method taking unknown and returning the branded value directly', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+
+      // Act
+      type MyStringParseUnsafe = typeof MyString.parseUnsafe;
+
+      // Assert - no Result wrapper: it throws instead of returning an Err.
+      expectTypeOf<MyStringParseUnsafe>().toEqualTypeOf<
+        (value: unknown) => Scalar<'MyString', string>
+      >();
+    });
+
+    it('should return the branded value directly for a valid input', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+
+      // Act
+      const branded = MyString.parseUnsafe('hello');
+
+      // Assert
+      expect(branded).toBe('hello');
+      expectTypeOf(branded).toEqualTypeOf<Scalar<'MyString', string>>();
+    });
+
+    it('should throw a PanicException carrying a TypeMismatchError as its cause for the wrong primitive', () => {
+      // Arrange
+      const MyString = Scalar('MyString', 'string');
+      // Sanity: the checked constructor returns Err rather than throwing.
+      assertErr(MyString.parse(123));
+
+      // Act - unlike `parse`, parseUnsafe throws instead of returning an Err.
+      let thrown: unknown;
+      try {
+        MyString.parseUnsafe(123);
+      } catch (error) {
+        thrown = error;
+      }
+
+      // Assert - the type mismatch is attached as `cause`.
+      expect(thrown).toBeInstanceOf(PanicException);
+      const cause = (thrown as PanicException).cause;
+      expect((cause as TypeMismatchError<string, unknown>).kind).toBe(
+        'TypeMismatchError',
+      );
+    });
+
+    it('should throw a PanicException carrying the failing invariant as its cause', () => {
+      // Arrange
+      const Email = Scalar('Email', 'string', { invariants: [isEmail] });
+
+      // Act
+      let thrown: unknown;
+      try {
+        Email.parseUnsafe('not-an-email');
+      } catch (error) {
+        thrown = error;
+      }
+
+      // Assert - the invariant's raw error is attached as `cause`.
+      expect(thrown).toBeInstanceOf(PanicException);
+      expect((thrown as PanicException).cause).toBe('NOT_EMAIL');
+    });
+
+    it('should run the full inherited chain and throw on the first failing invariant of an extended scalar', () => {
+      // Arrange
+      const isInteger = Invariant(
+        (value: number) => Number.isInteger(value),
+        () => 'NOT_INTEGER' as const,
+      );
+      const isNonNegative = Invariant(
+        (value: number) => value >= 0,
+        () => 'NEGATIVE' as const,
+      );
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', { invariants: [isNonNegative] });
+
+      // Act - -2.5 fails the inherited `isInteger` first (fail-fast), before
+      // `isNonNegative` is ever reached.
+      let thrown: unknown;
+      try {
+        UInt.parseUnsafe(-2.5);
+      } catch (error) {
+        thrown = error;
+      }
+
+      // Assert - the inherited invariant's error is the one carried as `cause`.
+      expect(thrown).toBeInstanceOf(PanicException);
+      expect((thrown as PanicException).cause).toBe('NOT_INTEGER');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // MARK: Scalar extend
   // ─────────────────────────────────────────────────────────────────────────────
   describe('Scalar extend', () => {
@@ -1196,6 +1297,9 @@ describe('(unit) Scalar', () => {
           Scalar<'Email', string>,
           TypeMismatchError<string, unknown> | 'NOT_EMAIL'
         >
+      >();
+      expectTypeOf(Email.parseUnsafe).toEqualTypeOf<
+        (value: unknown) => Scalar<'Email', string>
       >();
       expectTypeOf(Email.validate).toEqualTypeOf<
         (
