@@ -1285,6 +1285,64 @@ describe('(unit) LiteralUnion', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: parseOr
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('parseOr', () => {
+    it('should return the value when it is a member', () => {
+      // Arrange
+      const union = LiteralUnion(['debug', 'info', 'warn', 'error'] as const);
+      // Act
+      const level = union.parseOr('warn', 'info');
+      // Assert
+      expect(level).toBe('warn');
+    });
+
+    it('should return the fallback when the value is a non-member string', () => {
+      // Arrange
+      const union = LiteralUnion(['debug', 'info', 'warn', 'error'] as const);
+      // Act
+      const level = union.parseOr('verbose', 'info');
+      // Assert
+      expect(level).toBe('info');
+    });
+
+    it('should return the fallback when the value is not a string', () => {
+      // Arrange
+      const union = LiteralUnion(['debug', 'info', 'warn', 'error'] as const);
+      // Act & Assert — every non-string input falls back
+      for (const input of [42, null, undefined, [1], { a: 1 }, true]) {
+        expect(union.parseOr(input, 'info')).toBe('info');
+      }
+    });
+
+    it('should always return the union member type', () => {
+      // Arrange
+      const union = LiteralUnion(['debug', 'info', 'warn', 'error'] as const);
+      // Act
+      const level = union.parseOr(process.env['LOG_LEVEL'], 'info');
+      // Assert
+      expectTypeOf(level).toEqualTypeOf<'debug' | 'info' | 'warn' | 'error'>();
+    });
+
+    it('should reject a fallback that is not a member', () => {
+      // Arrange
+      const union = LiteralUnion(['debug', 'info'] as const);
+      // Act & Assert — the fallback is constrained to a member of the union
+      // @ts-expect-error - 'verbose' is not a member of the union
+      union.parseOr('debug', 'verbose');
+    });
+
+    it('should throw a PanicException if the member name collides with the reserved key "parseOr"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'parseOr'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // MARK: toSet
   // ─────────────────────────────────────────────────────────────────────────────
   describe('toSet', () => {

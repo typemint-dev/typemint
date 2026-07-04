@@ -520,6 +520,38 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   parseUnsafe(value: unknown): T;
 
   /**
+   * Parse an `unknown` value, returning it — narrowed to the union type — when
+   * it is a declared member, or the given `fallback` otherwise. The result is
+   * **always** a member of the union, so it never fails and never throws.
+   *
+   * This is the ergonomic form of the extremely common "read a value, fall back
+   * to a default" pattern at a boundary — an environment variable, a query
+   * parameter, a config field — where an absent or invalid value should quietly
+   * become a sensible default rather than an error to handle.
+   *
+   * `fallback` is constrained to a member of the union, which is what
+   * guarantees the return type is the union `T` regardless of the input. It is
+   * equivalent to `Country.isOfType(x) ? x : fallback`, spelled as one call.
+   * When you need to *distinguish* "a default was used" from "the input was
+   * valid", use {@link parse} and inspect the `Result` instead.
+   *
+   * @param value - The `unknown` value to parse.
+   * @param fallback - The member to return when `value` is not a member.
+   * @returns `value` narrowed to the union member if it is one; otherwise
+   *   `fallback`.
+   *
+   * @example Read an environment variable with a typed default
+   *
+   * ```ts
+   * const LogLevel = LiteralUnion(['debug', 'info', 'warn', 'error']);
+   *
+   * const level = LogLevel.parseOr(process.env['LOG_LEVEL'], 'info');
+   * // level: 'debug' | 'info' | 'warn' | 'error' — always valid
+   * ```
+   */
+  parseOr(value: unknown, fallback: T): T;
+
+  /**
    * Return the declared members of the union as a non-empty `readonly` tuple,
    * in the same order they were passed to {@link LiteralUnion}.
    *
@@ -1058,6 +1090,7 @@ const reservedKeys = new Set([
   'ofUnsafe',
   'parse',
   'parseUnsafe',
+  'parseOr',
   'toArray',
   'toSet',
   'size',
@@ -1231,6 +1264,12 @@ export function LiteralUnion<
     return result.value;
   }
 
+  // Parse-with-default: reuses the `isOfType` guard (string check + membership)
+  // and falls back to `fallback` on any miss, so the result is always a member.
+  function parseOr(value: unknown, fallback: T[number]): T[number] {
+    return isOfType(value) ? value : fallback;
+  }
+
   // Throwing counterpart to `of`: returns the narrowed value on success, or
   // panics on a miss with the `LiteralUnionMismatchError` attached as `cause`.
   function ofUnsafe(value: LiteralUnionMemberBase): T[number] {
@@ -1277,6 +1316,7 @@ export function LiteralUnion<
       ofUnsafe,
       parse,
       parseUnsafe,
+      parseOr,
       toArray,
       toSet,
       match,
