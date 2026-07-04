@@ -1,12 +1,17 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   LiteralUnion,
+  LiteralUnionMismatchError,
   type InferLiteralUnion,
   type LiteralUnionDescriptor,
   type LiteralUnionFrom,
   type LiteralUnionMembers,
 } from './literal-union.js';
-import { PanicException } from '@typemint/core';
+import {
+  Kind,
+  PanicException,
+  type NonEmptyReadonlyArray,
+} from '@typemint/core';
 import { assertErr, assertOk, Result } from '@typemint/result';
 
 describe('(unit) LiteralUnion', () => {
@@ -961,6 +966,155 @@ describe('(unit) LiteralUnion', () => {
         // Assert
         expect(act).toThrow(PanicException);
       });
+    });
+  });
+});
+
+describe('(unit) LiteralUnionMismatchError', () => {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Construction
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Construction', () => {
+    it('should tag the error with the LiteralUnionMismatchError kind', () => {
+      // Arrange & Act
+      const error = LiteralUnionMismatchError(
+        ['germany', 'france', 'usa'],
+        'belgium',
+      );
+
+      // Assert
+      expect(error.kind).toBe('LiteralUnionMismatchError');
+    });
+
+    it('should derive the message from the members and the received value', () => {
+      // Arrange & Act
+      const error = LiteralUnionMismatchError(
+        ['germany', 'france', 'usa'],
+        'belgium',
+      );
+
+      // Assert
+      expect(error.message).toBe(
+        'Expected one of "germany", "france", "usa" but got "belgium"',
+      );
+    });
+
+    it('should preserve the expected members and received value in details', () => {
+      // Arrange
+      const expected = ['germany', 'france', 'usa'] as const;
+
+      // Act
+      const error = LiteralUnionMismatchError(expected, 'belgium');
+
+      // Assert — the exact input tuple is carried through, not a copy
+      expect(error.details.expected).toBe(expected);
+      expect(error.details.received).toBe('belgium');
+    });
+
+    it('should be narrowable via the Kind discriminant', () => {
+      // Arrange
+      const error: unknown = LiteralUnionMismatchError(['germany'], 'belgium');
+
+      // Act & Assert
+      expect(Kind.isOf(error, 'LiteralUnionMismatchError')).toBe(true);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Message formatting
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Message formatting', () => {
+    it('should list every member when the count is at the preview limit', () => {
+      // Arrange & Act — five members is exactly the preview limit
+      const error = LiteralUnionMismatchError(['a', 'b', 'c', 'd', 'e'], 'z');
+
+      // Assert — no truncation, no "more" suffix
+      expect(error.message).toBe(
+        'Expected one of "a", "b", "c", "d", "e" but got "z"',
+      );
+    });
+
+    it('should truncate the member list beyond the preview limit', () => {
+      // Arrange & Act — seven members, two past the limit of five
+      const error = LiteralUnionMismatchError(
+        ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+        'z',
+      );
+
+      // Assert — only the first five are listed, the rest summarised
+      expect(error.message).toBe(
+        'Expected one of "a", "b", "c", "d", "e", … (+2 more) but got "z"',
+      );
+    });
+
+    it('should keep the full member list in details even when the message truncates', () => {
+      // Arrange
+      const expected = ['a', 'b', 'c', 'd', 'e', 'f', 'g'] as const;
+
+      // Act
+      const error = LiteralUnionMismatchError(expected, 'z');
+
+      // Assert — truncation only affects the human-readable string
+      expect(error.message).toContain('… (+2 more)');
+      expect(error.details.expected).toEqual([
+        'a',
+        'b',
+        'c',
+        'd',
+        'e',
+        'f',
+        'g',
+      ]);
+    });
+
+    it('should summarise a single overflowing member as "(+1 more)"', () => {
+      // Arrange & Act — six members, one past the limit
+      const error = LiteralUnionMismatchError(
+        ['a', 'b', 'c', 'd', 'e', 'f'],
+        'z',
+      );
+
+      // Assert
+      expect(error.message).toBe(
+        'Expected one of "a", "b", "c", "d", "e", … (+1 more) but got "z"',
+      );
+    });
+
+    it('should quote members and the received value so special characters stay unambiguous', () => {
+      // Arrange & Act — values containing quotes must be escaped, not raw
+      const error = LiteralUnionMismatchError(['wei"rd'], 'ha"ck');
+
+      // Assert — matches JSON.stringify escaping rather than naive interpolation
+      expect(error.message).toContain(JSON.stringify('wei"rd'));
+      expect(error.message).toContain(JSON.stringify('ha"ck'));
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Type-level
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Type-level', () => {
+    it('should carry the precise member union in details.expected', () => {
+      // Arrange & Act
+      const error = LiteralUnionMismatchError(
+        ['germany', 'france', 'usa'] as const,
+        'belgium',
+      );
+
+      // Assert
+      expectTypeOf(error.details.expected).toEqualTypeOf<
+        NonEmptyReadonlyArray<'germany' | 'france' | 'usa'>
+      >();
+    });
+
+    it('should default the member type to the wide LiteralUnionMemberBase', () => {
+      // Arrange
+      type Default = LiteralUnionMismatchError;
+
+      // Act & Assert — an unparameterised reference widens to string members
+      expectTypeOf<Default['details']['expected']>().toEqualTypeOf<
+        NonEmptyReadonlyArray<string>
+      >();
     });
   });
 });

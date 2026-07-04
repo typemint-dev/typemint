@@ -1,4 +1,10 @@
-import { PanicException, type NonEmptyReadonlyArray } from '@typemint/core';
+import {
+  Kind,
+  PanicException,
+  WithDetail,
+  WithMessage,
+  type NonEmptyReadonlyArray,
+} from '@typemint/core';
 import { Result } from '@typemint/result';
 
 /**
@@ -116,6 +122,115 @@ export type LiteralUnionMembers<T extends LiteralUnionMemberBase> = {
 
 export type InferLiteralUnion<T> =
   T extends LiteralUnionDescriptor<infer U> ? U : never;
+
+/**
+ * A structured error describing that a `string` was checked against a literal
+ * union but is not one of its declared members.
+ *
+ * It is the intersection of three reusable shapes from `@typemint/core`:
+ * - {@link Kind} — tags the object with the discriminant
+ *   `'LiteralUnionMismatchError'` so it can be narrowed within discriminated
+ *   unions. The discriminant is deliberately scoped to this primitive rather
+ *   than a generic name like `'NotAMemberError'`, so it never collides with a
+ *   structurally similar "value not in a closed set" error raised by a sibling
+ *   primitive (e.g. a future dictionary key miss).
+ * - {@link WithMessage} — a human-readable `message`.
+ * - {@link WithDetail} — the structured `details`, holding the `expected`
+ *   members (in declaration order) and the `received` value that failed.
+ *
+ * The two sides mirror {@link TypeMismatchError}, but the "expected" thing is a
+ * closed set of *names* rather than a single type, so `expected` is the union's
+ * member tuple — that is what makes both the message and any programmatic
+ * recovery useful (the caller sees exactly which values were allowed).
+ * `received` is always a `string`: this error is only raised *after* the value
+ * has been recognized as a string, so a non-string input is a
+ * {@link TypeMismatchError}, not this.
+ *
+ * @typeParam T - The literal union's member type. Defaults to the wide
+ *   {@link LiteralUnionMemberBase} for standalone references; a descriptor's
+ *   `parse`/`of` pin it to the precise member union.
+ *
+ * @example Narrowing a union on the `kind` discriminant
+ *
+ * ```ts
+ * function handle(error: LiteralUnionMismatchError | TypeMismatchError<string, unknown>) {
+ *   if (Kind.isOf(error, 'LiteralUnionMismatchError')) {
+ *     console.error(error.message);          // "Expected one of …"
+ *     console.error(error.details.expected); // the allowed members
+ *   }
+ * }
+ * ```
+ */
+export type LiteralUnionMismatchError<
+  T extends LiteralUnionMemberBase = LiteralUnionMemberBase,
+> = Kind<'LiteralUnionMismatchError'> &
+  WithMessage &
+  WithDetail<{
+    expected: NonEmptyReadonlyArray<T>;
+    received: string;
+  }>;
+
+const literalUnionMismatchKind = Kind.from('LiteralUnionMismatchError');
+
+/** How many members to list in the message before truncating with a count. */
+const MISMATCH_MEMBERS_PREVIEW = 5;
+
+/**
+ * Renders the union's members for a {@link LiteralUnionMismatchError} message,
+ * quoting each and truncating to the first {@link MISMATCH_MEMBERS_PREVIEW} with
+ * a `… (+N more)` suffix. The full list always survives in `details.expected`,
+ * so truncation only affects the human-readable string, never the data.
+ */
+function formatMembers(
+  members: NonEmptyReadonlyArray<LiteralUnionMemberBase>,
+): string {
+  const preview = members
+    .slice(0, MISMATCH_MEMBERS_PREVIEW)
+    .map((member) => JSON.stringify(member));
+  const remaining = members.length - preview.length;
+  const head = preview.join(', ');
+
+  return remaining > 0 ? `${head}, … (+${remaining} more)` : head;
+}
+
+/**
+ * Creates a {@link LiteralUnionMismatchError} from the union's declared members
+ * and the `string` that failed the membership check.
+ *
+ * `T` is inferred from `expected`, so the precise member union is carried in the
+ * returned error's `details.expected` without being written out at the call
+ * site. The `message` is derived as
+ * `Expected one of <members> but got <received>`, with the member list
+ * truncated for readability (see {@link formatMembers}); the full member tuple
+ * and the raw value are preserved under `details` for programmatic access.
+ *
+ * @param expected - The union's members, in declaration order.
+ * @param received - The `string` value that is not one of the members.
+ * @returns A fully populated `LiteralUnionMismatchError`.
+ *
+ * @example
+ *
+ * ```ts
+ * const error = LiteralUnionMismatchError(['germany', 'france', 'usa'], 'belgium');
+ *
+ * error.kind;             // 'LiteralUnionMismatchError'
+ * error.message;          // 'Expected one of "germany", "france", "usa" but got "belgium"'
+ * error.details.expected; // ['germany', 'france', 'usa']
+ * error.details.received; // 'belgium'
+ * ```
+ */
+export function LiteralUnionMismatchError<T extends LiteralUnionMemberBase>(
+  expected: NonEmptyReadonlyArray<T>,
+  received: string,
+): LiteralUnionMismatchError<T> {
+  const message = `Expected one of ${formatMembers(expected)} but got ${JSON.stringify(received)}`;
+
+  return {
+    ...literalUnionMismatchKind,
+    ...WithMessage.from(message),
+    ...WithDetail.from({ expected, received }),
+  };
+}
 
 /**
  * Exhaustive handler set for {@link LiteralUnionMatchFn}.
