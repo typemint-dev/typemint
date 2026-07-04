@@ -1050,6 +1050,66 @@ describe('(unit) LiteralUnion', () => {
       expect(act).toThrow(PanicException);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: ofUnsafe
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('ofUnsafe', () => {
+    it('should return the value directly when it is a member', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const value = union.ofUnsafe('france');
+      // Assert
+      expect(value).toBe('france');
+    });
+
+    it('should narrow the returned value to the union member type', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const value = union.ofUnsafe('france');
+      // Assert
+      expectTypeOf(value).toEqualTypeOf<'germany' | 'france' | 'usa'>();
+    });
+
+    it('should throw a PanicException when the value is not a member', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const act = () => union.ofUnsafe('belgium');
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should attach the LiteralUnionMismatchError as the exception cause', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      let caught: unknown;
+      try {
+        union.ofUnsafe('belgium');
+      } catch (error) {
+        caught = error;
+      }
+      // Assert
+      expect(caught).toBeInstanceOf(PanicException);
+      const cause = (caught as PanicException).cause;
+      expect(Kind.isOf(cause, 'LiteralUnionMismatchError')).toBe(true);
+      expect((cause as LiteralUnionMismatchError).details.received).toBe(
+        'belgium',
+      );
+    });
+
+    it('should throw a PanicException if the member name collides with the reserved key "ofUnsafe"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'ofUnsafe'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
 });
 
 describe('(unit) LiteralUnionMismatchError', () => {

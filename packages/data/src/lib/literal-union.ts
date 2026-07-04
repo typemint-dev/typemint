@@ -388,6 +388,41 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   of(value: LiteralUnionMemberBase): Result<T, LiteralUnionMismatchError<T>>;
 
   /**
+   * The **throwing** counterpart to {@link of}. Runs the same membership check,
+   * but instead of returning a {@link Result} it returns the value — narrowed
+   * to the union type — **directly** on success and **throws a
+   * {@link PanicException}** when the value is not a member. The
+   * {@link LiteralUnionMismatchError} is attached as the exception's `cause` so
+   * it stays inspectable.
+   *
+   * A failure signals a bug: the value was asserted to be a member but was not.
+   * Use this only where a violation is unrecoverable and should crash rather
+   * than be handled — asserting a value from a trusted, already-validated
+   * source (a persisted row, a prior `of`/parse result whose narrowing was lost
+   * in transit, a test fixture). For values you merely *believe* are members
+   * but want to handle on failure, use {@link of}; for `unknown` input from a
+   * trust boundary, recognize the `string` first.
+   *
+   * Prefer this over an `as` cast: it re-checks membership, is easy to search
+   * for, and only accepts a `string`, so it cannot brand the wrong primitive.
+   *
+   * @param value - A `string` asserted to be a member of the union.
+   * @returns `value`, narrowed to the union member type.
+   * @throws {PanicException} if `value` is not a declared member; the
+   *   {@link LiteralUnionMismatchError} is the exception's `cause`.
+   *
+   * @example Re-narrowing a value validated when it was persisted
+   *
+   * ```ts
+   * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   *
+   * // Throws if the stored value has since drifted out of the union.
+   * const country = Country.ofUnsafe(row.country); // 'germany' | 'france' | 'usa'
+   * ```
+   */
+  ofUnsafe(value: LiteralUnionMemberBase): T;
+
+  /**
    * Return the declared members of the union as a non-empty `readonly` tuple,
    * in the same order they were passed to {@link LiteralUnion}.
    *
@@ -876,6 +911,7 @@ export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
 const reservedKeys = new Set([
   'isOfType',
   'of',
+  'ofUnsafe',
   'toArray',
   'size',
   'match',
@@ -1020,6 +1056,20 @@ export function LiteralUnion<
       : Result.Err(LiteralUnionMismatchError(literalsCopy, value));
   }
 
+  // Throwing counterpart to `of`: returns the narrowed value on success, or
+  // panics on a miss with the `LiteralUnionMismatchError` attached as `cause`.
+  function ofUnsafe(value: LiteralUnionMemberBase): T[number] {
+    const result = of(value);
+    if (result.isErr()) {
+      throw new PanicException(
+        `LiteralUnion.ofUnsafe: ${JSON.stringify(value)} is not a member of ` +
+          `the union (LiteralUnionMismatchError attached as \`cause\`)`,
+        result.error,
+      );
+    }
+    return result.value;
+  }
+
   function toArray(): NonEmptyReadonlyArray<T[number]> {
     return literalsCopy;
   }
@@ -1041,6 +1091,7 @@ export function LiteralUnion<
       [Symbol.toStringTag]: 'LiteralUnion',
       isOfType,
       of,
+      ofUnsafe,
       toArray,
       match,
       matchResult,
