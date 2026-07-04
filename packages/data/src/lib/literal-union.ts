@@ -339,6 +339,55 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   isOfType: (value: unknown) => value is T;
 
   /**
+   * Validate that a `string` you already hold is a declared member of this
+   * union, returning it — narrowed to the union type — on success, or a
+   * {@link LiteralUnionMismatchError} on failure.
+   *
+   * Use `of` when the input is *statically known to be a `string`* but not yet
+   * known to be a member: an environment variable, a `VARCHAR` column, a CLI
+   * argument, a value already narrowed to `string` upstream. The "is it a
+   * string" question is answered by the type system, so `of` only checks
+   * membership. When the input is `unknown` (a JSON payload, a request body),
+   * recognize the `string` at the boundary first before reaching for `of`.
+   *
+   * `of` never throws and never mutates — it returns the outcome as a
+   * {@link Result}. The success value is the *same* string, re-typed as the
+   * union member; there is no branding or transformation (a literal union is
+   * structural, so the value already *is* its own identity).
+   *
+   * Membership is a `Set`-backed `O(1)` lookup, identical to {@link isOfType} —
+   * `of` is the {@link Result}-returning companion to that boolean guard.
+   *
+   * @param value - A `string` to check for membership.
+   * @returns `Ok` with `value` narrowed to the union member, or `Err` carrying
+   *   a {@link LiteralUnionMismatchError} whose `details.expected` lists every
+   *   declared member.
+   *
+   * @example Validate an environment variable
+   *
+   * ```ts
+   * const LogLevel = LiteralUnion(['debug', 'info', 'warn', 'error']);
+   *
+   * const level = LogLevel.of(process.env['LOG_LEVEL'] ?? 'info');
+   * if (level.isOk()) {
+   *   level.value; // 'debug' | 'info' | 'warn' | 'error'
+   * } else {
+   *   level.error.message; // 'Expected one of "debug", … but got "verbose"'
+   * }
+   * ```
+   *
+   * @example Compose in a `Result` pipeline
+   *
+   * ```ts
+   * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   *
+   * const capital = Country.of(row.country).map(lookupCapital);
+   * // capital: Result<string, LiteralUnionMismatchError<'germany' | 'france' | 'usa'>>
+   * ```
+   */
+  of(value: LiteralUnionMemberBase): Result<T, LiteralUnionMismatchError<T>>;
+
+  /**
    * Return the declared members of the union as a non-empty `readonly` tuple,
    * in the same order they were passed to {@link LiteralUnion}.
    *
@@ -826,6 +875,7 @@ export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
 
 const reservedKeys = new Set([
   'isOfType',
+  'of',
   'toArray',
   'size',
   'match',
@@ -959,6 +1009,17 @@ export function LiteralUnion<
     return typeof value === 'string' && memoSet.has(value);
   }
 
+  // Membership-only validation over a known `string`. Reuses the same
+  // `Set`-backed lookup as `isOfType`; on a miss it builds a
+  // `LiteralUnionMismatchError` carrying the full member list.
+  function of(
+    value: LiteralUnionMemberBase,
+  ): Result<T[number], LiteralUnionMismatchError<T[number]>> {
+    return memoSet.has(value)
+      ? Result.Ok(value as T[number])
+      : Result.Err(LiteralUnionMismatchError(literalsCopy, value));
+  }
+
   function toArray(): NonEmptyReadonlyArray<T[number]> {
     return literalsCopy;
   }
@@ -979,6 +1040,7 @@ export function LiteralUnion<
       },
       [Symbol.toStringTag]: 'LiteralUnion',
       isOfType,
+      of,
       toArray,
       match,
       matchResult,

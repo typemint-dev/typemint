@@ -968,6 +968,88 @@ describe('(unit) LiteralUnion', () => {
       });
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: of
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('of', () => {
+    it('should return Ok with the value when it is a member', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const result = union.of('france');
+      // Assert
+      assertOk(result);
+      expect(result.value).toBe('france');
+    });
+
+    it('should narrow the Ok value to the union member type', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const result = union.of('france');
+      // Assert
+      assertOk(result);
+      expectTypeOf(result.value).toEqualTypeOf<'germany' | 'france' | 'usa'>();
+    });
+
+    it('should return Err with a LiteralUnionMismatchError when the value is not a member', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const result = union.of('belgium');
+      // Assert
+      assertErr(result);
+      expect(result.error.kind).toBe('LiteralUnionMismatchError');
+      expect(result.error.details.received).toBe('belgium');
+      expect(result.error.details.expected).toEqual([
+        'germany',
+        'france',
+        'usa',
+      ]);
+    });
+
+    it('should type the Err channel as LiteralUnionMismatchError of the members', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const result = union.of('belgium');
+      // Assert
+      assertErr(result);
+      expectTypeOf(result.error).toEqualTypeOf<
+        LiteralUnionMismatchError<'germany' | 'france' | 'usa'>
+      >();
+    });
+
+    it('should reject an empty string when it is not a member', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b'] as const);
+      // Act
+      const result = union.of('');
+      // Assert
+      assertErr(result);
+      expect(result.error.details.received).toBe('');
+    });
+
+    it('should reuse the same declared members array in the error', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b'] as const);
+      // Act — the same reference backs both toArray() and the error's expected
+      const result = union.of('z');
+      // Assert
+      assertErr(result);
+      expect(result.error.details.expected).toBe(union.toArray());
+    });
+
+    it('should throw a PanicException if the member name collides with the reserved key "of"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'of'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
 });
 
 describe('(unit) LiteralUnionMismatchError', () => {
