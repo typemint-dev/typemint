@@ -487,6 +487,39 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   >;
 
   /**
+   * The **throwing** counterpart to {@link parse}. Runs the same recognize-then
+   * check-membership pipeline, but returns the value — narrowed to the union
+   * type — **directly** on success and **throws a {@link PanicException}** on
+   * failure. Whichever error {@link parse} would have returned (a
+   * {@link TypeMismatchError} for a non-string, or a
+   * {@link LiteralUnionMismatchError} for a non-member string) is attached as
+   * the exception's `cause` so it stays inspectable.
+   *
+   * A failure signals a bug: an `unknown` was asserted to already be a member
+   * but was not. Use this only where a violation is unrecoverable and should
+   * crash rather than be handled — a value from a source you fully trust to be
+   * well-formed. For untrusted input you want to handle on failure, use
+   * {@link parse}; when the value is already statically a `string`, use
+   * {@link ofUnsafe}.
+   *
+   * @param value - The `unknown` value asserted to be a member of the union.
+   * @returns `value`, narrowed to the union member type.
+   * @throws {PanicException} if `value` is not a string or not a declared
+   *   member; the underlying {@link TypeMismatchError} or
+   *   {@link LiteralUnionMismatchError} is the exception's `cause`.
+   *
+   * @example Assert a value from a trusted source
+   *
+   * ```ts
+   * const Country = LiteralUnion(['germany', 'france', 'usa']);
+   *
+   * // Throws if the config value is missing or not a known country.
+   * const country = Country.parseUnsafe(config.country); // 'germany' | 'france' | 'usa'
+   * ```
+   */
+  parseUnsafe(value: unknown): T;
+
+  /**
    * Return the declared members of the union as a non-empty `readonly` tuple,
    * in the same order they were passed to {@link LiteralUnion}.
    *
@@ -985,6 +1018,7 @@ const reservedKeys = new Set([
   'of',
   'ofUnsafe',
   'parse',
+  'parseUnsafe',
   'toArray',
   'size',
   'match',
@@ -1142,6 +1176,21 @@ export function LiteralUnion<
       : Result.Err(TypeMismatchError(STRING_DESCRIPTOR, value));
   }
 
+  // Throwing counterpart to `parse`: returns the narrowed value on success, or
+  // panics on failure with the underlying error (TypeMismatchError or
+  // LiteralUnionMismatchError) attached as `cause`.
+  function parseUnsafe(value: unknown): T[number] {
+    const result = parse(value);
+    if (result.isErr()) {
+      throw new PanicException(
+        `LiteralUnion.parseUnsafe: value is not a member of the union ` +
+          `(${result.error.kind} attached as \`cause\`)`,
+        result.error,
+      );
+    }
+    return result.value;
+  }
+
   // Throwing counterpart to `of`: returns the narrowed value on success, or
   // panics on a miss with the `LiteralUnionMismatchError` attached as `cause`.
   function ofUnsafe(value: LiteralUnionMemberBase): T[number] {
@@ -1179,6 +1228,7 @@ export function LiteralUnion<
       of,
       ofUnsafe,
       parse,
+      parseUnsafe,
       toArray,
       match,
       matchResult,

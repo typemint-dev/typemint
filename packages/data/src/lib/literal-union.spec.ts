@@ -1201,6 +1201,88 @@ describe('(unit) LiteralUnion', () => {
       expect(act).toThrow(PanicException);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: parseUnsafe
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('parseUnsafe', () => {
+    it('should return the value directly when it is a member', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const value = union.parseUnsafe('france');
+      // Assert
+      expect(value).toBe('france');
+    });
+
+    it('should narrow the returned value to the union member type', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const value = union.parseUnsafe('france');
+      // Assert
+      expectTypeOf(value).toEqualTypeOf<'germany' | 'france' | 'usa'>();
+    });
+
+    it('should throw a PanicException when the value is a non-member string', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const act = () => union.parseUnsafe('belgium');
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException when the value is not a string', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      const act = () => union.parseUnsafe(42);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should attach a LiteralUnionMismatchError as the cause for a non-member string', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      let caught: unknown;
+      try {
+        union.parseUnsafe('belgium');
+      } catch (error) {
+        caught = error;
+      }
+      // Assert
+      expect(caught).toBeInstanceOf(PanicException);
+      const cause = (caught as PanicException).cause;
+      expect(Kind.isOf(cause, 'LiteralUnionMismatchError')).toBe(true);
+    });
+
+    it('should attach a TypeMismatchError as the cause for a non-string', () => {
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+      // Act
+      let caught: unknown;
+      try {
+        union.parseUnsafe(42);
+      } catch (error) {
+        caught = error;
+      }
+      // Assert
+      expect(caught).toBeInstanceOf(PanicException);
+      const cause = (caught as PanicException).cause;
+      expect(Kind.isOf(cause, 'TypeMismatchError')).toBe(true);
+    });
+
+    it('should throw a PanicException if the member name collides with the reserved key "parseUnsafe"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'parseUnsafe'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
 });
 
 describe('(unit) LiteralUnionMismatchError', () => {
