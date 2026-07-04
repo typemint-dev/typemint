@@ -1,5 +1,22 @@
 # @typemint/data
 
+## 0.7.0
+
+### Minor Changes
+
+- Add LiteralUnionMismatchError type
+- Add LiteralUnion.of method
+- Add LiteralUnion.parse method
+- Add LiteralUnion.parseUnsafe method
+- Add Scalar.parseUnsafe method
+- Add LiteralUnion.toSet method
+- Add LiteralUnion.parseOr method
+- Add assertLiteralUnion type guard
+
+### Patch Changes
+
+- Fix type inference for Dictionary descriptor methods
+
 ## 0.6.0
 
 ### Minor Changes
