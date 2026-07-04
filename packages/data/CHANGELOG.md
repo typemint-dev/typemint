@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.8.0
+
+### Minor Changes
+
+- Add InferLiteralUnionMismatchError type
+
 ## 0.7.0
 
 ### Minor Changes
