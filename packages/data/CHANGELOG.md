@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.9.0
+
+### Minor Changes
+
+- InferLiteralUnionMismatchError from literal union members too.
+
 ## 0.8.0
 
 ### Minor Changes
