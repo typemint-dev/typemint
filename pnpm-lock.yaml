@@ -55,6 +55,12 @@ importers:
         specifier: ^8.5.1
         version: 8.5.1(postcss@8.5.9)(typescript@6.0.2)
 
+  packages/scalars:
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(postcss@8.5.9)(typescript@6.0.2)
+
 packages:
 
   '@babel/helper-string-parser@7.27.1':
