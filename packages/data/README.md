@@ -81,6 +81,7 @@ import { LiteralUnion, Dictionary } from '@typemint/data';
   - [`unwrap`](#unwrapvalue-scalar)
   - [Adding invariants](#adding-invariants)
   - [Methods and constants](#methods-and-constants)
+  - [Factories](#factories)
   - [`extend`: refining a scalar](#extend-refining-a-scalar)
   - [Type helpers](#scalar-type-helpers)
 - [License](#license)
@@ -1280,8 +1281,8 @@ Call `Scalar(name, kind, config?)`:
 - **`kind`** — the primitive to refine, one of `'string' | 'number' | 'bigint'
   | 'boolean'`. It is recognized at runtime with a direct `typeof` check — no
   decoder or codec required.
-- **`config`** — optional; declares `invariants`, custom `methods`, and
-  `consts` (all covered below).
+- **`config`** — optional; declares `invariants`, custom `methods`, `consts`,
+  and `factories` (all covered below).
 
 ```ts
 // Bare scalar — brands the primitive, checks nothing beyond its `typeof`.
@@ -1522,6 +1523,79 @@ A method or const name that collides with a **built-in** member (`name`, `of`,
 between a method and a const (the two maps are checked independently) surfaces
 at construction time as a `PanicException`.
 
+### Factories
+
+Where a [method](#methods-and-constants) operates *on* an already-validated
+value, a **factory** *produces* one. `config.factories` hangs named
+constructors off the descriptor — functions that take arbitrary arguments and
+return a `Result` of the branded scalar. Like `methods`, the callback receives
+`self`, so a factory builds its result through `self.of` / `self.parse`.
+
+Two properties set a factory apart from a method:
+
+- **Arbitrary input.** A method's first argument is forced to be a branded
+  `Scalar<TName, TRoot>`; a factory's arguments are unconstrained — raw
+  primitives, an options object, or even a *differently-branded* scalar, which
+  a method cannot accept.
+- **Guaranteed branded output.** A factory's return type is fixed to
+  `Result<Scalar<TName, TRoot>, …>`. Because the only way to obtain a branded
+  value is through the descriptor's own `of` / `parse`, this guarantees a
+  factory hands back a validated value — returning a bare primitive is a compile
+  error.
+
+```ts
+const isEmail = Invariant(
+  (value: string) => value.includes('@'),
+  () => 'NOT_EMAIL' as const,
+);
+
+const Email = Scalar('Email', 'string', {
+  invariants: [isEmail],
+  factories: (self) => ({
+    fromParts: (local: string, domain: string) => self.of(`${local}@${domain}`),
+  }),
+});
+
+const email = Email.fromParts('alice', 'corp.com');
+// Result<Scalar<'Email', string>, 'NOT_EMAIL'>  — the invariant error propagates
+```
+
+A factory is the natural home for a constructor whose input is *another* scalar
+— exactly the case a method's first-argument rule forbids:
+
+```ts
+const Username = Scalar('Username', 'string');
+
+const Email = Scalar('Email', 'string', {
+  invariants: [isEmail],
+  factories: (self) => ({
+    fromUsername: (user: Scalar<'Username', string>) =>
+      self.of(`${user}@corp.com`),
+  }),
+});
+
+Email.fromUsername(Username.ofUnsafe('bob')); // Result<Email, 'NOT_EMAIL'>
+```
+
+Factories can be declared on an extended scalar too, building the nested brand
+through the derived `self.of`:
+
+```ts
+const UInt = Int.extend('UInt', {
+  invariants: [isNonNegative],
+  factories: (self) => ({
+    fromCount: (n: number) => self.of(n),
+  }),
+});
+
+UInt.fromCount(3);  // Ok(branded UInt)
+UInt.fromCount(-1); // Err('NEGATIVE')
+```
+
+A factory name that collides with a **built-in** member is a compile error; a
+collision with a declared method or const is caught at construction time as a
+`PanicException` (factories are assigned after methods and consts).
+
 ### `extend`: refining a scalar
 
 `extend` derives a stricter scalar from an existing one. The derived scalar's
@@ -1564,7 +1638,7 @@ through the parent descriptor (subtyping), e.g. `Int.someMethod(uintValue)`.
 | ---- | ----------- |
 | `Scalar<TName, TType>` | The branded value type: `TType & Tag<TName>`. |
 | `ScalarDescriptor<TName, TRoot, TError>` | The runtime handle returned by the factory (`of`, `parse`, …). |
-| `ScalarConfig<…>` | The optional third argument: `invariants`, `methods`, `consts`. |
+| `ScalarConfig<…>` | The optional third argument: `invariants`, `methods`, `consts`, `factories`. |
 | `ScalarPrimitive` | The primitives a scalar may refine (`string \| number \| bigint \| boolean`). |
 | `ScalarPrimitiveKind` | The runtime `kind` discriminant (`'string' \| 'number' \| …`). |
 | `InferScalarType<T>` | The branded `Scalar` type produced by a descriptor. |

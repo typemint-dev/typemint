@@ -670,6 +670,153 @@ describe('(unit) Scalar', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Scalar factories
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Scalar factories', () => {
+    const isEmail = Invariant(
+      (value: string) => value.includes('@'),
+      () => 'NOT_EMAIL' as const,
+    );
+
+    it('should expose the factory on the descriptor returning a branded Result', () => {
+      // Arrange
+      const Email = Scalar('Email', 'string', {
+        invariants: [isEmail],
+        factories: (self) => ({
+          fromParts: (local: string, domain: string) =>
+            self.of(`${local}@${domain}`),
+        }),
+      });
+
+      // Act
+      const result = Email.fromParts('alice', 'corp.com');
+
+      // Assert - runtime
+      assertOk(result);
+      expect(result.value).toBe('alice@corp.com');
+      // Assert - type: the factory travels on the descriptor and its return is
+      // branded, carrying the scalar's own invariant error channel.
+      expectTypeOf(Email.fromParts).toEqualTypeOf<
+        (
+          local: string,
+          domain: string,
+        ) => Result<Scalar<'Email', string>, 'NOT_EMAIL'>
+      >();
+    });
+
+    it('should accept another scalar as an input', () => {
+      // Arrange - a factory whose first argument is a differently-branded
+      // scalar, which the instance-method contract forbids but factories allow.
+      const Username = Scalar('Username', 'string');
+      const Email = Scalar('Email', 'string', {
+        invariants: [isEmail],
+        factories: (self) => ({
+          fromUsername: (user: Scalar<'Username', string>) =>
+            self.of(`${user}@corp.com`),
+        }),
+      });
+      const user = Username.ofUnsafe('bob');
+
+      // Act
+      const result = Email.fromUsername(user);
+
+      // Assert
+      assertOk(result);
+      expect(result.value).toBe('bob@corp.com');
+    });
+
+    it('should propagate the invariant error when the built value is invalid', () => {
+      // Arrange
+      const Email = Scalar('Email', 'string', {
+        invariants: [isEmail],
+        factories: (self) => ({
+          fromRaw: (raw: string) => self.of(raw),
+        }),
+      });
+
+      // Act
+      const result = Email.fromRaw('not-an-email');
+
+      // Assert
+      assertErr(result);
+      expect(result.error).toBe('NOT_EMAIL');
+    });
+
+    it('should reject a factory that returns an unbranded value at the type level', () => {
+      // Arrange & Act - the output-branding guarantee: a factory must go
+      // through `self.of`/`self.ofUnsafe`; returning a raw primitive is a
+      // compile error. The descriptor still builds at runtime.
+      const act = () =>
+        Scalar('MyString', 'string', {
+          // @ts-expect-error - factory must return a branded Result, not a raw primitive
+          factories: () => ({
+            fromRaw: (raw: string) => Result.Ok(raw),
+          }),
+        });
+
+      // Assert
+      expect(act).not.toThrow();
+    });
+
+    it('should expose factories alongside methods and consts', () => {
+      // Arrange
+      const Email = Scalar('Email', 'string', {
+        invariants: [isEmail],
+        consts: { MAX_LENGTH: 254 },
+        methods: (self) => ({
+          getDomain: (email: InferScalarType<typeof self>) =>
+            email.split('@')[1],
+        }),
+        factories: (self) => ({
+          fromParts: (local: string, domain: string) =>
+            self.of(`${local}@${domain}`),
+        }),
+      });
+      const built = Email.fromParts('carol', 'corp.com');
+      assertOk(built);
+
+      // Act & Assert
+      expect(Email.MAX_LENGTH).toBe(254);
+      expect(Email.getDomain(built.value)).toBe('corp.com');
+      expect(built.value).toBe('carol@corp.com');
+    });
+
+    it('should prevent a factory overriding a built-in key with a compilation error and a runtime error', () => {
+      // Arrange & Act
+      const act = () => {
+        Scalar('MyString', 'string', {
+          // @ts-expect-error - "of" collides with a built-in descriptor member
+          factories: (self) => ({
+            of: (value: any): any => value,
+          }),
+        });
+      };
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should panic when a factory collides with a custom method name', () => {
+      // Arrange & Act
+      // The type guard only forbids built-in keys, so a method/factory clash is
+      // caught at runtime rather than at compile time.
+      const act = () => {
+        Scalar('MyString', 'string', {
+          methods: () => ({
+            build: (value: Scalar<'MyString', string>) => value,
+          }),
+          factories: (self) => ({
+            build: (raw: string) => self.of(raw),
+          }),
+        });
+      };
+
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // MARK: Scalar is
   // ─────────────────────────────────────────────────────────────────────────────
   describe('Scalar is', () => {
@@ -1250,6 +1397,28 @@ describe('(unit) Scalar', () => {
       assertOk(result);
       expect(UInt.MIN).toBe(0);
       expect(UInt.isZero(result.value)).toBe(true);
+    });
+
+    it('should allow the derived scalar to define its own factories', () => {
+      // Arrange
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', {
+        invariants: [isNonNegative],
+        factories: (self) => ({
+          fromCount: (n: number) => self.of(n),
+        }),
+      });
+
+      // Act - the factory travels on the derived descriptor and builds the
+      // nested brand via the extended `self.of`.
+      const ok = UInt.fromCount(3);
+      const bad = UInt.fromCount(-1);
+
+      // Assert
+      assertOk(ok);
+      expect(ok.value).toBe(3);
+      assertErr(bad);
+      expect(bad.error).toBe('NEGATIVE');
     });
   });
 

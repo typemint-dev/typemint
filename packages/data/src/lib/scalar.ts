@@ -392,6 +392,11 @@ export type ScalarDescriptor<
     TNewMethods extends ScalarCustomMethods<TNewName, Scalar<TName, TRoot>> =
       Record<never, never>,
     const TNewConsts extends ScalarCustomConsts = Record<never, never>,
+    TNewFactories extends ScalarCustomFactories<
+      TNewName,
+      Scalar<TName, TRoot>,
+      InferInvariantsError<TNewInvariants>
+    > = Record<never, never>,
   >(
     name: TNewName,
     config?: ScalarConfig<
@@ -399,7 +404,8 @@ export type ScalarDescriptor<
       Scalar<TName, TRoot>,
       TNewInvariants,
       TNewMethods,
-      TNewConsts
+      TNewConsts,
+      TNewFactories
     >,
   ): ScalarDescriptor<
     TNewName,
@@ -407,7 +413,8 @@ export type ScalarDescriptor<
     TInvariantError | InferInvariantsError<TNewInvariants>
   > &
     TNewMethods &
-    TNewConsts;
+    TNewConsts &
+    TNewFactories;
 };
 
 type ReservedScalarKeys<
@@ -429,6 +436,31 @@ export type ScalarCustomMethods<
   TName extends string,
   TRoot extends ScalarPrimitive,
 > = Record<string, (value: Scalar<TName, TRoot>, ...args: any[]) => unknown>;
+
+/**
+ * Shape of the custom factories attachable to a descriptor via
+ * {@link ScalarConfig.factories}. A factory is a named constructor for the
+ * scalar: it takes arbitrary arguments (unlike a {@link ScalarCustomMethods
+ * method}, whose first argument is forced to be a validated value of the scalar)
+ * and must return a `Result` of the branded value. That return type is what
+ * enforces the output guarantee — the only way to produce a `Scalar<TName,
+ * TRoot>` is through the descriptor's own `of`/`parse`, so a factory cannot
+ * hand back an unbranded primitive. `TInvariantError` is the scalar's invariant
+ * error channel, propagated straight from `self.of`.
+ *
+ * @example
+ * type EmailFactories = ScalarCustomFactories<'Email', string, 'NOT_EMAIL'>;
+ * // e.g. { fromParts: (local: string, domain: string) =>
+ * //          Result<Scalar<'Email', string>, 'NOT_EMAIL'> }
+ */
+export type ScalarCustomFactories<
+  TName extends string,
+  TRoot extends ScalarPrimitive,
+  TInvariantError = never,
+> = Record<
+  string,
+  (...args: any[]) => Result<Scalar<TName, TRoot>, TInvariantError>
+>;
 
 /**
  * Shape of the custom constants attachable to a descriptor via
@@ -474,6 +506,11 @@ export type ScalarConfig<
     TRoot
   >,
   TConsts extends ScalarCustomConsts = ScalarCustomConsts,
+  TFactories extends ScalarCustomFactories<
+    TName,
+    TRoot,
+    InferInvariantsError<TInvariants>
+  > = ScalarCustomFactories<TName, TRoot, InferInvariantsError<TInvariants>>,
 > = {
   /**
    * Invariants enforced on every value produced by this scalar. Declare the
@@ -537,6 +574,51 @@ export type ScalarConfig<
   readonly consts?: TConsts & {
     [K in ReservedScalarKeys<TName, TRoot>]?: never;
   };
+
+  /**
+   * Defines named constructors on the scalar descriptor. Like {@link methods},
+   * the callback receives `self` — the descriptor with the built-in members
+   * (`name`, `of`, `parse`, `validate`, …) — so a factory builds its result
+   * through `self.of`/`self.parse`.
+   *
+   * A factory differs from a method in what it is *for*: a method operates on an
+   * already-validated value (its first argument is forced to be a branded
+   * `Scalar<TName, TRoot>`), whereas a factory *produces* one from arbitrary
+   * input — including a differently-branded scalar, which a method cannot
+   * accept. In exchange, its return type is fixed to `Result<Scalar<TName,
+   * TRoot>, …>`: because a branded value can only come from the descriptor's own
+   * `of`/`parse`, this guarantees a factory hands back a validated value rather
+   * than a raw primitive.
+   *
+   * A factory name colliding with a **built-in** member (`name`, `of`, `parse`,
+   * `validate`, `is`, `unwrap`, `extend`) is a compile error (the
+   * `{ [K in ReservedScalarKeys]?: never }` guard). A collision with a declared
+   * `method` or `const` is **not** caught statically — the maps are checked
+   * independently — and surfaces at construction time as a
+   * {@link PanicException} (factories are assigned after methods and consts).
+   *
+   * @example
+   * const Email = Scalar('Email', 'string', {
+   *   invariants: [isEmail],
+   *   factories: (self) => ({
+   *     fromParts: (local: string, domain: string) =>
+   *       self.of(`${local}@${domain}`),
+   *   }),
+   * });
+   * const email = Email.fromParts('a', 'b.com'); // Result<Scalar<'Email', string>, 'NOT_EMAIL'>
+   *
+   * @example
+   * // A factory can take another scalar as input — a method cannot.
+   * const Email = Scalar('Email', 'string', {
+   *   factories: (self) => ({
+   *     fromUsername: (user: Scalar<'Username', string>) =>
+   *       self.of(`${user}@corp.com`),
+   *   }),
+   * });
+   */
+  readonly factories?: (
+    self: ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>>,
+  ) => TFactories & { [K in ReservedScalarKeys<TName, TRoot>]?: never };
 };
 
 const KIND_DESCRIPTORS: Record<
@@ -697,6 +779,9 @@ function buildScalar(
   if (config?.consts) {
     assignMembers(config.consts);
   }
+  if (typeof config?.factories === 'function') {
+    assignMembers(config.factories(descriptor));
+  }
 
   return Object.freeze(descriptor);
 }
@@ -712,11 +797,11 @@ function buildScalar(
  * @param kind - The {@link ScalarPrimitiveKind} to refine, recognized at runtime
  *   with a direct `typeof` check.
  * @param config - Optional {@link ScalarConfig} declaring `invariants`, custom
- *   `methods`, and `consts`.
+ *   `methods`, `consts`, and `factories`.
  * @returns A frozen descriptor exposing `of`, `parse`, `validate`, `is`,
  *   `unwrap`, `extend`, and any declared custom members.
- * @throws {PanicException} if a custom method or const name collides with a
- *   built-in descriptor member or another custom member.
+ * @throws {PanicException} if a custom method, const, or factory name collides
+ *   with a built-in descriptor member or another custom member.
  *
  * @example
  * // Bare scalar — only checks the primitive kind.
@@ -767,6 +852,11 @@ export function Scalar<
     never
   >,
   const TConsts extends ScalarCustomConsts = Record<never, never>,
+  TFactories extends ScalarCustomFactories<
+    TName,
+    KindToPrimitive<TKind>,
+    InferInvariantsError<TInvariants>
+  > = Record<never, never>,
 >(
   name: TName,
   kind: TKind,
@@ -775,7 +865,8 @@ export function Scalar<
     KindToPrimitive<TKind>,
     TInvariants,
     TMethods,
-    TConsts
+    TConsts,
+    TFactories
   >,
 ): ScalarDescriptor<
   TName,
@@ -783,7 +874,8 @@ export function Scalar<
   InferInvariantsError<TInvariants>
 > &
   TMethods &
-  TConsts;
+  TConsts &
+  TFactories;
 export function Scalar<
   const TName extends string,
   const TKind extends ScalarPrimitiveKind,
