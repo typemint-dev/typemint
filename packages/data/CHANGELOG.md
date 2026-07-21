@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.10.0
+
+### Minor Changes
+
+- Add Scalar factories
+
 ## 0.9.0
 
 ### Minor Changes
