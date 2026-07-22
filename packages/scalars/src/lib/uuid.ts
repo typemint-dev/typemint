@@ -1,19 +1,17 @@
-import {
-  Invariant,
-  Scalar,
-  type InferScalarType,
-  type Scalar as ScalarType,
-} from '@typemint/data';
+import { Invariant, Scalar, type InferScalarType } from '@typemint/data';
 import {
   Kind,
   PanicException,
   type WithDetail,
   type WithMessage,
 } from '@typemint/core';
-import type { Result } from '@typemint/result';
 
 function requireWebCrypto(): Crypto & { randomUUIDv7?: () => string } {
-  if (typeof crypto === 'undefined' || !crypto.randomUUID || !crypto.getRandomValues) {
+  if (
+    typeof crypto === 'undefined' ||
+    !crypto.randomUUID ||
+    !crypto.getRandomValues
+  ) {
     throw new PanicException(
       '@typemint/scalars: global Web Crypto is required (Node ≥ 19 or a browser)',
     );
@@ -59,8 +57,8 @@ export const Uuid = Scalar('Uuid', 'string', {
     },
   }),
   factories: (self) => ({
-    generate: (): Result<ScalarType<'Uuid', string>, IsUuidInvariantError> => {
-      return self.of(requireWebCrypto().randomUUID());
+    generate: (): InferScalarType<typeof self> => {
+      return self.ofUnsafe(requireWebCrypto().randomUUID());
     },
   }),
 });
@@ -93,8 +91,8 @@ const isUuid4Invariant = Invariant(isUuid4, ofIsUuid4InvariantError);
 export const UUID4 = Uuid.extend('UUID4', {
   invariants: [isUuid4Invariant],
   factories: (self) => ({
-    generate: () => {
-      return self.of(requireWebCrypto().randomUUID());
+    generate: (): InferScalarType<typeof self> => {
+      return self.ofUnsafe(requireWebCrypto().randomUUID());
     },
   }),
 });
@@ -148,20 +146,9 @@ function buildUuid7(): string {
 
 export const UUID7 = Uuid.extend('UUID7', {
   invariants: [isUuid7Invariant],
-  methods: (self) => ({
-    generate: () => {
-      if (typeof crypto === 'undefined') {
-        throw new PanicException(
-          '@typemint/scalars: global Web Crypto is required (Node ≥ 19 or a browser)',
-        );
-      }
-      // Node ≥ 26.1.0 exposes randomUUIDv7 on the global Crypto; its lib types may
-      // not be loaded, so widen locally with an optional member.
-      const webcrypto = requireWebCrypto();
-      if (typeof webcrypto.randomUUIDv7 === 'function') {
-        return self.ofUnsafe(webcrypto.randomUUIDv7());
-      }
-      return self.ofUnsafe(buildUuid7());
+  factories: (self) => ({
+    generate: (): InferScalarType<typeof self> => {
+      return self.ofUnsafe(requireWebCrypto().randomUUIDv7?.() ?? buildUuid7());
     },
   }),
 });
