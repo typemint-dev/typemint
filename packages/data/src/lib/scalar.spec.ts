@@ -704,6 +704,31 @@ describe('(unit) Scalar', () => {
       >();
     });
 
+    it('should allow an unsafe factory that returns the branded value directly', () => {
+      // Arrange - the unsafe path: built via `self.ofUnsafe`, the factory
+      // returns a bare `Scalar` (not a `Result`) and panics on a failed
+      // invariant rather than returning an `Err`.
+      const Email = Scalar('Email', 'string', {
+        invariants: [isEmail],
+        factories: (self) => ({
+          fromTrusted: (raw: string) => self.ofUnsafe(raw),
+        }),
+      });
+
+      // Act
+      const email = Email.fromTrusted('dave@corp.com');
+
+      // Assert - runtime: the value is branded and already unwrapped.
+      expect(email).toBe('dave@corp.com');
+      // Assert - type: the return is the bare branded value, not a Result.
+      expectTypeOf(Email.fromTrusted).toEqualTypeOf<
+        (raw: string) => Scalar<'Email', string>
+      >();
+
+      // Act & Assert - a failed invariant panics instead of returning an Err.
+      expect(() => Email.fromTrusted('not-an-email')).toThrow(PanicException);
+    });
+
     it('should accept another scalar as an input', () => {
       // Arrange - a factory whose first argument is a differently-branded
       // scalar, which the instance-method contract forbids but factories allow.
@@ -744,11 +769,12 @@ describe('(unit) Scalar', () => {
 
     it('should reject a factory that returns an unbranded value at the type level', () => {
       // Arrange & Act - the output-branding guarantee: a factory must go
-      // through `self.of`/`self.ofUnsafe`; returning a raw primitive is a
-      // compile error. The descriptor still builds at runtime.
+      // through `self.of`/`self.ofUnsafe`; returning a raw primitive — even
+      // wrapped in a `Result` — is a compile error. The descriptor still builds
+      // at runtime.
       const act = () =>
         Scalar('MyString', 'string', {
-          // @ts-expect-error - factory must return a branded Result, not a raw primitive
+          // @ts-expect-error - factory must return a branded value (Result or bare Scalar), not a raw primitive
           factories: () => ({
             fromRaw: (raw: string) => Result.Ok(raw),
           }),
@@ -1433,9 +1459,10 @@ describe('(unit) Scalar', () => {
       );
       const Int = Scalar('Int', 'number', { invariants: [isInteger] });
       const UInt = Int.extend('UInt', {
-        invariants: [isNonNegative], factories: (self) => ({
+        invariants: [isNonNegative],
+        factories: (self) => ({
           fromCount: (n: number) => self.of(n),
-        })
+        }),
       });
 
       // Act
@@ -1444,7 +1471,7 @@ describe('(unit) Scalar', () => {
 
       // Assert
       expectTypeOf<UIntError>().toEqualTypeOf<'NOT_INTEGER' | 'NEGATIVE'>();
-    })
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

@@ -443,16 +443,25 @@ export type ScalarCustomMethods<
  * {@link ScalarConfig.factories}. A factory is a named constructor for the
  * scalar: it takes arbitrary arguments (unlike a {@link ScalarCustomMethods
  * method}, whose first argument is forced to be a validated value of the scalar)
- * and must return a `Result` of the branded value. That return type is what
- * enforces the output guarantee — the only way to produce a `Scalar<TName,
- * TRoot>` is through the descriptor's own `of`/`parse`, so a factory cannot
- * hand back an unbranded primitive. `TInvariantError` is the scalar's invariant
- * error channel, propagated straight from `self.of`.
+ * and returns the branded value in one of two shapes:
+ *
+ * - `Result<Scalar<TName, TRoot>, TInvariantError>` — the safe path, built via
+ *   `self.of` / `self.parse`; a failed invariant surfaces as an `Err`.
+ * - `Scalar<TName, TRoot>` — the unsafe path, built via `self.ofUnsafe` /
+ *   `self.parseUnsafe`; a failed invariant throws a {@link PanicException}.
+ *
+ * Either shape is *branded*: a `Scalar<TName, TRoot>` can only come from the
+ * descriptor's own constructors, so a factory can never hand back an unbranded
+ * primitive. The union therefore widens only *how* a failure surfaces (an `Err`
+ * vs a panic) — mirroring the `of` / `ofUnsafe` duality — not the output
+ * guarantee. `TInvariantError` is the scalar's invariant error channel, used by
+ * the `Result` arm and propagated straight from `self.of`.
  *
  * @example
  * type EmailFactories = ScalarCustomFactories<'Email', string, 'NOT_EMAIL'>;
- * // e.g. { fromParts: (local: string, domain: string) =>
- * //          Result<Scalar<'Email', string>, 'NOT_EMAIL'> }
+ * // safe:   fromParts:   (local: string, domain: string) =>
+ * //            Result<Scalar<'Email', string>, 'NOT_EMAIL'>
+ * // unsafe: fromTrusted: (raw: string) => Scalar<'Email', string>
  */
 export type ScalarCustomFactories<
   TName extends string,
@@ -460,7 +469,9 @@ export type ScalarCustomFactories<
   TInvariantError = never,
 > = Record<
   string,
-  (...args: any[]) => Result<Scalar<TName, TRoot>, TInvariantError>
+  (
+    ...args: any[]
+  ) => Scalar<TName, TRoot> | Result<Scalar<TName, TRoot>, TInvariantError>
 >;
 
 /**
@@ -595,10 +606,14 @@ export type ScalarConfig<
    * already-validated value (its first argument is forced to be a branded
    * `Scalar<TName, TRoot>`), whereas a factory *produces* one from arbitrary
    * input — including a differently-branded scalar, which a method cannot
-   * accept. In exchange, its return type is fixed to `Result<Scalar<TName,
-   * TRoot>, …>`: because a branded value can only come from the descriptor's own
-   * `of`/`parse`, this guarantees a factory hands back a validated value rather
-   * than a raw primitive.
+   * accept. Its return type is the branded value in either shape: a
+   * `Result<Scalar<TName, TRoot>, …>` (safe, via `self.of`/`self.parse`) or a
+   * bare `Scalar<TName, TRoot>` (unsafe, via `self.ofUnsafe`/`self.parseUnsafe`,
+   * which throws on a failed invariant). Because a branded value can only come
+   * from the descriptor's own constructors, both shapes guarantee the factory
+   * hands back a validated value rather than a raw primitive; the choice only
+   * decides whether failure is an `Err` or a panic. See
+   * {@link ScalarCustomFactories}.
    *
    * A factory name colliding with a **built-in** member (`name`, `of`, `parse`,
    * `validate`, `is`, `unwrap`, `extend`) is a compile error (the
