@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.11.0
+
+### Minor Changes
+
+- Allow unsafe factories
+
 ## 0.10.0
 
 ### Minor Changes

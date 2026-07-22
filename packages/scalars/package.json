@@ -1,6 +1,6 @@
 {
   "name": "@typemint/scalars",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.cjs",
   "types": "./dist/index.d.ts",
@@ -55,5 +55,10 @@
   },
   "devDependencies": {
     "tsup": "^8.5.1"
+  },
+  "dependencies": {
+    "@typemint/core": "^0.16.2",
+    "@typemint/data": "^0.11.0",
+    "@typemint/result": "^0.3.0"
   }
 }
