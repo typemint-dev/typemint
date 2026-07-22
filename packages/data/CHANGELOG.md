@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.11.1
+
+### Patch Changes
+
+- Add cjs support
+
 ## 0.11.0
 
 ### Minor Changes
