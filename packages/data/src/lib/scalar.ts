@@ -395,7 +395,7 @@ export type ScalarDescriptor<
     TNewFactories extends ScalarCustomFactories<
       TNewName,
       Scalar<TName, TRoot>,
-      InferInvariantsError<TNewInvariants>
+      TInvariantError | InferInvariantsError<TNewInvariants>
     > = Record<never, never>,
   >(
     name: TNewName,
@@ -405,7 +405,8 @@ export type ScalarDescriptor<
       TNewInvariants,
       TNewMethods,
       TNewConsts,
-      TNewFactories
+      TNewFactories,
+      TInvariantError
     >,
   ): ScalarDescriptor<
     TNewName,
@@ -509,8 +510,13 @@ export type ScalarConfig<
   TFactories extends ScalarCustomFactories<
     TName,
     TRoot,
-    InferInvariantsError<TInvariants>
+    TInheritedError | InferInvariantsError<TInvariants>
   > = ScalarCustomFactories<TName, TRoot, InferInvariantsError<TInvariants>>,
+  // Error channel inherited from ancestor scalars when this config is reused
+  // via `extend` (`never` for a base scalar). Combined with this config's own
+  // invariant errors so the `self` handed to factories/methods — and therefore
+  // `self.of` — reports the full composed error, matching the descriptor's `of`.
+  TInheritedError = never,
 > = {
   /**
    * Invariants enforced on every value produced by this scalar. Declare the
@@ -550,7 +556,11 @@ export type ScalarConfig<
    * if (parsedEmail.isOk()) Email.getDomain(parsedEmail.value); // 'b.com'
    */
   readonly methods?: (
-    self: ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>>,
+    self: ScalarDescriptor<
+      TName,
+      TRoot,
+      TInheritedError | InferInvariantsError<TInvariants>
+    >,
   ) => TMethods & { [K in ReservedScalarKeys<TName, TRoot>]?: never };
 
   /**
@@ -617,7 +627,11 @@ export type ScalarConfig<
    * });
    */
   readonly factories?: (
-    self: ScalarDescriptor<TName, TRoot, InferInvariantsError<TInvariants>>,
+    self: ScalarDescriptor<
+      TName,
+      TRoot,
+      TInheritedError | InferInvariantsError<TInvariants>
+    >,
   ) => TFactories & { [K in ReservedScalarKeys<TName, TRoot>]?: never };
 };
 

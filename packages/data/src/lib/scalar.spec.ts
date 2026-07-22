@@ -1420,6 +1420,31 @@ describe('(unit) Scalar', () => {
       assertErr(bad);
       expect(bad.error).toBe('NEGATIVE');
     });
+
+    it('should accumulate inherited errors when extending in factories', () => {
+      // Arrange
+      const isInteger = Invariant(
+        (value: number) => Number.isInteger(value),
+        () => 'NOT_INTEGER' as const,
+      );
+      const isNonNegative = Invariant(
+        (value: number) => value >= 0,
+        () => 'NEGATIVE' as const,
+      );
+      const Int = Scalar('Int', 'number', { invariants: [isInteger] });
+      const UInt = Int.extend('UInt', {
+        invariants: [isNonNegative], factories: (self) => ({
+          fromCount: (n: number) => self.of(n),
+        })
+      });
+
+      // Act
+      const result = UInt.fromCount(-1);
+      type UIntError = InferScalarInvariantError<typeof UInt>;
+
+      // Assert
+      expectTypeOf<UIntError>().toEqualTypeOf<'NOT_INTEGER' | 'NEGATIVE'>();
+    })
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
