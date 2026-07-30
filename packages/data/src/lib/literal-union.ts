@@ -744,6 +744,111 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   toSet: () => ReadonlySet<T>;
 
   /**
+   * Derive a **new** literal union from a subset of this union's members,
+   * selected by name. The result is an independent
+   * {@link LiteralUnionDescriptor} over exactly the picked members.
+   *
+   * `pick` is the "derive, don't redeclare" operation for the union itself:
+   * when a narrower context needs a strict subset of a broader union
+   * (`PaymentMethod` → the online-only methods, `Country` → the EU members),
+   * `pick` keeps the subset tied to the source. Unlike hand-writing a second
+   * `LiteralUnion([...])`, the `keys` argument is constrained to members of
+   * this union — a typo or a member that never existed is a **compile error**,
+   * not a silently divergent second union.
+   *
+   * **The result is a snapshot, not a live view.** The returned descriptor is
+   * fully independent: it has its own member set, its own cached array/set, and
+   * no back-reference to this union. Later changes to how this union was
+   * declared cannot exist (descriptors are immutable), so "snapshot" only means
+   * there is no runtime subtype link — `sub.isOfType(x)` implying
+   * `parent.isOfType(x)` holds by *value*, but nothing tracks the relationship.
+   *
+   * **Order follows the argument.** The picked union's declaration order is the
+   * order of `keys`, exactly as if you had written `LiteralUnion(keys)`. This
+   * lets `pick` double as a reorder; when you want the parent's order, pass the
+   * keys in that order.
+   *
+   * @typeParam K - The picked member(s), inferred from `keys` and constrained
+   *   to members of this union.
+   * @param keys - A non-empty tuple of members to keep, in the order the
+   *   derived union should declare them.
+   * @returns A new {@link LiteralUnionDescriptor} over the picked members.
+   * @throws {PanicException} If `keys` is empty, or (only reachable when the
+   *   type system is bypassed) contains a value that is not a member of this
+   *   union.
+   *
+   * @example Derive an online-only subset
+   *
+   * ```ts
+   * const PaymentMethod = LiteralUnion(['card', 'sepa', 'paypal', 'cash']);
+   * const OnlineMethod = PaymentMethod.pick(['card', 'sepa', 'paypal']);
+   * // OnlineMethod: LiteralUnionDescriptor<'card' | 'sepa' | 'paypal'>
+   *
+   * OnlineMethod.isOfType('cash'); // false — 'cash' was not picked
+   * ```
+   *
+   * @example A non-member is a compile error, not a divergent union
+   *
+   * ```ts
+   * // @ts-expect-error — 'crypto' is not a member of PaymentMethod
+   * PaymentMethod.pick(['card', 'crypto']);
+   * ```
+   */
+  pick<const K extends T>(keys: readonly [K, ...K[]]): LiteralUnionDescriptor<K>;
+
+  /**
+   * Derive a **new** literal union containing every member of this union
+   * *except* the named ones — the complement of {@link pick}. The result is an
+   * independent {@link LiteralUnionDescriptor} over the remaining members.
+   *
+   * Reach for `omit` when the subset is most naturally described by what it
+   * *excludes* — "all statuses except the terminal ones", "every role but
+   * `guest`". As with {@link pick}, the `keys` argument is constrained to
+   * members of this union, so removing a member that never existed is a
+   * **compile error**, keeping the derived union honest.
+   *
+   * **The result is an independent snapshot** with no back-reference to this
+   * union — see {@link pick} for the full note on why there is no runtime
+   * subtype link.
+   *
+   * **Order follows this union.** The remaining members keep *this* union's
+   * declaration order (with the omitted ones removed), since `omit` describes a
+   * removal rather than a re-selection. Use {@link pick} when you also want to
+   * reorder.
+   *
+   * **At least one member must survive.** Omitting every member would produce
+   * an empty union, which this primitive does not model; that case throws.
+   *
+   * @typeParam K - The omitted member(s), inferred from `keys` and constrained
+   *   to members of this union.
+   * @param keys - A non-empty tuple of members to remove.
+   * @returns A new {@link LiteralUnionDescriptor} over the members that remain,
+   *   in this union's declaration order.
+   * @throws {PanicException} If removing `keys` would leave no members, or if
+   *   `keys` is empty.
+   *
+   * @example Drop the terminal statuses
+   *
+   * ```ts
+   * const Status = LiteralUnion(['draft', 'active', 'archived', 'deleted']);
+   * const LiveStatus = Status.omit(['archived', 'deleted']);
+   * // LiveStatus: LiteralUnionDescriptor<'draft' | 'active'>
+   *
+   * LiveStatus.toArray(); // ['draft', 'active'] — source order preserved
+   * ```
+   *
+   * @example Removing a non-member is a compile error
+   *
+   * ```ts
+   * // @ts-expect-error — 'suspended' is not a member of Status
+   * Status.omit(['suspended']);
+   * ```
+   */
+  omit<const K extends T>(
+    keys: readonly [K, ...K[]],
+  ): LiteralUnionDescriptor<Exclude<T, K>>;
+
+  /**
    * The number of members in the union.
    */
   size: number;
@@ -1141,6 +1246,8 @@ const reservedKeys = new Set([
   'parseOr',
   'toArray',
   'toSet',
+  'pick',
+  'omit',
   'size',
   'match',
   'matchResult',
@@ -1344,6 +1451,50 @@ export function LiteralUnion<
     return new Set(literalsCopy);
   }
 
+  // Derive a sub-union from a subset of members, keeping argument order. The
+  // member constraint (`K extends T[number]`) rejects non-members at compile
+  // time; the runtime check guards the type-bypass path (`as any`, untyped JS)
+  // in the same defensive spirit as the rest of the factory. Delegates to the
+  // factory so the derived descriptor inherits every check and memoization.
+  function pick<const K extends T[number]>(
+    keys: readonly [K, ...K[]],
+  ): LiteralUnionDescriptor<K> {
+    for (const key of keys) {
+      if (!memoSet.has(key)) {
+        throw new PanicException(
+          `LiteralUnion.pick: ${JSON.stringify(key)} is not a member of the ` +
+            `union`,
+        );
+      }
+    }
+    return LiteralUnion(keys);
+  }
+
+  // Complement of `pick`: derive a sub-union of everything except `keys`,
+  // preserving this union's declaration order. Set-difference semantics mean an
+  // omitted non-member is simply a no-op, so no membership check is needed —
+  // but every member surviving is required, since an empty union is not
+  // representable.
+  function omit<const K extends T[number]>(
+    keys: readonly [K, ...K[]],
+  ): LiteralUnionDescriptor<Exclude<T[number], K>> {
+    const removed = new Set<LiteralUnionMemberBase>(keys);
+    const remaining = literalsCopy.filter(
+      (lit): lit is Exclude<T[number], K> => !removed.has(lit),
+    );
+    if (remaining.length === 0) {
+      throw new PanicException(
+        `LiteralUnion.omit: cannot omit every member; the resulting union ` +
+          `would be empty`,
+      );
+    }
+    return LiteralUnion(
+      [remaining[0], ...remaining.slice(1)] as NonEmptyReadonlyArray<
+        Exclude<T[number], K>
+      >,
+    );
+  }
+
   // Use Object.assign to create the descriptor object to avoid
   // prototype pollution. (No __proto__ or constructor pollution.)
   const descriptor: LiteralUnionDescriptor<LiteralUnionFrom<T>> = Object.assign(
@@ -1367,6 +1518,8 @@ export function LiteralUnion<
       parseOr,
       toArray,
       toSet,
+      pick,
+      omit,
       match,
       matchResult,
     },

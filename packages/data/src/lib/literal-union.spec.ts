@@ -1411,6 +1411,146 @@ describe('(unit) LiteralUnion', () => {
       expect(act).toThrow(PanicException);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: pick
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('pick', () => {
+    it('should derive a union over exactly the picked members', () => {
+      // Arrange
+      const union = LiteralUnion(['card', 'sepa', 'paypal', 'cash'] as const);
+      // Act
+      const sub = union.pick(['card', 'sepa', 'paypal']);
+      // Assert
+      expect(sub.toArray()).toEqual(['card', 'sepa', 'paypal']);
+      expect(sub.isOfType('cash')).toBe(false);
+      expect(sub.isOfType('card')).toBe(true);
+    });
+
+    it('should preserve the argument order, not the source order', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c', 'd'] as const);
+      // Act — pick in an order different from declaration
+      const sub = union.pick(['c', 'a']);
+      // Assert
+      expect(sub.toArray()).toEqual(['c', 'a']);
+    });
+
+    it('should return an independent descriptor with no back-reference', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      const sub = union.pick(['a', 'b']);
+      // Assert — the sub-union is its own thing, unaffected by the parent
+      expect(sub).not.toBe(union);
+      expect(sub.size).toBe(2);
+      expect(union.size).toBe(3);
+    });
+
+    it('should support a single-member pick', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      const sub = union.pick(['b']);
+      // Assert
+      expect(sub.toArray()).toEqual(['b']);
+    });
+
+    it('should narrow the derived member type to the picked keys', () => {
+      // Arrange
+      const union = LiteralUnion(['card', 'sepa', 'paypal', 'cash'] as const);
+      // Act
+      const sub = union.pick(['card', 'sepa']);
+      // Assert
+      expectTypeOf(sub).toEqualTypeOf<
+        LiteralUnionDescriptor<'card' | 'sepa'>
+      >();
+    });
+
+    it('should throw a PanicException when a non-member is picked via a type bypass', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act — bypass the compile-time member constraint
+      // @ts-expect-error - 'z' is not a member of the union
+      const act = () => (union.pick(['a', 'z']));
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException if the member name collides with the reserved key "pick"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'pick'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: omit
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('omit', () => {
+    it('should derive a union of every member except the omitted ones', () => {
+      // Arrange
+      const union = LiteralUnion(['draft', 'active', 'archived', 'deleted'] as const);
+      // Act
+      const sub = union.omit(['archived', 'deleted']);
+      // Assert
+      expect(sub.toArray()).toEqual(['draft', 'active']);
+      expect(sub.isOfType('archived')).toBe(false);
+      expect(sub.isOfType('draft')).toBe(true);
+    });
+
+    it('should preserve the source declaration order', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c', 'd'] as const);
+      // Act — omit out of order; remaining keeps source order
+      const sub = union.omit(['c', 'a']);
+      // Assert
+      expect(sub.toArray()).toEqual(['b', 'd']);
+    });
+
+    it('should return an independent descriptor', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act
+      const sub = union.omit(['c']);
+      // Assert
+      expect(sub).not.toBe(union);
+      expect(sub.size).toBe(2);
+      expect(union.size).toBe(3);
+    });
+
+    it('should narrow the derived member type to the complement', () => {
+      // Arrange
+      const union = LiteralUnion(['card', 'sepa', 'paypal', 'cash'] as const);
+      // Act
+      const sub = union.omit(['cash']);
+      // Assert
+      expectTypeOf(sub).toEqualTypeOf<
+        LiteralUnionDescriptor<'card' | 'sepa' | 'paypal'>
+      >();
+    });
+
+    it('should throw a PanicException when every member is omitted', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b'] as const);
+      // Act
+      const act = () => union.omit(['a', 'b']);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException if the member name collides with the reserved key "omit"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'omit'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+  });
 });
 
 describe('(unit) LiteralUnionMismatchError', () => {
