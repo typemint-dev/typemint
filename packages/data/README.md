@@ -40,6 +40,8 @@ import { LiteralUnion, Dictionary } from '@typemint/data';
   - [`LiteralUnionMismatchError`](#literalunionmismatcherror)
   - [`toArray`](#toarray-nonemptyreadonlyarrayt)
   - [`toSet`](#toset-readonlysett)
+  - [`pick`](#pickkeys)
+  - [`omit`](#omitkeys)
   - [`size`](#size)
   - [Iteration (`Symbol.iterator`)](#iteration-symboliterator)
   - [`match`](#matchvalue-handlers--matchhandlers)
@@ -157,7 +159,8 @@ Some rules enforced at construction time:
   is thrown.
 - Member names must not collide with the reserved descriptor keys (`isOfType`,
   `of`, `ofUnsafe`, `parse`, `parseUnsafe`, `parseOr`, `toArray`, `toSet`,
-  `size`, `match`, `matchResult`). A collision throws a `PanicException`.
+  `pick`, `omit`, `size`, `match`, `matchResult`). A collision throws a
+  `PanicException`.
 - Only `string` members are allowed by design — see the rationale in
   [How they work together](#how-literalunion-and-dictionary-work-together).
 
@@ -398,6 +401,63 @@ const unknownOnes = [...requested].filter((c) => !known.has(c));
 Its type is `ReadonlySet<T>` to signal that the members *are* the union's, but
 since the value is already your own copy you may freely build a mutable set from
 it.
+
+### `pick(keys)`
+
+Derive a **new** union from a subset of this union's members, selected by name.
+The result is an independent descriptor over exactly the picked members. This is
+"derive, don't redeclare" applied to the union itself: when a narrower context
+needs a strict subset of a broader union, `pick` keeps the subset tied to its
+source. Unlike hand-writing a second `LiteralUnion([...])`, the `keys` argument
+is **constrained to members of this union**, so a typo or a member that never
+existed is a *compile error*, not a silently divergent second union.
+
+```ts
+const PaymentMethod = LiteralUnion(['card', 'sepa', 'paypal', 'cash']);
+const OnlineMethod = PaymentMethod.pick(['card', 'sepa', 'paypal']);
+// OnlineMethod: LiteralUnionDescriptor<'card' | 'sepa' | 'paypal'>
+
+OnlineMethod.isOfType('cash'); // false — 'cash' was not picked
+
+// @ts-expect-error — 'crypto' is not a member of PaymentMethod
+PaymentMethod.pick(['card', 'crypto']);
+```
+
+**Order follows the argument.** The picked union's declaration order is the order
+of `keys` (exactly as if you had written `LiteralUnion(keys)`), so `pick` doubles
+as a reorder. Pass the keys in the parent's order when you want to preserve it.
+
+**The result is an independent snapshot.** The returned descriptor has its own
+member set and cached array/set, and no runtime back-reference to this union —
+`sub.isOfType(x)` implying `parent.isOfType(x)` holds by *value*, but nothing
+tracks the relationship. Passing an empty list (or, via a type bypass, a
+non-member) throws a `PanicException`.
+
+### `omit(keys)`
+
+Derive a **new** union containing every member *except* the named ones — the
+complement of [`pick`](#pickkeys). Reach for `omit` when the subset is most
+naturally described by what it excludes ("all statuses except the terminal
+ones"). As with `pick`, `keys` is constrained to members of this union, so
+removing a member that never existed is a *compile error*.
+
+```ts
+const Status = LiteralUnion(['draft', 'active', 'archived', 'deleted']);
+const LiveStatus = Status.omit(['archived', 'deleted']);
+// LiveStatus: LiteralUnionDescriptor<'draft' | 'active'>
+
+LiveStatus.toArray(); // ['draft', 'active'] — source order preserved
+
+// @ts-expect-error — 'suspended' is not a member of Status
+Status.omit(['suspended']);
+```
+
+**Order follows this union.** The remaining members keep *this* union's
+declaration order (with the omitted ones removed), since `omit` describes a
+removal rather than a re-selection; use [`pick`](#pickkeys) when you also want to
+reorder. Like `pick`, the result is an independent snapshot. **At least one
+member must survive** — omitting every member throws a `PanicException`, since an
+empty union is not representable.
 
 ### `size`
 
