@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.12.0
+
+### Minor Changes
+
+- Add LiteralUnion omit and pick operations
+
 ## 0.11.1
 
 ### Patch Changes
