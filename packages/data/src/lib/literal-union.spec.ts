@@ -1472,7 +1472,7 @@ describe('(unit) LiteralUnion', () => {
       const union = LiteralUnion(['a', 'b', 'c'] as const);
       // Act — bypass the compile-time member constraint
       // @ts-expect-error - 'z' is not a member of the union
-      const act = () => (union.pick(['a', 'z']));
+      const act = () => union.pick(['a', 'z']);
       // Assert
       expect(act).toThrow(PanicException);
     });
@@ -1493,7 +1493,12 @@ describe('(unit) LiteralUnion', () => {
   describe('omit', () => {
     it('should derive a union of every member except the omitted ones', () => {
       // Arrange
-      const union = LiteralUnion(['draft', 'active', 'archived', 'deleted'] as const);
+      const union = LiteralUnion([
+        'draft',
+        'active',
+        'archived',
+        'deleted',
+      ] as const);
       // Act
       const sub = union.omit(['archived', 'deleted']);
       // Assert

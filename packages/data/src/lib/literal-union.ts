@@ -794,7 +794,9 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * PaymentMethod.pick(['card', 'crypto']);
    * ```
    */
-  pick<const K extends T>(keys: readonly [K, ...K[]]): LiteralUnionDescriptor<K>;
+  pick<const K extends T>(
+    keys: readonly [K, ...K[]],
+  ): LiteralUnionDescriptor<K>;
 
   /**
    * Derive a **new** literal union containing every member of this union
@@ -1488,11 +1490,10 @@ export function LiteralUnion<
           `would be empty`,
       );
     }
-    return LiteralUnion(
-      [remaining[0], ...remaining.slice(1)] as NonEmptyReadonlyArray<
-        Exclude<T[number], K>
-      >,
-    );
+    return LiteralUnion([
+      remaining[0],
+      ...remaining.slice(1),
+    ] as NonEmptyReadonlyArray<Exclude<T[number], K>>);
   }
 
   // Use Object.assign to create the descriptor object to avoid
