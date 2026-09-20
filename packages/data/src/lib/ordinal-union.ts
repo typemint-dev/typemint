@@ -594,16 +594,31 @@ export function OrdinalUnion<
     omit,
   } satisfies OrdinalUnionMethods<Members<T>>;
 
-  // `Object.assign` copies `base`'s own members and methods (its `size` getter
-  // is read once, which is fine — the member set is immutable), then the
-  // ordinal methods overwrite `pick`, `omit` and the string tag. The null-
+  // `Object.assign` copies `base`'s own enumerable members and methods, then
+  // the ordinal methods overwrite `pick`, `omit` and the string tag. The null-
   // prototype target is cast to `object` so the result is typed from `base`
   // and `methods` rather than collapsing to `any`.
-  const descriptor: OrdinalUnionDescriptor<Members<T>> = Object.assign(
+  //
+  // `base.size` is non-enumerable, so it is *not* copied — it is redefined
+  // below on the same terms, keeping the ordinal's cardinality out of
+  // `JSON.stringify(descriptor)` just as the literal union keeps it out.
+  const descriptor = Object.assign(
     Object.create(null) as object,
     base,
     methods,
   );
 
-  return descriptor;
+  Object.defineProperty(descriptor, 'size', {
+    value: members.length,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+
+  // Frozen for the same reason as a `LiteralUnion` descriptor: the member set
+  // and its order are the union's identity, so `Rank.vp = 'hacked'` throws in
+  // strict mode rather than silently rewriting a member.
+  return Object.freeze(descriptor) as unknown as OrdinalUnionDescriptor<
+    Members<T>
+  >;
 }

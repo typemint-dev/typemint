@@ -119,9 +119,15 @@ export type LiteralUnionFrom<
   T extends readonly [LiteralUnionMemberBase, ...LiteralUnionMemberBase[]],
 > = T[number];
 
-/** converts a literal union into a record of its members. */
+/**
+ * converts a literal union into a record of its members.
+ *
+ * The properties are `readonly`: the descriptor is frozen at construction, so
+ * `Country.germany = 'hacked'` throws at runtime — the type makes it a compile
+ * error instead of a surprise.
+ */
 export type LiteralUnionMembers<T extends LiteralUnionMemberBase> = {
-  [K in T]: K;
+  readonly [K in T]: K;
 };
 
 export type InferLiteralUnion<T> =
@@ -853,8 +859,11 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
 
   /**
    * The number of members in the union.
+   *
+   * Non-enumerable on the descriptor, so it stays out of `JSON.stringify`,
+   * object spreads and `Object.keys` — those see the members alone.
    */
-  size: number;
+  readonly size: number;
 
   /**
    * Return an iterator over the declared members of the union.
@@ -1322,7 +1331,11 @@ export function LiteralUnion<
 
   const memoSet = new Set<LiteralUnionMemberBase>(literalsCopy);
 
-  const members: LiteralUnionMembers<LiteralUnionFrom<T>> = Object.create(null);
+  // Built through a mutable alias: `LiteralUnionMembers` is `readonly` (the
+  // descriptor is frozen), which is the contract for callers, not for the
+  // handful of lines that populate it here.
+  const members: Record<LiteralUnionMemberBase, LiteralUnionMemberBase> =
+    Object.create(null);
   for (const lit of literalsCopy) {
     members[lit] = lit;
   }
@@ -1545,11 +1558,10 @@ export function LiteralUnion<
   // `satisfies` checks every method against its declared signature (a
   // misspelled or mistyped method is a compile error), while keeping the
   // literal type of the string tag.
+  //
+  // `size` is deliberately absent: it is installed with `Object.defineProperty`
+  // below rather than assigned, so it is excluded from the checked shape here.
   const methods = {
-    get size(): number {
-      return literalsCopy.length;
-    },
-
     [Symbol.iterator](): IterableIterator<T[number]> {
       return literalsCopy[Symbol.iterator]();
     },
@@ -1566,19 +1578,38 @@ export function LiteralUnion<
     omit,
     match,
     matchResult,
-  } satisfies LiteralUnionMethods<LiteralUnionFrom<T>>;
+  } satisfies Omit<LiteralUnionMethods<LiteralUnionFrom<T>>, 'size'>;
 
   // Use Object.assign to create the descriptor object to avoid
   // prototype pollution. (No __proto__ or constructor pollution.) The
   // null-prototype target is cast to `object` so the result is typed from
   // `members` and `methods` rather than collapsing to `any`.
-  const descriptor: LiteralUnionDescriptor<LiteralUnionFrom<T>> = Object.assign(
+  const descriptor = Object.assign(
     Object.create(null) as object,
     members,
     methods,
   );
 
-  return descriptor;
+  // `size` is *defined*, not assigned. Carried on the `methods` literal it
+  // would be a getter that `Object.assign` evaluates into a plain enumerable
+  // data property, which then shows up as `"size": 3` beside the members in
+  // `JSON.stringify(descriptor)` — the members are the union's public JSON
+  // shape, its cardinality is not. Non-enumerable keeps it out of `JSON`,
+  // spreads and `Object.keys`, while `descriptor.size` still reads normally.
+  Object.defineProperty(descriptor, 'size', {
+    value: literalsCopy.length,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+
+  // A union is a closed set: freezing makes that true of the descriptor as
+  // well, so `Country.germany = 'hacked'` throws in strict mode (ESM is always
+  // strict) instead of silently rewriting a member. This mirrors the
+  // immutability of an enum in Java, Rust or Kotlin.
+  return Object.freeze(descriptor) as unknown as LiteralUnionDescriptor<
+    LiteralUnionFrom<T>
+  >;
 }
 
 /**

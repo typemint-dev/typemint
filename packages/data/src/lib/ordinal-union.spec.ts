@@ -119,6 +119,44 @@ describe('(unit) OrdinalUnion', () => {
       expect(Rank.toArray()[0]).toBe('team_lead');
     });
 
+    it('should keep size out of the serialized shape', () => {
+      // Assert — `size` is non-enumerable on a LiteralUnion descriptor and
+      // must stay so once the ordinal re-defines it on its own descriptor.
+      expect(JSON.parse(JSON.stringify(Rank))).toEqual({
+        team_lead: 'team_lead',
+        manager: 'manager',
+        senior_manager: 'senior_manager',
+        director: 'director',
+        vp: 'vp',
+        c_suite: 'c_suite',
+      });
+      expect(Object.keys(Rank)).not.toContain('size');
+    });
+
+    it('should freeze the descriptor', () => {
+      // Arrange — the cast bypasses the `readonly` members, leaving only the
+      // runtime guarantee under test.
+      const mutable = Rank as unknown as Record<string, string>;
+
+      // Act & Assert — ESM is always strict mode, so the write throws.
+      expect(Object.isFrozen(Rank)).toBe(true);
+      expect(() => {
+        mutable['vp'] = 'hacked';
+      }).toThrow(TypeError);
+      expect(Rank.vp).toBe('vp');
+    });
+
+    it('should reject replacing an ordering method', () => {
+      // Arrange
+      const mutable = Rank as unknown as { compare: () => number };
+
+      // Act & Assert
+      expect(() => {
+        mutable.compare = () => 0;
+      }).toThrow(TypeError);
+      expect(Rank.compare('vp', 'manager')).toBe(1);
+    });
+
     it('should match exhaustively', () => {
       // Act
       const result = Rank.match('vp', {

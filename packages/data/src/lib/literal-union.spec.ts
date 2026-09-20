@@ -506,6 +506,100 @@ describe('(unit) LiteralUnion', () => {
       // Assert
       expect(result).toBe(3);
     });
+
+    it('should not be enumerable, so JSON carries the members alone', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act & Assert — `size` is the union's cardinality, not part of its
+      // serialized shape; an enumerable one would leak in as `"size": 3`.
+      expect(JSON.parse(JSON.stringify(union))).toEqual({
+        a: 'a',
+        b: 'b',
+        c: 'c',
+      });
+      expect(Object.keys(union)).not.toContain('size');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Immutability
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Immutability', () => {
+    it('should freeze the descriptor', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      // Act & Assert
+      expect(Object.isFrozen(union)).toBe(true);
+    });
+
+    it('should reject rewriting a member', () => {
+      // Arrange — the cast bypasses the `readonly` members, leaving only the
+      // runtime guarantee under test.
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      const mutable = union as unknown as Record<string, string>;
+
+      // Act & Assert — ESM is always strict mode, so the write throws.
+      expect(() => {
+        mutable['a'] = 'hacked';
+      }).toThrow(TypeError);
+      expect(union.a).toBe('a');
+    });
+
+    it('should reject adding or removing a member', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      const mutable = union as unknown as Record<string, string>;
+
+      // Act & Assert
+      expect(() => {
+        mutable['d'] = 'd';
+      }).toThrow(TypeError);
+      expect(() => {
+        delete mutable['a'];
+      }).toThrow(TypeError);
+      expect(union.isOfType('d')).toBe(false);
+      expect(union.isOfType('a')).toBe(true);
+    });
+
+    it('should reject replacing size', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      const mutable = union as unknown as { size: number };
+
+      // Act & Assert
+      expect(() => {
+        mutable.size = 99;
+      }).toThrow(TypeError);
+      expect(union.size).toBe(3);
+    });
+
+    it('should reject replacing a method', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      const mutable = union as unknown as { isOfType: () => boolean };
+
+      // Act & Assert
+      expect(() => {
+        mutable.isOfType = () => true;
+      }).toThrow(TypeError);
+      expect(union.isOfType('z')).toBe(false);
+    });
+
+    it('should type the members and size as readonly', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+
+      // Act & Assert — compile-time only: the writes below throw at runtime
+      // (the descriptor is frozen), so the body is never executed.
+      const neverRun = () => {
+        // @ts-expect-error — members are readonly
+        union.a = 'hacked';
+        // @ts-expect-error — size is readonly
+        union.size = 99;
+      };
+
+      expect(neverRun).toBeTypeOf('function');
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
