@@ -125,7 +125,7 @@ export type LiteralUnionMembers<T extends LiteralUnionMemberBase> = {
 };
 
 export type InferLiteralUnion<T> =
-  T extends LiteralUnionDescriptor<infer U> ? U : never;
+  T extends LiteralUnionLike<infer U> ? U : never;
 
 /**
  * A structured error describing that a `string` was checked against a literal
@@ -241,8 +241,9 @@ export function LiteralUnionMismatchError<T extends LiteralUnionMemberBase>(
  * error `of` / `parse` return in their `Err` channel (and `ofUnsafe` /
  * `parseUnsafe` throw as a `cause`), specialized to that union's members.
  *
- * Accepts **either** a {@link LiteralUnionDescriptor} (from which the members
- * are recovered) **or** a bare member union (a
+ * Accepts **either** a {@link LiteralUnionLike} — any literal-union-shaped
+ * descriptor, ordinals included — (from which the members are recovered) **or**
+ * a bare member union (a
  * {@link LiteralUnionMemberBase} union such as `'a' | 'b'`), so it is usable
  * both from a descriptor value and from a member type you already hold.
  *
@@ -250,7 +251,7 @@ export function LiteralUnionMismatchError<T extends LiteralUnionMemberBase>(
  * `number`, an object, …) is a compile error at the use site rather than a
  * silent `never`.
  *
- * @typeParam T - A {@link LiteralUnionDescriptor} or a member union.
+ * @typeParam T - A {@link LiteralUnionLike} descriptor or a member union.
  *
  * @example From a descriptor
  *
@@ -271,13 +272,13 @@ export type InferLiteralUnionMismatchError<
   // `any` in the descriptor slot (not `LiteralUnionMemberBase`): the member type
   // sits in contravariant positions on the descriptor (`match(value: T)`,
   // `parseOr(_, fallback: T)`), so a fixed-width instantiation like
-  // `LiteralUnionDescriptor<string>` is not a supertype of a concrete
-  // descriptor and would reject it. `any` matches any member type.
-  T extends LiteralUnionDescriptor<any> | LiteralUnionMemberBase,
+  // `LiteralUnionLike<string>` is not a supertype of a concrete descriptor and
+  // would reject it. `any` matches any member type.
+  T extends LiteralUnionLike<any> | LiteralUnionMemberBase,
 > =
   // Tuple-wrap to suppress distribution — a bare member union must yield one
   // `LiteralUnionMismatchError<'a' | 'b'>`, not `…<'a'> | …<'b'>`.
-  [T] extends [LiteralUnionDescriptor<infer U>]
+  [T] extends [LiteralUnionLike<infer U>]
     ? LiteralUnionMismatchError<U>
     : [T] extends [LiteralUnionMemberBase]
       ? LiteralUnionMismatchError<T>
@@ -1228,6 +1229,51 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   ): <E1>(result: Result<T, E1>) => Result<A, E1 | E2>;
 };
 
+/**
+ * The **common supertype of every literal-union-shaped descriptor**: its member
+ * record plus every method whose meaning does not depend on how the union was
+ * declared.
+ *
+ * This is the type helpers should accept. A {@link LiteralUnionDescriptor} and
+ * an `OrdinalUnionDescriptor` both satisfy it, but neither is assignable to the
+ * other, because the three members left out here are exactly the ones on which
+ * they legitimately disagree:
+ *
+ * - **`pick` / `omit`** — an ordinal returns an *ordinal* (order-preserving, so
+ *   the derived union still agrees with its parent on every comparison), a
+ *   plain literal union returns a plain literal union ordered by the argument.
+ *   Return types are covariant, so the two signatures cannot be unified without
+ *   one of them lying about what it hands back.
+ * - **`[Symbol.toStringTag]`** — each descriptor reports its own kind
+ *   (`'LiteralUnion'` vs `'OrdinalUnion'`), and two different string literals
+ *   are never mutually assignable.
+ *
+ * Everything a helper actually needs to *use* a union — `isOfType`, `of`,
+ * `parse`, `toArray`, `toSet`, `match`, `size`, iteration, the members — is
+ * here and behaves identically on both. So write helpers against
+ * `LiteralUnionLike<T>` and name a concrete descriptor type only when the
+ * derivation methods or the tag are genuinely part of the contract.
+ *
+ * @example A helper that accepts either descriptor
+ *
+ * ```ts
+ * function options<T extends LiteralUnionMemberBase>(union: LiteralUnionLike<T>) {
+ *   return union.toArray().map((value) => ({ value, label: value }));
+ * }
+ *
+ * options(LiteralUnion(['germany', 'france'])); // ok
+ * options(OrdinalUnion(['low', 'high']));       // ok — an ordinal is one too
+ * ```
+ */
+export type LiteralUnionLike<T extends LiteralUnionMemberBase> =
+  LiteralUnionMembers<T> &
+    Omit<LiteralUnionMethods<T>, 'pick' | 'omit' | typeof Symbol.toStringTag>;
+
+/**
+ * The descriptor returned by {@link LiteralUnion}: a {@link LiteralUnionLike}
+ * plus the derivation methods (`pick`, `omit`) that return literal unions and
+ * the `'LiteralUnion'` string tag.
+ */
 export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
   LiteralUnionMembers<T> & LiteralUnionMethods<T>;
 
@@ -1496,34 +1542,40 @@ export function LiteralUnion<
     ] as NonEmptyReadonlyArray<Exclude<T[number], K>>);
   }
 
-  // Use Object.assign to create the descriptor object to avoid
-  // prototype pollution. (No __proto__ or constructor pollution.)
-  const descriptor: LiteralUnionDescriptor<LiteralUnionFrom<T>> = Object.assign(
-    Object.create(null),
-    members,
-    {
-      /* methods */
-      get size(): number {
-        return literalsCopy.length;
-      },
-
-      [Symbol.iterator](): IterableIterator<T[number]> {
-        return literalsCopy[Symbol.iterator]();
-      },
-      [Symbol.toStringTag]: 'LiteralUnion',
-      isOfType,
-      of,
-      ofUnsafe,
-      parse,
-      parseUnsafe,
-      parseOr,
-      toArray,
-      toSet,
-      pick,
-      omit,
-      match,
-      matchResult,
+  // `satisfies` checks every method against its declared signature (a
+  // misspelled or mistyped method is a compile error), while keeping the
+  // literal type of the string tag.
+  const methods = {
+    get size(): number {
+      return literalsCopy.length;
     },
+
+    [Symbol.iterator](): IterableIterator<T[number]> {
+      return literalsCopy[Symbol.iterator]();
+    },
+    [Symbol.toStringTag]: 'LiteralUnion',
+    isOfType,
+    of,
+    ofUnsafe,
+    parse,
+    parseUnsafe,
+    parseOr,
+    toArray,
+    toSet,
+    pick,
+    omit,
+    match,
+    matchResult,
+  } satisfies LiteralUnionMethods<LiteralUnionFrom<T>>;
+
+  // Use Object.assign to create the descriptor object to avoid
+  // prototype pollution. (No __proto__ or constructor pollution.) The
+  // null-prototype target is cast to `object` so the result is typed from
+  // `members` and `methods` rather than collapsing to `any`.
+  const descriptor: LiteralUnionDescriptor<LiteralUnionFrom<T>> = Object.assign(
+    Object.create(null) as object,
+    members,
+    methods,
   );
 
   return descriptor;
@@ -1546,7 +1598,8 @@ export function LiteralUnion<
  * and `assertOk`/`assertErr`.
  *
  * @typeParam T - The union's member type, inferred from `union`.
- * @param union - The literal union descriptor to check against.
+ * @param union - The union to check against. Any {@link LiteralUnionLike}
+ *   descriptor works, an `OrdinalUnion` included.
  * @param value - The value to assert. Accepts `unknown` so it can sit at a
  *   trust boundary without a pre-cast.
  * @param message - The message to throw if `value` is not a member. Accepts a
@@ -1570,7 +1623,7 @@ export function LiteralUnion<
  * ```
  */
 export function assertLiteralUnionMember<T extends LiteralUnionMemberBase>(
-  union: LiteralUnionDescriptor<T>,
+  union: LiteralUnionLike<T>,
   value: unknown,
   message: string | (() => string) = () =>
     `Value is not a member of the literal union ` +

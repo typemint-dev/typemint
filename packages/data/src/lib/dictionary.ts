@@ -4,7 +4,7 @@ import {
   NonEmptyReadonlyArray,
 } from '@typemint/core';
 import {
-  type LiteralUnionDescriptor,
+  type LiteralUnionLike,
   type LiteralUnionMemberBase,
 } from './literal-union.js';
 
@@ -169,7 +169,7 @@ Dictionary.fromLiteralUnion = <
   T extends LiteralUnionMemberBase,
   const S extends Record<T, unknown>,
 >(
-  _union: LiteralUnionDescriptor<T>,
+  _union: LiteralUnionLike<T>,
   source: S,
 ) => {
   return Dictionary(source);

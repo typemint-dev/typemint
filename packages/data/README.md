@@ -649,7 +649,8 @@ the members.
 | --- | --- |
 | `InferLiteralUnion<typeof U>` | Extract the literal union type (`'a' \| 'b'`) from a descriptor. |
 | `LiteralUnionFrom<T>` | Derive a literal union from a `const` tuple type. |
-| `LiteralUnionDescriptor<T>` | The full descriptor type (members + methods). |
+| `LiteralUnionLike<T>` | The common supertype every literal-union-shaped descriptor satisfies — `OrdinalUnion` included. Write helpers against this. |
+| `LiteralUnionDescriptor<T>` | The full descriptor type (members + methods), as returned by `LiteralUnion` itself. |
 | `LiteralUnionMembers<T>` | The `{ [K in T]: K }` member record. |
 | `LiteralUnionMethods<T>` | The method portion of the descriptor. |
 | `LiteralUnionMatchHandlers<T, U>` | Exhaustive handler map for `match`. |
