@@ -500,6 +500,42 @@ describe('(unit) OrdinalUnion', () => {
         Exclude<Large, 'm000'>
       >();
     });
+
+    it('should return the same descriptor for a repeated derivation', () => {
+      // Assert
+      expect(Rank.atLeast('director')).toBe(Rank.atLeast('director'));
+      expect(Rank.atMost('manager')).toBe(Rank.atMost('manager'));
+      expect(Rank.range('manager', 'vp')).toBe(Rank.range('manager', 'vp'));
+      expect(Rank.pick(['vp', 'manager'])).toBe(Rank.pick(['vp', 'manager']));
+      expect(Rank.omit(['vp'])).toBe(Rank.omit(['vp']));
+    });
+
+    it('should share one descriptor across methods deriving the same members', () => {
+      // Assert — the cache is keyed by the members, not by the call.
+      expect(Rank.atLeast('vp')).toBe(Rank.range('vp', 'c_suite'));
+      expect(Rank.atMost('manager')).toBe(Rank.pick(['manager', 'team_lead']));
+      expect(Rank.omit(['team_lead'])).toBe(Rank.atLeast('manager'));
+    });
+
+    it('should return the descriptor itself when every member is kept', () => {
+      // Assert
+      expect(Rank.atLeast('team_lead')).toBe(Rank);
+      expect(Rank.range('team_lead', 'c_suite')).toBe(Rank);
+      expect(Rank.pick(Rank.toArray())).toBe(Rank);
+    });
+
+    it('should keep derivations of a derived ordinal stable', () => {
+      // Act
+      const Upper = Rank.atLeast('director');
+
+      // Assert — identity is per parent: the same members reached through a
+      // different parent are a distinct, equivalent descriptor.
+      expect(Upper.atMost('vp')).toBe(Rank.atLeast('director').atMost('vp'));
+      expect(Upper.atMost('vp')).not.toBe(Rank.range('director', 'vp'));
+      expect(Upper.atMost('vp').toArray()).toEqual(
+        Rank.range('director', 'vp').toArray(),
+      );
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────

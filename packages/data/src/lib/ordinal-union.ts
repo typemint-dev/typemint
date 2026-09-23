@@ -208,6 +208,16 @@ export type OrdinalComparison = -1 | 0 | 1;
  *
  * Every method is a closure over the descriptor's own state (no `this`), so
  * they can be passed around unbound — `ranks.sort(Rank.compare)` works.
+ *
+ * The derivations (`range`, `atLeast`, `atMost`, `pick`, `omit`) are
+ * **memoized per descriptor**: asking for the same members again returns the
+ * same descriptor, whichever method produced it, so
+ * `Rank.atLeast('vp') === Rank.range('vp', 'c_suite')` holds and a derivation
+ * is cheap in hot code and stable as a React dependency or `Map` key. A
+ * derivation that keeps every member returns the descriptor itself. Identity
+ * is per parent: `Rank.atLeast('manager').atMost('vp')` and
+ * `Rank.range('manager', 'vp')` have the same members but are distinct
+ * descriptors.
  */
 export type OrdinalUnionMethods<
   T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
@@ -555,6 +565,17 @@ export function OrdinalUnion<
   // calling method's signature computes (inferred from its return type); the
   // compiler cannot follow a runtime slice to that tuple, so this cast is the
   // one unchecked step in the derivations.
+  //
+  // Derivations are memoized: a subset is built once and handed back on every
+  // later request for the same members, by whichever method asks — so
+  // `Rank.atLeast(x)` in per-request code costs a lookup, not a descriptor
+  // build, and is stable as a React dependency or `Map` key. The key is the
+  // subset's ranks, which identify it exactly (it is always in ascending
+  // order). The cache lives as long as this descriptor and holds at most one
+  // entry per distinct subset actually requested. The full member list is
+  // this descriptor itself.
+  const derived = new Map<string, OrdinalUnionDescriptor<Members<T>>>();
+
   function derive<R extends NonEmptyReadonlyArray<LiteralUnionMemberBase>>(
     subset: readonly LiteralUnionMemberBase[],
     method: string,
@@ -564,9 +585,19 @@ export function OrdinalUnion<
         `OrdinalUnion.${method}: the resulting union would be empty`,
       );
     }
-    return OrdinalUnion(
-      subset as NonEmptyReadonlyArray<LiteralUnionMemberBase>,
-    ) as unknown as OrdinalUnionDescriptor<R>;
+    if (subset.length === members.length) {
+      return self as unknown as OrdinalUnionDescriptor<R>;
+    }
+
+    const key = subset.map((lit) => ranks.get(lit)).join(',');
+    let result = derived.get(key);
+    if (result === undefined) {
+      result = OrdinalUnion(
+        subset as NonEmptyReadonlyArray<LiteralUnionMemberBase>,
+      ) as unknown as OrdinalUnionDescriptor<Members<T>>;
+      derived.set(key, result);
+    }
+    return result as unknown as OrdinalUnionDescriptor<R>;
   }
 
   function range<const From extends M, const To extends M>(
@@ -663,8 +694,11 @@ export function OrdinalUnion<
 
   // Frozen for the same reason as a `LiteralUnion` descriptor: the member set
   // and its order are the union's identity, so `Rank.vp = 'hacked'` throws in
-  // strict mode rather than silently rewriting a member.
-  return Object.freeze(descriptor) as unknown as OrdinalUnionDescriptor<
+  // strict mode rather than silently rewriting a member. Named so `derive` can
+  // return it for a derivation that keeps every member; it only reads `self`
+  // when a method runs, after this line.
+  const self = Object.freeze(descriptor) as unknown as OrdinalUnionDescriptor<
     Members<T>
   >;
+  return self;
 }
