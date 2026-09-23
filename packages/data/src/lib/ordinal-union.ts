@@ -529,9 +529,19 @@ export type OrdinalUnionDescriptor<
   T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
 > = LiteralUnionLike<T[number]> & OrdinalUnionMethods<T>;
 
-/** Extract the member union from an {@link OrdinalUnionDescriptor}. */
+/**
+ * Extract the member union from an {@link OrdinalUnionDescriptor}.
+ *
+ * Matched against {@link OrdinalUnionMethods} rather than the whole
+ * {@link OrdinalUnionDescriptor}: the methods are the half that carries the
+ * member tuple, and the {@link LiteralUnionLike} half only restates it as a
+ * union. Inferring through the intersection costs the compiler that second
+ * half at every use and ties this alias to how `LiteralUnionLike` happens to
+ * be built today. A plain literal union still yields `never` — it has none of
+ * these methods.
+ */
 export type InferOrdinalUnion<T> =
-  T extends OrdinalUnionDescriptor<infer U> ? U[number] : never;
+  T extends OrdinalUnionMethods<infer U> ? U[number] : never;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: Factory
