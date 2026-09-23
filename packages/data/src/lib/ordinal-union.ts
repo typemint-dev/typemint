@@ -3,6 +3,7 @@ import {
   LiteralUnion,
   type LiteralUnionLike,
   type LiteralUnionMemberBase,
+  type LiteralUnionMethods,
 } from './literal-union.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,7 +91,7 @@ type SliceRange<
 > = SliceThrough<SliceFrom<T, From>, Extract<To, SliceFrom<T, From>[number]>>;
 
 /**
- * The message a duplicated member is replaced by in {@link UniqueTuple}. It is
+ * The message a duplicated member is replaced by in {@link CheckedTuple}. It is
  * a string literal type so the compiler prints it verbatim — the error reads as
  * a sentence rather than as a structural mismatch.
  */
@@ -98,10 +99,35 @@ type DuplicateMember<M extends LiteralUnionMemberBase> =
   `duplicate member "${M}": each member of an ordinal union holds exactly one rank`;
 
 /**
- * `T` with every member that already appeared earlier replaced by a
- * {@link DuplicateMember} message. A tuple with no repeats maps to itself, so
- * the argument only fails to assign at the duplicate's own position — the
- * editor underlines the second `'a'`, not the whole call.
+ * The member names the descriptor's own keys already occupy — every string key
+ * of {@link LiteralUnionMethods} (`size`, `parse`, `pick`, …) and of
+ * {@link OrdinalUnionMethods} (`rank`, `next`, `range`, …). Derived from the
+ * method types rather than listed, so a method added to either surface is
+ * reserved here without a second edit.
+ */
+type ReservedKey = Extract<
+  | keyof LiteralUnionMethods<LiteralUnionMemberBase>
+  | keyof OrdinalUnionMethods<NonEmptyReadonlyArray<LiteralUnionMemberBase>>,
+  string
+>;
+
+/**
+ * The message a reserved member is replaced by in {@link CheckedTuple}; a
+ * sentence for the same reason as {@link DuplicateMember}.
+ */
+type ReservedMember<M extends LiteralUnionMemberBase> =
+  `reserved member "${M}": the name is taken by a method of the ordinal union descriptor`;
+
+/**
+ * `T` with every member that is a {@link ReservedKey}, or that already
+ * appeared earlier, replaced by a {@link ReservedMember} or
+ * {@link DuplicateMember} message. A valid tuple maps to itself, so the
+ * argument only fails to assign at the offending member's own position — the
+ * editor underlines the second `'a'` or the `'next'`, not the whole call.
+ *
+ * Without the reserved check, a member named after a method would compile —
+ * its property typed as a meaningless intersection of the literal and the
+ * method — and only panic when the module loads.
  *
  * `Seen` collects the members walked so far. It is kept separate from the
  * output accumulator `Acc` so a non-literal member (a `string`-typed variable,
@@ -114,7 +140,7 @@ type DuplicateMember<M extends LiteralUnionMemberBase> =
  * slice), the walk stops at the first element and the rest must be carried
  * through, or the call would be typed as a one-element tuple.
  */
-type UniqueTuple<
+type CheckedTuple<
   T extends readonly LiteralUnionMemberBase[],
   Acc extends LiteralUnionMemberBase[] = [],
   Seen = never,
@@ -123,17 +149,20 @@ type UniqueTuple<
   ...infer R extends LiteralUnionMemberBase[],
 ]
   ? string extends H
-    ? UniqueTuple<R, [...Acc, H], Seen>
-    : H extends Seen
-      ? UniqueTuple<R, [...Acc, DuplicateMember<H>], Seen>
-      : UniqueTuple<R, [...Acc, H], Seen | H>
+    ? CheckedTuple<R, [...Acc, H], Seen>
+    : H extends ReservedKey
+      ? CheckedTuple<R, [...Acc, ReservedMember<H>], Seen | H>
+      : H extends Seen
+        ? CheckedTuple<R, [...Acc, DuplicateMember<H>], Seen>
+        : CheckedTuple<R, [...Acc, H], Seen | H>
   : readonly [...Acc, ...T];
 
 /**
  * The parameter type of {@link OrdinalUnion}: `T` itself when its members are
- * distinct, and the annotated {@link UniqueTuple} when they are not.
+ * distinct and unreserved, and the annotated {@link CheckedTuple} when they
+ * are not.
  *
- * Written as a conditional rather than as `T & UniqueTuple<T>` because an
+ * Written as a conditional rather than as `T & CheckedTuple<T>` because an
  * intersection with a conflicting element reduces to `never`, and the compiler
  * then reports "not assignable to `never`" for *every* element instead of
  * naming the repeated one.
@@ -142,12 +171,12 @@ type UniqueTuple<
  * through the conditional keeps `T` readonly (and so a `readonly` argument
  * assigns), which the derived slice types depend on.
  */
-type UniqueMembers<T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>> =
-  UniqueTuple<T> extends readonly [...T] ? readonly [...T] : UniqueTuple<T>;
+type CheckedMembers<T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>> =
+  CheckedTuple<T> extends readonly [...T] ? readonly [...T] : CheckedTuple<T>;
 
 /**
  * The member tuple an inferred `T` stands for. Inference through
- * {@link UniqueMembers} can hand back a mutable tuple (an array literal at the
+ * {@link CheckedMembers} can hand back a mutable tuple (an array literal at the
  * call site), so every use of `T` — the descriptor's parameter and the slice
  * types derived from it — goes through this alias to keep the member tuple
  * `readonly`, as it was when the parameter was plain `T`.
@@ -387,9 +416,19 @@ const ordinalReservedKeys = new Set([
  * // member of an ordinal union holds exactly one rank'.
  * ```
  *
- * @throws {PanicException} If `literals` is empty, contains a duplicate (only
- *   reachable when the members are not literal types — a widened array, or a
- *   JavaScript caller), or contains a reserved descriptor key.
+ * A member named after a descriptor method (`next`, `size`, `pick`, …) would
+ * shadow it, so it is rejected the same way:
+ *
+ * ```ts
+ * OrdinalUnion(['low', 'next']);
+ * //                   ~~~~~~
+ * // Type '"next"' is not assignable to type 'reserved member "next": the
+ * // name is taken by a method of the ordinal union descriptor'.
+ * ```
+ *
+ * @throws {PanicException} If `literals` is empty, contains a duplicate, or
+ *   contains a reserved descriptor key (the last two only reachable when the
+ *   members are not literal types — a widened array, or a JavaScript caller).
  *
  * @example Career ranks
  *
@@ -412,8 +451,8 @@ const ordinalReservedKeys = new Set([
  */
 export function OrdinalUnion<
   const T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
->(literals: UniqueMembers<T>): OrdinalUnionDescriptor<Members<T>> {
-  // The parameter is typed through `UniqueMembers`, a conditional the compiler
+>(literals: CheckedMembers<T>): OrdinalUnionDescriptor<Members<T>> {
+  // The parameter is typed through `CheckedMembers`, a conditional the compiler
   // cannot resolve while `T` is still generic, so it cannot see that the
   // argument is a non-empty array of members. The cast restores what the
   // constraint on `T` already guarantees; the runtime checks below and inside

@@ -84,14 +84,33 @@ describe('(unit) OrdinalUnion', () => {
       expect(() => OrdinalUnion(literals)).toThrow(/duplicate/);
     });
 
-    it('should throw a PanicException on a LiteralUnion reserved key', () => {
+    it('should reject a LiteralUnion reserved key at compile time', () => {
       // Act & Assert
-      expect(() => OrdinalUnion(['size', 'other'])).toThrow(PanicException);
+      expect(() =>
+        // @ts-expect-error - 'size' is a descriptor property
+        OrdinalUnion(['size', 'other']),
+      ).toThrow(PanicException);
     });
 
-    it('should throw a PanicException on an ordinal reserved key', () => {
+    it('should reject an ordinal reserved key at compile time', () => {
       // Act & Assert
-      expect(() => OrdinalUnion(['low', 'max'])).toThrow(/reserved/);
+      expect(() =>
+        // @ts-expect-error - 'max' is a descriptor method
+        OrdinalUnion(['low', 'max']),
+      ).toThrow(/reserved/);
+    });
+
+    it('should throw a PanicException on a reserved key', () => {
+      // Arrange
+      // As with duplicates, a widened tuple bypasses the compile-time check
+      // and reaches the runtime guard.
+      const literals = ['low', 'next'] as unknown as readonly [
+        string,
+        ...string[],
+      ];
+
+      // Act & Assert
+      expect(() => OrdinalUnion(literals)).toThrow(/reserved/);
     });
   });
 
