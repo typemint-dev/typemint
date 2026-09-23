@@ -51,15 +51,15 @@ type FilterTuple<
   Acc extends LiteralUnionMemberBase[] = [],
 > =
   IsWidened<T> extends true
-  ? readonly [...Acc, ...T]
-  : T extends readonly [
-    infer H extends LiteralUnionMemberBase,
-    ...infer R extends LiteralUnionMemberBase[],
-  ]
-  ? H extends K
-  ? FilterTuple<R, K, [...Acc, H]>
-  : FilterTuple<R, K, Acc>
-  : readonly [...Acc];
+    ? readonly [...Acc, ...T]
+    : T extends readonly [
+          infer H extends LiteralUnionMemberBase,
+          ...infer R extends LiteralUnionMemberBase[],
+        ]
+      ? H extends K
+        ? FilterTuple<R, K, [...Acc, H]>
+        : FilterTuple<R, K, Acc>
+      : readonly [...Acc];
 
 /**
  * Drop the members of `T` before `From`; `From` itself is kept.
@@ -73,15 +73,15 @@ type FilterTuple<
  */
 type SliceFrom<T extends readonly LiteralUnionMemberBase[], From> =
   IsWidened<T> extends true
-  ? readonly [...T]
-  : T extends readonly [
-    infer H extends LiteralUnionMemberBase,
-    ...infer R extends LiteralUnionMemberBase[],
-  ]
-  ? H extends From
-  ? T
-  : SliceFrom<R, From>
-  : [];
+    ? readonly [...T]
+    : T extends readonly [
+          infer H extends LiteralUnionMemberBase,
+          ...infer R extends LiteralUnionMemberBase[],
+        ]
+      ? H extends From
+        ? T
+        : SliceFrom<R, From>
+      : [];
 
 /**
  * Keep the members of `T` up to and including `To`.
@@ -106,17 +106,17 @@ type SliceThrough<
   Acc extends LiteralUnionMemberBase[] = [],
 > =
   IsWidened<T> extends true
-  ? readonly [...Acc, ...T]
-  : [To] extends [never]
-  ? Acc
-  : T extends readonly [
-    infer H extends LiteralUnionMemberBase,
-    ...infer R extends LiteralUnionMemberBase[],
-  ]
-  ? H extends To
-  ? SliceThrough<R, Exclude<To, H>, [...Acc, H]>
-  : SliceThrough<R, To, [...Acc, H]>
-  : Acc;
+    ? readonly [...Acc, ...T]
+    : [To] extends [never]
+      ? Acc
+      : T extends readonly [
+            infer H extends LiteralUnionMemberBase,
+            ...infer R extends LiteralUnionMemberBase[],
+          ]
+        ? H extends To
+          ? SliceThrough<R, Exclude<To, H>, [...Acc, H]>
+          : SliceThrough<R, To, [...Acc, H]>
+        : Acc;
 
 /**
  * The inclusive slice `[From, To]`. `To` is first restricted to the members at
@@ -173,8 +173,8 @@ type AmbiguousMember =
  */
 type IsUnion<U, C = U> = U extends unknown
   ? [C] extends [U]
-  ? false
-  : true
+    ? false
+    : true
   : never;
 
 /**
@@ -233,14 +233,14 @@ type CheckedTuple<
   ...infer R extends LiteralUnionMemberBase[],
 ]
   ? IsStringLiteral<H> extends false
-  ? CheckedTuple<R, [...Acc, H], Seen>
-  : IsUnion<H> extends true
-  ? CheckedTuple<R, [...Acc, AmbiguousMember], Seen>
-  : H extends ReservedKey
-  ? CheckedTuple<R, [...Acc, ReservedMember<H>], Seen | H>
-  : H extends Seen
-  ? CheckedTuple<R, [...Acc, DuplicateMember<H>], Seen>
-  : CheckedTuple<R, [...Acc, H], Seen | H>
+    ? CheckedTuple<R, [...Acc, H], Seen>
+    : IsUnion<H> extends true
+      ? CheckedTuple<R, [...Acc, AmbiguousMember], Seen>
+      : H extends ReservedKey
+        ? CheckedTuple<R, [...Acc, ReservedMember<H>], Seen | H>
+        : H extends Seen
+          ? CheckedTuple<R, [...Acc, DuplicateMember<H>], Seen>
+          : CheckedTuple<R, [...Acc, H], Seen | H>
   : readonly [...Acc, ...T];
 
 /**
@@ -312,6 +312,21 @@ export type OrdinalComparison = -1 | 0 | 1;
  * is per parent: `Rank.atLeast('manager').atMost('vp')` and
  * `Rank.range('manager', 'vp')` have the same members but are distinct
  * descriptors.
+ *
+ * `next`, `prev` and `clamp` are typed with the **whole member union**, not
+ * the exact member the call returns: `Rank.next('vp')` is `Rank | undefined`,
+ * not `'c_suite' | undefined`. Naming the exact member means indexing the
+ * member tuple at `rank(value) + 1` at the type level — a walk the compiler
+ * repeats at every call site, paid by every consumer of the union, for a value
+ * that is nearly always assigned back to something of the member type anyway.
+ * This is a deliberate trade, not an oversight; a call site that needs the
+ * literal can narrow it with a comparison or a derived ordinal's `isOfType`.
+ * `min` and `max` narrow as far as the arguments they were given, never to the
+ * one they pick, for the same reason.
+ *
+ * The derivations are the exception: there the member tuple *is* the result,
+ * so the walk earns its cost and `range`, `atLeast`, `atMost`, `pick` and
+ * `omit` all carry exact slices.
  */
 export type OrdinalUnionMethods<
   T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
@@ -370,13 +385,27 @@ export type OrdinalUnionMethods<
   /**
    * Bound `value` to the inclusive range `[lo, hi]`.
    *
+   * Typed as the member union rather than as `value | lo | hi`; see the note
+   * on stepping and bounding types above.
+   *
    * @throws {PanicException} If `lo` is higher than `hi`.
    */
   clamp: (value: T[number], lo: T[number], hi: T[number]) => T[number];
 
-  /** The member directly above `value`, or `undefined` if it is the highest. */
+  /**
+   * The member directly above `value`, or `undefined` if it is the highest.
+   *
+   * Typed as the member union, not as the exact successor — `Rank.next('vp')`
+   * is `Rank | undefined`, not `'c_suite' | undefined`; see the note on
+   * stepping and bounding types above.
+   */
   next: (value: T[number]) => T[number] | undefined;
-  /** The member directly below `value`, or `undefined` if it is the lowest. */
+
+  /**
+   * The member directly below `value`, or `undefined` if it is the lowest.
+   *
+   * Typed as the member union, not as the exact predecessor; see {@link next}.
+   */
   prev: (value: T[number]) => T[number] | undefined;
 
   /**
@@ -610,13 +639,13 @@ export function OrdinalUnion<
     if (ranks.has(lit)) {
       throw new PanicException(
         `OrdinalUnion: duplicate member ${JSON.stringify(lit)}; each member ` +
-        `must hold exactly one rank`,
+          `must hold exactly one rank`,
       );
     }
     if (ordinalReservedKeys.has(lit)) {
       throw new PanicException(
         `OrdinalUnion: member name "${lit}" collides with a reserved ` +
-        `descriptor key`,
+          `descriptor key`,
       );
     }
     ranks.set(lit, index);
@@ -629,7 +658,7 @@ export function OrdinalUnion<
     if (index === undefined) {
       throw new PanicException(
         `OrdinalUnion.rank: ${JSON.stringify(value)} is not a member of the ` +
-        `union`,
+          `union`,
       );
     }
     return index;
@@ -667,7 +696,7 @@ export function OrdinalUnion<
     if (gt(lo, hi)) {
       throw new PanicException(
         `OrdinalUnion.clamp: lower bound ${JSON.stringify(lo)} is above ` +
-        `upper bound ${JSON.stringify(hi)}`,
+          `upper bound ${JSON.stringify(hi)}`,
       );
     }
     if (lt(value, lo)) return lo;
@@ -732,7 +761,7 @@ export function OrdinalUnion<
     if (gt(from, to)) {
       throw new PanicException(
         `OrdinalUnion.range: ${JSON.stringify(from)} is above ` +
-        `${JSON.stringify(to)}`,
+          `${JSON.stringify(to)}`,
       );
     }
     return derive(members.slice(rank(from), rank(to) + 1), 'range');

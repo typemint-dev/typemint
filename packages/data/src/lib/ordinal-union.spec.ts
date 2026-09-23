@@ -466,6 +466,19 @@ describe('(unit) OrdinalUnion', () => {
       expect(Rank.prev('manager')).toBe('team_lead');
       expect(Rank.prev('team_lead')).toBeUndefined();
     });
+
+    it('should type stepping and bounding as the whole member union', () => {
+      // The documented trade: naming the exact member would mean walking the
+      // member tuple at the type level at every call site. A change here means
+      // the note on `OrdinalUnionMethods` is out of date.
+
+      // Assert
+      expectTypeOf(Rank.next('vp')).toEqualTypeOf<Rank | undefined>();
+      expectTypeOf(Rank.prev('vp')).toEqualTypeOf<Rank | undefined>();
+      expectTypeOf(
+        Rank.clamp('team_lead', 'manager', 'vp'),
+      ).toEqualTypeOf<Rank>();
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
