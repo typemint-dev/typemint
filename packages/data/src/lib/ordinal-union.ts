@@ -735,7 +735,15 @@ export function OrdinalUnion<
   // order). The cache lives as long as this descriptor and holds at most one
   // entry per distinct subset actually requested. The full member list is
   // this descriptor itself.
-  const derived = new Map<string, OrdinalUnionDescriptor<Members<T>>>();
+  //
+  // Its value type is `unknown`: every entry is a descriptor over a *different*
+  // member tuple, so no parameterization describes them all — not even the
+  // widened `OrdinalUnionDescriptor<NonEmptyReadonlyArray<...>>`, which the
+  // contravariant method parameters (see {@link OrdinalUnionMethods}) reject
+  // each entry against. Naming any of them would be a claim about the entries
+  // that is false for all of them; the one honest assertion is the `R` cast on
+  // the way out, which is the documented unchecked step above.
+  const derived = new Map<string, unknown>();
 
   function derive<R extends NonEmptyReadonlyArray<LiteralUnionMemberBase>>(
     subset: readonly LiteralUnionMemberBase[],
@@ -755,10 +763,10 @@ export function OrdinalUnion<
     if (result === undefined) {
       result = OrdinalUnion(
         subset as NonEmptyReadonlyArray<LiteralUnionMemberBase>,
-      ) as unknown as OrdinalUnionDescriptor<Members<T>>;
+      );
       derived.set(key, result);
     }
-    return result as unknown as OrdinalUnionDescriptor<R>;
+    return result as OrdinalUnionDescriptor<R>;
   }
 
   function range<const From extends M, const To extends M>(
