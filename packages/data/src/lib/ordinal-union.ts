@@ -269,6 +269,17 @@ export type OrdinalUnionMethods<
    * `principal` between `senior_manager` and `director`) shifts every rank
    * after it, silently corrupting stored integers.
    *
+   * Ranks are also relative to **this** descriptor: a derived ordinal
+   * renumbers its members from `0`, so a rank means nothing outside the
+   * descriptor that produced it. Two ranks are only comparable when they come
+   * from the same descriptor — order members with {@link compare} (or
+   * `lt`/`gte`), which take member strings and cannot be mixed up this way.
+   *
+   * ```ts
+   * Rank.rank('director'); // 3
+   * Rank.atLeast('director').rank('director'); // 0 — same member, new scale
+   * ```
+   *
    * @throws {PanicException} If `value` is not a member (only reachable when
    *   the type system is bypassed).
    */
