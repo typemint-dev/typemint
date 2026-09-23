@@ -377,9 +377,21 @@ export type OrdinalUnionMethods<
   /** `true` if `a` is higher than or equal to `b`. */
   gte: (a: T[number], b: T[number]) => boolean;
 
-  /** The lowest of the given members. */
+  /**
+   * The lowest of the given members.
+   *
+   * Ties keep the **earliest** argument: the scan replaces its candidate only
+   * on a strictly lower member, never on an equal one. Nothing observable
+   * hangs on that today — equal rank means the identical member string, so
+   * both candidates are the same value — but the rule is fixed, so a caller
+   * reasoning about the scan (or a later implementation) cannot quietly flip
+   * it.
+   */
   min: <const V extends T[number]>(...values: NonEmptyReadonlyArray<V>) => V;
-  /** The highest of the given members. */
+  /**
+   * The highest of the given members. Ties keep the earliest argument, as in
+   * {@link min}.
+   */
   max: <const V extends T[number]>(...values: NonEmptyReadonlyArray<V>) => V;
 
   /**
@@ -691,6 +703,10 @@ export function OrdinalUnion<
     return rank(a) >= rank(b);
   }
 
+  // Both scans compare strictly, so an equal member leaves the accumulator
+  // alone and the earliest argument wins a tie — the rule the method docs
+  // state. `reduce` without a seed starts from the first argument, which the
+  // non-empty parameter type guarantees exists.
   function min<const V extends M>(...values: NonEmptyReadonlyArray<V>): V {
     return values.reduce((acc, value) => (lt(value, acc) ? value : acc));
   }
