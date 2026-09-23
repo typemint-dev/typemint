@@ -84,6 +84,19 @@ describe('(unit) OrdinalUnion', () => {
       expect(() => OrdinalUnion(literals)).toThrow(/duplicate/);
     });
 
+    it('should reject a union-typed member at compile time', () => {
+      // Arrange
+      const either = 'high' as 'low' | 'high';
+
+      // Act & Assert — the runtime value is a single string, so nothing
+      // panics; the compiler rejects the element because its type has no
+      // single rank.
+      expect(() =>
+        // @ts-expect-error - 'low' | 'high' is an ambiguous member
+        OrdinalUnion([either, 'low']),
+      ).not.toThrow();
+    });
+
     it('should reject a LiteralUnion reserved key at compile time', () => {
       // Act & Assert
       expect(() =>

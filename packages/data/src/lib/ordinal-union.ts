@@ -120,6 +120,26 @@ type ReservedMember<M extends LiteralUnionMemberBase> =
   `reserved member "${M}": the name is taken by a method of the ordinal union descriptor`;
 
 /**
+ * The message a union-typed member is replaced by in {@link CheckedTuple}. It
+ * does not interpolate the member: a template literal over a union yields one
+ * message per branch, and the error would print that union instead of a
+ * sentence. The compiler names the offending type on its own anyway.
+ */
+type AmbiguousMember =
+  'ambiguous member: a union-typed element has no single rank; pass each member as its own literal';
+
+/**
+ * `true` if `U` is a union of two or more types. Each branch of the
+ * distribution compares the whole union `C` against that one branch, which
+ * only matches when there is a single branch.
+ */
+type IsUnion<U, C = U> = U extends unknown
+  ? [C] extends [U]
+    ? false
+    : true
+  : never;
+
+/**
  * `T` with every member that is a {@link ReservedKey}, or that already
  * appeared earlier, replaced by a {@link ReservedMember} or
  * {@link DuplicateMember} message. A valid tuple maps to itself, so the
@@ -129,6 +149,14 @@ type ReservedMember<M extends LiteralUnionMemberBase> =
  * Without the reserved check, a member named after a method would compile —
  * its property typed as a meaningless intersection of the literal and the
  * method — and only panic when the module loads.
+ *
+ * A union-typed member (a variable typed `'a' | 'b'`) is replaced by the
+ * {@link AmbiguousMember} message: it has no single rank to hold. The check
+ * runs first because `H` is an `infer` type parameter, so the conditionals
+ * after it distribute over a union `H` — the walk would fork into one tuple
+ * per branch, and the error would read as a mismatch against that union of
+ * tuples. It is not added to `Seen`: which member it stands for is unknown,
+ * so a later literal cannot be called its duplicate.
  *
  * `Seen` collects the members walked so far. It is kept separate from the
  * output accumulator `Acc` so a non-literal member (a `string`-typed variable,
@@ -151,11 +179,13 @@ type CheckedTuple<
 ]
   ? string extends H
     ? CheckedTuple<R, [...Acc, H], Seen>
-    : H extends ReservedKey
-      ? CheckedTuple<R, [...Acc, ReservedMember<H>], Seen | H>
-      : H extends Seen
-        ? CheckedTuple<R, [...Acc, DuplicateMember<H>], Seen>
-        : CheckedTuple<R, [...Acc, H], Seen | H>
+    : IsUnion<H> extends true
+      ? CheckedTuple<R, [...Acc, AmbiguousMember], Seen>
+      : H extends ReservedKey
+        ? CheckedTuple<R, [...Acc, ReservedMember<H>], Seen | H>
+        : H extends Seen
+          ? CheckedTuple<R, [...Acc, DuplicateMember<H>], Seen>
+          : CheckedTuple<R, [...Acc, H], Seen | H>
   : readonly [...Acc, ...T];
 
 /**
