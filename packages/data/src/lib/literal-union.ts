@@ -1315,8 +1315,25 @@ const reservedKeys = new Set([
 export function LiteralUnion<
   const T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
 >(literals: T): LiteralUnionDescriptor<LiteralUnionFrom<T>> {
+  return createLiteralUnion(literals, 'LiteralUnion');
+}
+
+/**
+ * The {@link LiteralUnion} factory, with the descriptor name its panic
+ * messages report. A descriptor built on top of a literal union
+ * (`OrdinalUnion`) passes its own name, so a panic from an inherited method
+ * reads `OrdinalUnion.ofUnsafe: …` and points at the type the caller wrote.
+ *
+ * Stripped from the published declarations (`stripInternal`): the name is an
+ * implementation detail of the descriptors in this package, not API.
+ *
+ * @internal
+ */
+export function createLiteralUnion<
+  const T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
+>(literals: T, name: string): LiteralUnionDescriptor<LiteralUnionFrom<T>> {
   if (literals.length === 0) {
-    throw new PanicException('LiteralUnion requires at least one member');
+    throw new PanicException(`${name} requires at least one member`);
   }
 
   // Deduplicated through a `Set`, which keeps each member's first occurrence in
@@ -1330,7 +1347,7 @@ export function LiteralUnion<
   for (const lit of literalsCopy) {
     if (reservedKeys.has(lit))
       throw new PanicException(
-        `LiteralUnion: member name "${lit}" collides with a reserved ` +
+        `${name}: member name "${lit}" collides with a reserved ` +
           `descriptor key`,
       );
   }
@@ -1351,22 +1368,20 @@ export function LiteralUnion<
     handlers: LiteralUnionMatchHandlers<LiteralUnionMemberBase, U>,
   ): (value: LiteralUnionMemberBase) => U {
     if (typeof handlers !== 'object' || handlers === null) {
-      throw new PanicException(
-        `LiteralUnion.match: handlers must be an object`,
-      );
+      throw new PanicException(`${name}.match: handlers must be an object`);
     }
 
     const handler = handlers[value];
 
     if (handler === undefined) {
       throw new PanicException(
-        `LiteralUnion.match: missing handler for "${value}". ` +
+        `${name}.match: missing handler for "${value}". ` +
           `Provided handlers: ${Object.keys(handlers).join(', ')}`,
       );
     }
     if (typeof handler !== 'function') {
       throw new PanicException(
-        `LiteralUnion.match: handler for "${value}" is ${typeof handler}, ` +
+        `${name}.match: handler for "${value}" is ${typeof handler}, ` +
           `expected a function`,
       );
     }
@@ -1392,7 +1407,7 @@ export function LiteralUnion<
       const handlers = arg2;
 
       if (typeof value !== 'string') {
-        throw new PanicException('LiteralUnion.match: value must be a string');
+        throw new PanicException(`${name}.match: value must be a string`);
       }
       const handler = resolveHandler<U>(value, handlers);
 
@@ -1400,9 +1415,7 @@ export function LiteralUnion<
     } else {
       // Data-last: validate arg1 is a non-null object
       if (typeof arg1 !== 'object' || arg1 === null) {
-        throw new PanicException(
-          'LiteralUnion.match: handlers must be an object',
-        );
+        throw new PanicException(`${name}.match: handlers must be an object`);
       }
       const handlers = arg1;
 
@@ -1478,7 +1491,7 @@ export function LiteralUnion<
     const result = parse(value);
     if (result.isErr()) {
       throw new PanicException(
-        `LiteralUnion.parseUnsafe: value is not a member of the union ` +
+        `${name}.parseUnsafe: value is not a member of the union ` +
           `(${result.error.kind} attached as \`cause\`)`,
         result.error,
       );
@@ -1498,7 +1511,7 @@ export function LiteralUnion<
     const result = of(value);
     if (result.isErr()) {
       throw new PanicException(
-        `LiteralUnion.ofUnsafe: ${JSON.stringify(value)} is not a member of ` +
+        `${name}.ofUnsafe: ${JSON.stringify(value)} is not a member of ` +
           `the union (LiteralUnionMismatchError attached as \`cause\`)`,
         result.error,
       );
@@ -1529,7 +1542,7 @@ export function LiteralUnion<
     for (const key of keys) {
       if (!memoSet.has(key)) {
         throw new PanicException(
-          `LiteralUnion.pick: ${JSON.stringify(key)} is not a member of the ` +
+          `${name}.pick: ${JSON.stringify(key)} is not a member of the ` +
             `union`,
         );
       }
@@ -1551,7 +1564,7 @@ export function LiteralUnion<
     );
     if (remaining.length === 0) {
       throw new PanicException(
-        `LiteralUnion.omit: cannot omit every member; the resulting union ` +
+        `${name}.omit: cannot omit every member; the resulting union ` +
           `would be empty`,
       );
     }

@@ -1,6 +1,7 @@
 import { PanicException, type NonEmptyReadonlyArray } from '@typemint/core';
 import {
-  LiteralUnion,
+  createLiteralUnion,
+  type LiteralUnion,
   type LiteralUnionLike,
   type LiteralUnionMemberBase,
   type LiteralUnionMethods,
@@ -460,7 +461,9 @@ export function OrdinalUnion<
   const literalsIn = literals as unknown as Members<T>;
 
   // Delegating first reuses LiteralUnion's empty-input and reserved-key checks.
-  const base = LiteralUnion(literalsIn);
+  // The descriptor name makes those panics, and the ones raised later by
+  // inherited methods (`ofUnsafe`, `match`, …), read `OrdinalUnion`.
+  const base = createLiteralUnion(literalsIn, 'OrdinalUnion');
   const members = base.toArray() as unknown as Members<T>;
 
   // Walks the caller's input, not `members`: `LiteralUnion` deduplicates, so a

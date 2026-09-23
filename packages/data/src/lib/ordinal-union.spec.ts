@@ -112,6 +112,22 @@ describe('(unit) OrdinalUnion', () => {
       // Act & Assert
       expect(() => OrdinalUnion(literals)).toThrow(/reserved/);
     });
+
+    it('should name OrdinalUnion in a panic raised by the delegated checks', () => {
+      // Arrange
+      const empty = [] as unknown as readonly [string, ...string[]];
+      const reserved = ['low', 'size'] as unknown as readonly [
+        string,
+        ...string[],
+      ];
+
+      // Act & Assert — the checks run inside the LiteralUnion factory, but the
+      // caller wrote OrdinalUnion, so that is the name the message reports.
+      expect(() => OrdinalUnion(empty)).toThrow(/^OrdinalUnion requires/);
+      expect(() => OrdinalUnion(reserved)).toThrow(
+        /^OrdinalUnion: member name "size"/,
+      );
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -129,6 +145,17 @@ describe('(unit) OrdinalUnion', () => {
       assertOk(Rank.parse('manager'));
       assertErr(Rank.parse('intern'));
       assertErr(Rank.parse(3));
+    });
+
+    it('should name OrdinalUnion in a panic from an inherited method', () => {
+      // Act & Assert
+      expect(() => Rank.ofUnsafe('intern')).toThrow(/^OrdinalUnion\.ofUnsafe:/);
+      expect(() => Rank.parseUnsafe('intern')).toThrow(
+        /^OrdinalUnion\.parseUnsafe:/,
+      );
+      expect(() => Rank.match('vp', {} as never)).toThrow(
+        /^OrdinalUnion\.match:/,
+      );
     });
 
     it('should keep size, iteration and toArray in declaration order', () => {
