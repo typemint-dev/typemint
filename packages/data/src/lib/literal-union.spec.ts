@@ -507,6 +507,18 @@ describe('(unit) LiteralUnion', () => {
       expect(result).toBe(3);
     });
 
+    it('should count a repeated member once, keeping its first position', () => {
+      // Arrange
+      const union = LiteralUnion(['b', 'a', 'b', 'c', 'a'] as const);
+
+      // Act & Assert — the member type collapses repeats, so the runtime views
+      // must agree with it.
+      expect(union.size).toBe(3);
+      expect(union.toArray()).toEqual(['b', 'a', 'c']);
+      expect([...union]).toEqual(['b', 'a', 'c']);
+      expect(union.toSet().size).toBe(3);
+    });
+
     it('should not be enumerable, so JSON carries the members alone', () => {
       // Arrange
       const union = LiteralUnion(['a', 'b', 'c'] as const);

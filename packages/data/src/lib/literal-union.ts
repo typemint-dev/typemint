@@ -619,7 +619,8 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
    * callers that depend on order (e.g. dropdown lists, priority sequences)
    * can rely on it. This is one of the reasons the factory takes a *tuple*
    * rather than a `Set`: the union itself is unordered, but the descriptor
-   * remembers how it was declared.
+   * remembers how it was declared. A literal declared more than once appears
+   * once, at its first position.
    *
    * **The result is the same reference on every call.** No allocation
    * happens at the call site; the descriptor caches the array internally.
@@ -858,7 +859,8 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   ): LiteralUnionDescriptor<Exclude<T, K>>;
 
   /**
-   * The number of members in the union.
+   * The number of distinct members in the union — a repeated literal counts
+   * once.
    *
    * Non-enumerable on the descriptor, so it stays out of `JSON.stringify`,
    * object spreads and `Object.keys` — those see the members alone.
@@ -1317,9 +1319,13 @@ export function LiteralUnion<
     throw new PanicException('LiteralUnion requires at least one member');
   }
 
-  const literalsCopy = Object.freeze([...literals] as NonEmptyReadonlyArray<
-    T[number]
-  >);
+  // Deduplicated through a `Set`, which keeps each member's first occurrence in
+  // declaration order. The member *type* already collapses repeats, so the
+  // runtime must too — otherwise `LiteralUnion(['a', 'a'])` would type as one
+  // member while `size`, `toArray` and iteration reported two.
+  const literalsCopy = Object.freeze([
+    ...new Set(literals),
+  ] as unknown as NonEmptyReadonlyArray<T[number]>);
 
   for (const lit of literalsCopy) {
     if (reservedKeys.has(lit))

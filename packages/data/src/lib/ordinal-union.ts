@@ -463,8 +463,12 @@ export function OrdinalUnion<
   const base = LiteralUnion(literalsIn);
   const members = base.toArray() as unknown as Members<T>;
 
+  // Walks the caller's input, not `members`: `LiteralUnion` deduplicates, so a
+  // repeat would already be gone from `members` and pass unnoticed. Once the
+  // walk finds none, the two agree position for position, so the index is the
+  // member's rank in `members` as well.
   const ranks = new Map<LiteralUnionMemberBase, number>();
-  for (const [index, lit] of members.entries()) {
+  for (const [index, lit] of literalsIn.entries()) {
     if (ranks.has(lit)) {
       throw new PanicException(
         `OrdinalUnion: duplicate member ${JSON.stringify(lit)}; each member ` +
