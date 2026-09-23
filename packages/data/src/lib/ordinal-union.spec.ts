@@ -537,6 +537,38 @@ describe('(unit) OrdinalUnion', () => {
       >();
     });
 
+    it('should type every derivation of a widened union as its whole tuple', () => {
+      // Arrange
+      // A widened tuple is what `derive` hands the factory when it re-invokes
+      // it on a runtime slice, and what a JavaScript caller passes. It has no
+      // positions the compiler can walk, so every derivation is typed as the
+      // widest result the call can return — the parent's own member tuple —
+      // rather than as the one-element tuple the walk would otherwise close on.
+      const literals = ['low', 'mid', 'high'] as unknown as readonly [
+        string,
+        ...string[],
+      ];
+      const Wide = OrdinalUnion(literals);
+
+      // Act
+      const below = Wide.atMost('mid');
+      const above = Wide.atLeast('mid');
+      const ranged = Wide.range('low', 'high');
+      const picked = Wide.pick(['low']);
+      const omitted = Wide.omit(['low']);
+
+      // Assert
+      // The member arguments below are the type assertion: a derived tuple
+      // narrower than the parent's types its members as `never` and rejects
+      // every one of these calls, which is what `pick` did while the filter
+      // dropped the rest element instead of carrying it through.
+      expect(below.toArray()).toEqual(['low', 'mid']);
+      expect(above.rank('high')).toBe(1);
+      expect(ranged).toBe(Wide);
+      expect(picked.rank('low')).toBe(0);
+      expect(omitted.gt('high', 'mid')).toBe(true);
+    });
+
     it('should return the same descriptor for a repeated derivation', () => {
       // Assert
       expect(Rank.atLeast('director')).toBe(Rank.atLeast('director'));

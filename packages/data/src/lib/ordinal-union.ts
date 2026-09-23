@@ -1,7 +1,6 @@
 import { PanicException, type NonEmptyReadonlyArray } from '@typemint/core';
 import {
   createLiteralUnion,
-  type LiteralUnion,
   type LiteralUnionLike,
   type LiteralUnionMemberBase,
   type LiteralUnionMethods,
@@ -12,6 +11,28 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * `true` if `T` has no fixed length — a widened array such as
+ * `readonly [string, ...string[]]`, which is what the factory sees when
+ * `derive` re-invokes it on a runtime slice, or when a JavaScript caller passes
+ * an array the compiler never read as literals.
+ *
+ * The slice helpers below walk `T` position by position, so they are only exact
+ * while there are positions to walk. On a widened `T` they stop and carry the
+ * remainder through untouched, which types the derivation as the parent's whole
+ * member tuple: the widest result the call can return, and never a narrower one
+ * than the runtime produces. Without it the walk consumes the single leading
+ * element and closes on it, typing every derivation of a widened union as the
+ * one-element tuple `[string]`. {@link CheckedTuple} carries the remainder
+ * through for the same reason.
+ *
+ * The consequence for a partially widened tuple (a literal prefix and a rest
+ * element) is that the walk is exact up to the rest element and widens from
+ * there; only a fixed-length tuple derives an exact slice.
+ */
+type IsWidened<T extends readonly LiteralUnionMemberBase[]> =
+  number extends T['length'] ? true : false;
+
+/**
  * Keep the members of `T` that extend `K`, preserving `T`'s order. Written
  * tail-recursively (accumulator) so long rank lists stay within the compiler's
  * recursion budget.
@@ -20,19 +41,25 @@ import {
  * inside its accumulator argument: a conditional in argument position defeats
  * tail-call elimination, and the pick/omit types then collapse to `never`
  * (TS2589) at around 100 members.
+ *
+ * A widened `T` yields the members walked so far plus the rest of `T`; see
+ * {@link IsWidened}.
  */
 type FilterTuple<
   T extends readonly LiteralUnionMemberBase[],
   K,
   Acc extends LiteralUnionMemberBase[] = [],
-> = T extends readonly [
-  infer H extends LiteralUnionMemberBase,
-  ...infer R extends LiteralUnionMemberBase[],
-]
+> =
+  IsWidened<T> extends true
+  ? readonly [...Acc, ...T]
+  : T extends readonly [
+    infer H extends LiteralUnionMemberBase,
+    ...infer R extends LiteralUnionMemberBase[],
+  ]
   ? H extends K
-    ? FilterTuple<R, K, [...Acc, H]>
-    : FilterTuple<R, K, Acc>
-  : Acc;
+  ? FilterTuple<R, K, [...Acc, H]>
+  : FilterTuple<R, K, Acc>
+  : readonly [...Acc];
 
 /**
  * Drop the members of `T` before `From`; `From` itself is kept.
@@ -40,17 +67,20 @@ type FilterTuple<
  * When `From` is a union (the argument is a variable, not a literal), the
  * slice starts at its **lowest** member — the widest suffix any runtime value
  * of `From` can produce, which is the union of all of them.
+ *
+ * A widened `T` is returned as it is — every member is a candidate for the
+ * slice; see {@link IsWidened}.
  */
-type SliceFrom<
-  T extends readonly LiteralUnionMemberBase[],
-  From,
-> = T extends readonly [
-  infer H extends LiteralUnionMemberBase,
-  ...infer R extends LiteralUnionMemberBase[],
-]
+type SliceFrom<T extends readonly LiteralUnionMemberBase[], From> =
+  IsWidened<T> extends true
+  ? readonly [...T]
+  : T extends readonly [
+    infer H extends LiteralUnionMemberBase,
+    ...infer R extends LiteralUnionMemberBase[],
+  ]
   ? H extends From
-    ? T
-    : SliceFrom<R, From>
+  ? T
+  : SliceFrom<R, From>
   : [];
 
 /**
@@ -64,21 +94,29 @@ type SliceFrom<
  * An empty `To` yields `[]` (collapsed to `never` by {@link AsNonEmpty}); this
  * is how an inverted `range` is typed. Every branch recurses in tail position,
  * so the compiler's tail-call elimination applies.
+ *
+ * The {@link IsWidened} test runs *before* the empty-`To` one, not after it: on
+ * a widened `T` the bound is `string`, which the first member removes from `To`
+ * entirely, so the walk would stop one position in and report that position as
+ * the whole slice rather than reaching the rest element.
  */
 type SliceThrough<
   T extends readonly LiteralUnionMemberBase[],
   To,
   Acc extends LiteralUnionMemberBase[] = [],
-> = [To] extends [never]
+> =
+  IsWidened<T> extends true
+  ? readonly [...Acc, ...T]
+  : [To] extends [never]
   ? Acc
   : T extends readonly [
-        infer H extends LiteralUnionMemberBase,
-        ...infer R extends LiteralUnionMemberBase[],
-      ]
-    ? H extends To
-      ? SliceThrough<R, Exclude<To, H>, [...Acc, H]>
-      : SliceThrough<R, To, [...Acc, H]>
-    : Acc;
+    infer H extends LiteralUnionMemberBase,
+    ...infer R extends LiteralUnionMemberBase[],
+  ]
+  ? H extends To
+  ? SliceThrough<R, Exclude<To, H>, [...Acc, H]>
+  : SliceThrough<R, To, [...Acc, H]>
+  : Acc;
 
 /**
  * The inclusive slice `[From, To]`. `To` is first restricted to the members at
@@ -135,8 +173,8 @@ type AmbiguousMember =
  */
 type IsUnion<U, C = U> = U extends unknown
   ? [C] extends [U]
-    ? false
-    : true
+  ? false
+  : true
   : never;
 
 /**
@@ -195,14 +233,14 @@ type CheckedTuple<
   ...infer R extends LiteralUnionMemberBase[],
 ]
   ? IsStringLiteral<H> extends false
-    ? CheckedTuple<R, [...Acc, H], Seen>
-    : IsUnion<H> extends true
-      ? CheckedTuple<R, [...Acc, AmbiguousMember], Seen>
-      : H extends ReservedKey
-        ? CheckedTuple<R, [...Acc, ReservedMember<H>], Seen | H>
-        : H extends Seen
-          ? CheckedTuple<R, [...Acc, DuplicateMember<H>], Seen>
-          : CheckedTuple<R, [...Acc, H], Seen | H>
+  ? CheckedTuple<R, [...Acc, H], Seen>
+  : IsUnion<H> extends true
+  ? CheckedTuple<R, [...Acc, AmbiguousMember], Seen>
+  : H extends ReservedKey
+  ? CheckedTuple<R, [...Acc, ReservedMember<H>], Seen | H>
+  : H extends Seen
+  ? CheckedTuple<R, [...Acc, DuplicateMember<H>], Seen>
+  : CheckedTuple<R, [...Acc, H], Seen | H>
   : readonly [...Acc, ...T];
 
 /**
@@ -554,13 +592,13 @@ export function OrdinalUnion<
     if (ranks.has(lit)) {
       throw new PanicException(
         `OrdinalUnion: duplicate member ${JSON.stringify(lit)}; each member ` +
-          `must hold exactly one rank`,
+        `must hold exactly one rank`,
       );
     }
     if (ordinalReservedKeys.has(lit)) {
       throw new PanicException(
         `OrdinalUnion: member name "${lit}" collides with a reserved ` +
-          `descriptor key`,
+        `descriptor key`,
       );
     }
     ranks.set(lit, index);
@@ -573,7 +611,7 @@ export function OrdinalUnion<
     if (index === undefined) {
       throw new PanicException(
         `OrdinalUnion.rank: ${JSON.stringify(value)} is not a member of the ` +
-          `union`,
+        `union`,
       );
     }
     return index;
@@ -611,7 +649,7 @@ export function OrdinalUnion<
     if (gt(lo, hi)) {
       throw new PanicException(
         `OrdinalUnion.clamp: lower bound ${JSON.stringify(lo)} is above ` +
-          `upper bound ${JSON.stringify(hi)}`,
+        `upper bound ${JSON.stringify(hi)}`,
       );
     }
     if (lt(value, lo)) return lo;
@@ -676,7 +714,7 @@ export function OrdinalUnion<
     if (gt(from, to)) {
       throw new PanicException(
         `OrdinalUnion.range: ${JSON.stringify(from)} is above ` +
-          `${JSON.stringify(to)}`,
+        `${JSON.stringify(to)}`,
       );
     }
     return derive(members.slice(rank(from), rank(to) + 1), 'range');
