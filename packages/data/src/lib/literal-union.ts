@@ -1334,18 +1334,64 @@ export function LiteralUnion<
 
 /**
  * The {@link LiteralUnion} factory, with the descriptor name its panic
- * messages report. A descriptor built on top of a literal union
- * (`OrdinalUnion`) passes its own name, so a panic from an inherited method
- * reads `OrdinalUnion.ofUnsafe: …` and points at the type the caller wrote.
+ * messages report and an optional extension hook. A descriptor built on top of
+ * a literal union (`OrdinalUnion`) passes its own name, so a panic from an
+ * inherited method reads `OrdinalUnion.ofUnsafe: …` and points at the type the
+ * caller wrote, and adds its own half through `extend` rather than copying the
+ * finished descriptor.
  *
- * Stripped from the published declarations (`stripInternal`): the name is an
- * implementation detail of the descriptors in this package, not API.
+ * Extending here rather than composing from outside is what keeps a derived
+ * descriptor honest: there is **one** descriptor object, built once, checked
+ * once and frozen once. A composition that copied this one would silently drop
+ * whatever is not an own enumerable property (`size` is defined, not assigned)
+ * and would depend on member order surviving a round trip through `toArray()`.
+ *
+ * Stripped from the published declarations (`stripInternal`): the name and the
+ * hook are implementation details of the descriptors in this package, not API.
  *
  * @internal
  */
 export function createLiteralUnion<
   const T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
->(literals: T, name: string): LiteralUnionDescriptor<LiteralUnionFrom<T>> {
+>(
+  literals: T,
+  name: string,
+  options?: {
+    /**
+     * Member names the extension's own keys occupy, rejected alongside this
+     * factory's {@link reservedKeys} in the same pass — so an extended
+     * descriptor runs one reserved-key check over one member list, not two.
+     */
+    readonly reserved?: ReadonlySet<LiteralUnionMemberBase>;
+
+    /**
+     * Contribute the extending descriptor's own properties. Called once, after
+     * the members and the inherited methods are in place and before `size` is
+     * defined and the descriptor is frozen; whatever it returns is assigned
+     * onto the descriptor, so it may also *replace* an inherited method (an
+     * ordinal substitutes its own order-preserving `pick`/`omit`) and the
+     * string tag.
+     *
+     * `size` is the one key it cannot contribute: this factory defines it
+     * non-enumerably afterwards, which is what keeps the union's cardinality
+     * out of `JSON.stringify`.
+     *
+     * `self` is the descriptor being built — the same object this call
+     * returns, so a method may close over it and hand it back later. It is not
+     * yet complete *during* the call (no `size`, not frozen), so the hook must
+     * only capture it, never read through it.
+     *
+     * `members` is the deduplicated member list in declaration order, typed as
+     * the input tuple. The two coincide unless the input repeats a member; an
+     * extension that reads members positionally (an ordinal reads their index
+     * as a rank) has to reject a repeat of its own, as `OrdinalUnion` does.
+     */
+    readonly extend?: (context: {
+      readonly members: readonly [...T];
+      readonly self: LiteralUnionLike<T[number]>;
+    }) => object;
+  },
+): LiteralUnionDescriptor<LiteralUnionFrom<T>> {
   if (literals.length === 0) {
     throw new PanicException(`${name} requires at least one member`);
   }
@@ -1359,7 +1405,7 @@ export function createLiteralUnion<
   ] as unknown as NonEmptyReadonlyArray<T[number]>);
 
   for (const lit of literalsCopy) {
-    if (reservedKeys.has(lit))
+    if (reservedKeys.has(lit) || options?.reserved?.has(lit))
       throw new PanicException(
         `${name}: member name "${lit}" collides with a reserved ` +
           `descriptor key`,
@@ -1622,6 +1668,25 @@ export function createLiteralUnion<
     members,
     methods,
   );
+
+  // The extension's half, assigned onto the same object rather than copied out
+  // of it: an extending descriptor replaces what it overrides in place and
+  // inherits everything else — including keys no copy would reach.
+  //
+  // It runs before `size` is defined below, so the definition always wins and
+  // an extension cannot turn the cardinality back into an enumerable data
+  // property. The methods it returns close over `descriptor`, which is the
+  // object frozen and returned at the end of this function; they are only
+  // called afterwards.
+  if (options?.extend) {
+    Object.assign(
+      descriptor,
+      options.extend({
+        members: literalsCopy as unknown as readonly [...T],
+        self: descriptor as unknown as LiteralUnionLike<T[number]>,
+      }),
+    );
+  }
 
   // `size` is *defined*, not assigned. Carried on the `methods` literal it
   // would be a getter that `Object.assign` evaluates into a plain enumerable

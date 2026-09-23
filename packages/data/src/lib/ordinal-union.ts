@@ -550,8 +550,9 @@ export type InferOrdinalUnion<T> =
 /**
  * The descriptor keys a member cannot take, checked at runtime for the inputs
  * {@link ReservedKey} cannot see: a widened array, or a JavaScript caller.
- * `LiteralUnion`'s own keys are checked by `LiteralUnion` when it is delegated
- * to, so the overlap here (`pick`, `omit`) is redundant but harmless.
+ * Handed to the `LiteralUnion` factory as its `reserved` option, which checks
+ * these names together with its own in a single pass — so the overlap here
+ * (`pick`, `omit`) is redundant but harmless.
  *
  * Spelled as an object literal checked against the method surface rather than
  * as a free-standing list, so the two cannot drift: `satisfies` reports a
@@ -653,247 +654,230 @@ export function OrdinalUnion<
   // `LiteralUnion` are unchanged.
   const literalsIn = literals as unknown as Members<T>;
 
-  // Delegating first reuses LiteralUnion's empty-input and reserved-key checks.
-  // The descriptor name makes those panics, and the ones raised later by
-  // inherited methods (`ofUnsafe`, `match`, …), read `OrdinalUnion`.
-  const base = createLiteralUnion(literalsIn, 'OrdinalUnion');
-  const members = base.toArray() as unknown as Members<T>;
-
-  // Walks the caller's input, not `members`: `LiteralUnion` deduplicates, so a
-  // repeat would already be gone from `members` and pass unnoticed. Once the
-  // walk finds none, the two agree position for position, so the index is the
-  // member's rank in `members` as well.
-  const ranks = new Map<LiteralUnionMemberBase, number>();
-  for (const [index, lit] of literalsIn.entries()) {
-    if (ranks.has(lit)) {
-      throw new PanicException(
-        `OrdinalUnion: duplicate member ${JSON.stringify(lit)}; each member ` +
-          `must hold exactly one rank`,
-      );
-    }
-    if (ordinalReservedKeys.has(lit)) {
-      throw new PanicException(
-        `OrdinalUnion: member name "${lit}" collides with a reserved ` +
-          `descriptor key`,
-      );
-    }
-    ranks.set(lit, index);
-  }
-
   type M = Members<T>[number];
 
-  function rank(value: M): number {
-    const index = ranks.get(value);
-    if (index === undefined) {
-      throw new PanicException(
-        `OrdinalUnion.rank: ${JSON.stringify(value)} is not a member of the ` +
-          `union`,
-      );
-    }
-    return index;
-  }
-
-  function compare(a: M, b: M): OrdinalComparison {
-    return Math.sign(rank(a) - rank(b)) as OrdinalComparison;
-  }
-
-  function lt(a: M, b: M): boolean {
-    return rank(a) < rank(b);
-  }
-
-  function lte(a: M, b: M): boolean {
-    return rank(a) <= rank(b);
-  }
-
-  function gt(a: M, b: M): boolean {
-    return rank(a) > rank(b);
-  }
-
-  function gte(a: M, b: M): boolean {
-    return rank(a) >= rank(b);
-  }
-
-  // Both scans compare strictly, so an equal member leaves the accumulator
-  // alone and the earliest argument wins a tie — the rule the method docs
-  // state. `reduce` without a seed starts from the first argument, which the
-  // non-empty parameter type guarantees exists.
-  function min<const V extends M>(...values: NonEmptyReadonlyArray<V>): V {
-    return values.reduce((acc, value) => (lt(value, acc) ? value : acc));
-  }
-
-  function max<const V extends M>(...values: NonEmptyReadonlyArray<V>): V {
-    return values.reduce((acc, value) => (gt(value, acc) ? value : acc));
-  }
-
-  function clamp(value: M, lo: M, hi: M): M {
-    if (gt(lo, hi)) {
-      throw new PanicException(
-        `OrdinalUnion.clamp: lower bound ${JSON.stringify(lo)} is above ` +
-          `upper bound ${JSON.stringify(hi)}`,
-      );
-    }
-    if (lt(value, lo)) return lo;
-    if (gt(value, hi)) return hi;
-    return value;
-  }
-
-  function next(value: M): M | undefined {
-    return members[rank(value) + 1];
-  }
-
-  function prev(value: M): M | undefined {
-    const index = rank(value);
-    return index === 0 ? undefined : members[index - 1];
-  }
-
-  // Every derivation funnels through here: slices and filters of `members` are
-  // already in ascending order, so re-running the factory yields a sub-ordinal
-  // that agrees with this one on every comparison. `R` is the tuple the
-  // calling method's signature computes (inferred from its return type); the
-  // compiler cannot follow a runtime slice to that tuple, so this cast is the
-  // one unchecked step in the derivations.
+  // The ordinal is not composed from a finished `LiteralUnion` — it *is* one,
+  // extended in place through the factory's hook. `LiteralUnion` runs the
+  // empty-input and reserved-key checks (the ordinal's own reserved names ride
+  // along in `reserved`, so there is one check over one member list), installs
+  // the members and the inherited methods, calls `extend` for the ordering
+  // half, defines `size` and freezes the result. Nothing is copied, so nothing
+  // can be lost in the copying.
   //
-  // Derivations are memoized: a subset is built once and handed back on every
-  // later request for the same members, by whichever method asks — so
-  // `Rank.atLeast(x)` in per-request code costs a lookup, not a descriptor
-  // build, and is stable as a React dependency or `Map` key. The key is the
-  // subset's ranks, which identify it exactly (it is always in ascending
-  // order). The cache lives as long as this descriptor and holds at most one
-  // entry per distinct subset actually requested. The full member list is
-  // this descriptor itself.
+  // The descriptor name makes the checks' panics, and the ones raised later by
+  // inherited methods (`ofUnsafe`, `match`, …), read `OrdinalUnion`.
   //
-  // Its value type is `unknown`: every entry is a descriptor over a *different*
-  // member tuple, so no parameterization describes them all — not even the
-  // widened `OrdinalUnionDescriptor<NonEmptyReadonlyArray<...>>`, which the
-  // contravariant method parameters (see {@link OrdinalUnionMethods}) reject
-  // each entry against. Naming any of them would be a claim about the entries
-  // that is false for all of them; the one honest assertion is the `R` cast on
-  // the way out, which is the documented unchecked step above.
-  const derived = new Map<string, unknown>();
+  // The cast on the way out is the one composing needed too: the hook's return
+  // type is opaque to `createLiteralUnion`, which goes on reporting the
+  // literal union half it builds.
+  return createLiteralUnion(literalsIn, 'OrdinalUnion', {
+    reserved: ordinalReservedKeys,
 
-  function derive<R extends NonEmptyReadonlyArray<LiteralUnionMemberBase>>(
-    subset: readonly LiteralUnionMemberBase[],
-    method: string,
-  ): OrdinalUnionDescriptor<R> {
-    if (subset.length === 0) {
-      throw new PanicException(
-        `OrdinalUnion.${method}: the resulting union would be empty`,
-      );
-    }
-    if (subset.length === members.length) {
-      return self as unknown as OrdinalUnionDescriptor<R>;
-    }
+    extend: ({ members, self }) => {
+      // Walks the caller's input, not `members`: `LiteralUnion` deduplicates,
+      // so a repeat would already be gone from `members` and pass unnoticed.
+      // Once the walk finds none, the two agree position for position, so the
+      // index is the member's rank in `members` as well — and `size`, which
+      // counts `members`, is the ordinal's cardinality too.
+      const ranks = new Map<LiteralUnionMemberBase, number>();
+      for (const [index, lit] of literalsIn.entries()) {
+        if (ranks.has(lit)) {
+          throw new PanicException(
+            `OrdinalUnion: duplicate member ${JSON.stringify(lit)}; each ` +
+              `member must hold exactly one rank`,
+          );
+        }
+        ranks.set(lit, index);
+      }
 
-    const key = subset.map((lit) => ranks.get(lit)).join(',');
-    let result = derived.get(key);
-    if (result === undefined) {
-      result = OrdinalUnion(
-        subset as NonEmptyReadonlyArray<LiteralUnionMemberBase>,
-      );
-      derived.set(key, result);
-    }
-    return result as OrdinalUnionDescriptor<R>;
-  }
+      function rank(value: M): number {
+        const index = ranks.get(value);
+        if (index === undefined) {
+          throw new PanicException(
+            `OrdinalUnion.rank: ${JSON.stringify(value)} is not a member of ` +
+              `the union`,
+          );
+        }
+        return index;
+      }
 
-  function range<const From extends M, const To extends M>(
-    from: From,
-    to: To,
-  ): OrdinalUnionDescriptor<AsNonEmpty<SliceRange<Members<T>, From, To>>> {
-    if (gt(from, to)) {
-      throw new PanicException(
-        `OrdinalUnion.range: ${JSON.stringify(from)} is above ` +
-          `${JSON.stringify(to)}`,
-      );
-    }
-    return derive(members.slice(rank(from), rank(to) + 1), 'range');
-  }
+      function compare(a: M, b: M): OrdinalComparison {
+        return Math.sign(rank(a) - rank(b)) as OrdinalComparison;
+      }
 
-  function atLeast<const V extends M>(
-    value: V,
-  ): OrdinalUnionDescriptor<AsNonEmpty<SliceFrom<Members<T>, V>>> {
-    return derive(members.slice(rank(value)), 'atLeast');
-  }
+      function lt(a: M, b: M): boolean {
+        return rank(a) < rank(b);
+      }
 
-  function atMost<const V extends M>(
-    value: V,
-  ): OrdinalUnionDescriptor<AsNonEmpty<SliceThrough<Members<T>, V>>> {
-    return derive(members.slice(0, rank(value) + 1), 'atMost');
-  }
+      function lte(a: M, b: M): boolean {
+        return rank(a) <= rank(b);
+      }
 
-  function pick<const K extends M>(
-    keys: NonEmptyReadonlyArray<K>,
-  ): OrdinalUnionDescriptor<AsNonEmpty<FilterTuple<Members<T>, K>>> {
-    for (const key of keys) rank(key); // panics on a non-member
-    const picked = new Set<LiteralUnionMemberBase>(keys);
-    return derive(
-      members.filter((lit) => picked.has(lit)),
-      'pick',
-    );
-  }
+      function gt(a: M, b: M): boolean {
+        return rank(a) > rank(b);
+      }
 
-  function omit<const K extends M>(
-    keys: NonEmptyReadonlyArray<K>,
-  ): OrdinalUnionDescriptor<
-    AsNonEmpty<FilterTuple<Members<T>, Exclude<M, K>>>
-  > {
-    const removed = new Set<LiteralUnionMemberBase>(keys);
-    return derive(
-      members.filter((lit) => !removed.has(lit)),
-      'omit',
-    );
-  }
+      function gte(a: M, b: M): boolean {
+        return rank(a) >= rank(b);
+      }
 
-  // `satisfies` checks every method against its declared signature (a
-  // misspelled or mistyped method is a compile error), while keeping the
-  // literal type of the string tag.
-  const methods = {
-    [Symbol.toStringTag]: 'OrdinalUnion',
-    rank,
-    compare,
-    lt,
-    lte,
-    gt,
-    gte,
-    min,
-    max,
-    clamp,
-    next,
-    prev,
-    range,
-    atLeast,
-    atMost,
-    pick,
-    omit,
-  } satisfies OrdinalUnionMethods<Members<T>>;
+      // Both scans compare strictly, so an equal member leaves the accumulator
+      // alone and the earliest argument wins a tie — the rule the method docs
+      // state. `reduce` without a seed starts from the first argument, which
+      // the non-empty parameter type guarantees exists.
+      function min<const V extends M>(...values: NonEmptyReadonlyArray<V>): V {
+        return values.reduce((acc, value) => (lt(value, acc) ? value : acc));
+      }
 
-  // `Object.assign` copies `base`'s own enumerable members and methods, then
-  // the ordinal methods overwrite `pick`, `omit` and the string tag. The null-
-  // prototype target is cast to `object` so the result is typed from `base`
-  // and `methods` rather than collapsing to `any`.
-  //
-  // `base.size` is non-enumerable, so it is *not* copied — it is redefined
-  // below on the same terms, keeping the ordinal's cardinality out of
-  // `JSON.stringify(descriptor)` just as the literal union keeps it out.
-  const descriptor = Object.assign(
-    Object.create(null) as object,
-    base,
-    methods,
-  );
+      function max<const V extends M>(...values: NonEmptyReadonlyArray<V>): V {
+        return values.reduce((acc, value) => (gt(value, acc) ? value : acc));
+      }
 
-  Object.defineProperty(descriptor, 'size', {
-    value: members.length,
-    enumerable: false,
-    writable: false,
-    configurable: false,
-  });
+      function clamp(value: M, lo: M, hi: M): M {
+        if (gt(lo, hi)) {
+          throw new PanicException(
+            `OrdinalUnion.clamp: lower bound ${JSON.stringify(lo)} is above ` +
+              `upper bound ${JSON.stringify(hi)}`,
+          );
+        }
+        if (lt(value, lo)) return lo;
+        if (gt(value, hi)) return hi;
+        return value;
+      }
 
-  // Frozen for the same reason as a `LiteralUnion` descriptor: the member set
-  // and its order are the union's identity, so `Rank.vp = 'hacked'` throws in
-  // strict mode rather than silently rewriting a member. Named so `derive` can
-  // return it for a derivation that keeps every member; it only reads `self`
-  // when a method runs, after this line.
-  const self = Object.freeze(descriptor) as unknown as OrdinalUnionDescriptor<
-    Members<T>
-  >;
-  return self;
+      function next(value: M): M | undefined {
+        return members[rank(value) + 1];
+      }
+
+      function prev(value: M): M | undefined {
+        const index = rank(value);
+        return index === 0 ? undefined : members[index - 1];
+      }
+
+      // Every derivation funnels through here: slices and filters of `members`
+      // are already in ascending order, so re-running the factory yields a
+      // sub-ordinal that agrees with this one on every comparison. `R` is the
+      // tuple the calling method's signature computes (inferred from its
+      // return type); the compiler cannot follow a runtime slice to that
+      // tuple, so this cast is the one unchecked step in the derivations.
+      //
+      // Derivations are memoized: a subset is built once and handed back on
+      // every later request for the same members, by whichever method asks —
+      // so `Rank.atLeast(x)` in per-request code costs a lookup, not a
+      // descriptor build, and is stable as a React dependency or `Map` key.
+      // The key is the subset's ranks, which identify it exactly (it is always
+      // in ascending order). The cache lives as long as this descriptor and
+      // holds at most one entry per distinct subset actually requested. The
+      // full member list is this descriptor itself.
+      //
+      // Its value type is `unknown`: every entry is a descriptor over a
+      // *different* member tuple, so no parameterization describes them all —
+      // not even the widened `OrdinalUnionDescriptor<NonEmptyReadonlyArray<…>>`,
+      // which the contravariant method parameters (see
+      // {@link OrdinalUnionMethods}) reject each entry against. Naming any of
+      // them would be a claim about the entries that is false for all of them;
+      // the one honest assertion is the `R` cast on the way out, which is the
+      // documented unchecked step above.
+      const derived = new Map<string, unknown>();
+
+      function derive<R extends NonEmptyReadonlyArray<LiteralUnionMemberBase>>(
+        subset: readonly LiteralUnionMemberBase[],
+        method: string,
+      ): OrdinalUnionDescriptor<R> {
+        if (subset.length === 0) {
+          throw new PanicException(
+            `OrdinalUnion.${method}: the resulting union would be empty`,
+          );
+        }
+        // `self` is the descriptor this hook is extending — captured here, and
+        // complete by the time any derivation runs.
+        if (subset.length === members.length) {
+          return self as unknown as OrdinalUnionDescriptor<R>;
+        }
+
+        const key = subset.map((lit) => ranks.get(lit)).join(',');
+        let result = derived.get(key);
+        if (result === undefined) {
+          result = OrdinalUnion(
+            subset as NonEmptyReadonlyArray<LiteralUnionMemberBase>,
+          );
+          derived.set(key, result);
+        }
+        return result as OrdinalUnionDescriptor<R>;
+      }
+
+      function range<const From extends M, const To extends M>(
+        from: From,
+        to: To,
+      ): OrdinalUnionDescriptor<AsNonEmpty<SliceRange<Members<T>, From, To>>> {
+        if (gt(from, to)) {
+          throw new PanicException(
+            `OrdinalUnion.range: ${JSON.stringify(from)} is above ` +
+              `${JSON.stringify(to)}`,
+          );
+        }
+        return derive(members.slice(rank(from), rank(to) + 1), 'range');
+      }
+
+      function atLeast<const V extends M>(
+        value: V,
+      ): OrdinalUnionDescriptor<AsNonEmpty<SliceFrom<Members<T>, V>>> {
+        return derive(members.slice(rank(value)), 'atLeast');
+      }
+
+      function atMost<const V extends M>(
+        value: V,
+      ): OrdinalUnionDescriptor<AsNonEmpty<SliceThrough<Members<T>, V>>> {
+        return derive(members.slice(0, rank(value) + 1), 'atMost');
+      }
+
+      function pick<const K extends M>(
+        keys: NonEmptyReadonlyArray<K>,
+      ): OrdinalUnionDescriptor<AsNonEmpty<FilterTuple<Members<T>, K>>> {
+        for (const key of keys) rank(key); // panics on a non-member
+        const picked = new Set<LiteralUnionMemberBase>(keys);
+        return derive(
+          members.filter((lit) => picked.has(lit)),
+          'pick',
+        );
+      }
+
+      function omit<const K extends M>(
+        keys: NonEmptyReadonlyArray<K>,
+      ): OrdinalUnionDescriptor<
+        AsNonEmpty<FilterTuple<Members<T>, Exclude<M, K>>>
+      > {
+        const removed = new Set<LiteralUnionMemberBase>(keys);
+        return derive(
+          members.filter((lit) => !removed.has(lit)),
+          'omit',
+        );
+      }
+
+      // `satisfies` checks every method against its declared signature (a
+      // misspelled or mistyped method is a compile error), while keeping the
+      // literal type of the string tag. `pick`, `omit` and the tag are
+      // declared by both surfaces, so the pair the descriptor ends up holding
+      // is checked on the way in here as well as on the way out.
+      return {
+        [Symbol.toStringTag]: 'OrdinalUnion',
+        rank,
+        compare,
+        lt,
+        lte,
+        gt,
+        gte,
+        min,
+        max,
+        clamp,
+        next,
+        prev,
+        range,
+        atLeast,
+        atMost,
+        pick,
+        omit,
+      } satisfies OrdinalUnionMethods<Members<T>>;
+    },
+  }) as unknown as OrdinalUnionDescriptor<Members<T>>;
 }

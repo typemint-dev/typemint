@@ -258,12 +258,12 @@ describe('(unit) OrdinalUnion', () => {
   // MARK: Property layout
   // ───────────────────────────────────────────────────────────────────────────
   describe('Property layout', () => {
-    // The ordinal descriptor is composed by copying a `LiteralUnion`
-    // descriptor with `Object.assign` and overwriting what it replaces. That
-    // leans on facts about the `LiteralUnion` constructor no type can enforce:
-    // which keys are own and enumerable (`Object.assign` copies those alone),
-    // and which are defined rather than assigned. A change there would break
-    // the ordinal silently, so the layout is pinned down here.
+    // The ordinal descriptor is not composed from a finished `LiteralUnion`:
+    // it *is* one, built by the same factory and extended in place through its
+    // hook. So it should be indistinguishable from a plain literal union over
+    // the same members except for what it deliberately adds or replaces — a
+    // property no type can state, and the reason the layout is pinned down
+    // here.
 
     const base = LiteralUnion([
       'team_lead',
@@ -294,8 +294,8 @@ describe('(unit) OrdinalUnion', () => {
     ];
 
     it('should own exactly the base keys plus the ordering methods', () => {
-      // Assert — `pick`, `omit` and the string tag are overwritten in place,
-      // so composing adds the ordinal's own methods and loses nothing.
+      // Assert — `pick`, `omit` and the string tag are replaced in place, so
+      // extending adds the ordinal's own methods and loses nothing.
       expect(new Set(Reflect.ownKeys(Rank))).toEqual(
         new Set<string | symbol>([
           ...Reflect.ownKeys(base),
@@ -304,30 +304,37 @@ describe('(unit) OrdinalUnion', () => {
       );
     });
 
-    it('should copy every own enumerable key of the base descriptor', () => {
-      // Assert — only own *enumerable* keys are copied, so anything the base
-      // holds otherwise would be dropped. `size` is the one key defined
-      // non-enumerably, and the ordinal re-defines it rather than copy it.
+    it('should hold every inherited key on the same terms as the base', () => {
+      // Assert — the attributes too, not just the presence of the key: a key
+      // the base gains later is inherited whatever its shape, which is the
+      // guarantee extending in place buys over copying own enumerable
+      // properties. Values are compared only where they are not functions,
+      // since each descriptor closes over its own members.
+      const replaced = new Set<string | symbol>([
+        'pick',
+        'omit',
+        Symbol.toStringTag,
+      ]);
+
       for (const key of Reflect.ownKeys(base)) {
-        const enumerable = Object.prototype.propertyIsEnumerable.call(
-          base,
+        const from = Object.getOwnPropertyDescriptor(base, key);
+        const to = Object.getOwnPropertyDescriptor(Rank, key);
+        expect([key, to !== undefined]).toEqual([key, true]);
+        expect([key, { ...to, value: undefined }]).toEqual([
           key,
-        );
-        expect([key, enumerable]).toEqual([key, key !== 'size']);
-        expect(Object.prototype.hasOwnProperty.call(Rank, key)).toBe(true);
+          { ...from, value: undefined },
+        ]);
+        if (!replaced.has(key) && typeof from?.value !== 'function') {
+          expect([key, to?.value]).toEqual([key, from?.value]);
+        }
       }
     });
 
-    it('should carry Symbol.iterator over as an own enumerable key', () => {
-      // The ordinal defines no iterator of its own; `[...Rank]` works only
-      // because the base holds `Symbol.iterator` as an own enumerable symbol,
-      // which is what `Object.assign` copies. Moved to a prototype, or made
-      // non-enumerable, it would vanish from the ordinal.
+    it('should inherit Symbol.iterator, so the ordinal is iterable', () => {
+      // The ordinal defines no iterator of its own — `[...Rank]` works
+      // because the descriptor it extends installed one.
 
       // Assert
-      expect(
-        Object.prototype.propertyIsEnumerable.call(base, Symbol.iterator),
-      ).toBe(true);
       expect(Object.prototype.hasOwnProperty.call(Rank, Symbol.iterator)).toBe(
         true,
       );
@@ -335,9 +342,9 @@ describe('(unit) OrdinalUnion', () => {
     });
 
     it('should define size non-enumerably on both descriptors', () => {
-      // Assert — non-enumerable on the base is why the ordinal has to
-      // re-define it, and it must do so on the same terms or the cardinality
-      // leaks into `JSON.stringify`.
+      // Assert — `size` is defined, not assigned, and the extension runs
+      // before that definition, so an ordinal cannot turn the cardinality into
+      // an enumerable data property that leaks into `JSON.stringify`.
       for (const union of [base, Rank] as const) {
         expect(Object.getOwnPropertyDescriptor(union, 'size')).toEqual({
           value: 6,
@@ -349,8 +356,8 @@ describe('(unit) OrdinalUnion', () => {
     });
 
     it('should override pick and omit with the ordering-preserving pair', () => {
-      // Assert — the base's `pick`/`omit` return literal unions; the copies
-      // sitting on the ordinal must be the ones that return ordinals.
+      // Assert — the base's `pick`/`omit` return literal unions; the pair
+      // sitting on the ordinal must be the one that returns ordinals.
       expect(
         Object.prototype.toString.call(base.pick(['vp', 'director'])),
       ).toBe('[object LiteralUnion]');
