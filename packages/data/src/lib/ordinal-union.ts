@@ -479,6 +479,13 @@ export type OrdinalUnionMethods<
    * Derive an ordinal over every member except `keys`, keeping this ordinal's
    * order.
    *
+   * This is a **set difference**, as {@link LiteralUnion}'s `omit` is: a key
+   * that is not a member removes nothing and is otherwise ignored, so the only
+   * failure is an empty result. {@link pick}, which selects rather than
+   * subtracts, panics on a non-member instead — there the key names a member
+   * the result was supposed to contain. Neither case is reachable while the
+   * type system is honoured; `keys` is constrained to members of this ordinal.
+   *
    * @throws {PanicException} If removing `keys` would leave no members.
    */
   omit: <const K extends T[number]>(
