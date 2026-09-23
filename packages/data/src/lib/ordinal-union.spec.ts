@@ -15,7 +15,7 @@ import {
   type LiteralUnionLike,
 } from './literal-union.js';
 import { Dictionary } from './dictionary.js';
-import { PanicException } from '@typemint/core';
+import { PanicException, type NonEmptyReadonlyArray } from '@typemint/core';
 import { assertErr, assertOk } from '@typemint/result';
 
 const Rank = OrdinalUnion([
@@ -747,17 +747,93 @@ describe('(unit) OrdinalUnion', () => {
       expect(Rank.pick(Rank.toArray())).toBe(Rank);
     });
 
-    it('should keep derivations of a derived ordinal stable', () => {
+    it('should share one descriptor across the whole derivation tree', () => {
       // Act
       const Upper = Rank.atLeast('director');
+      const Gapped = Rank.pick(['team_lead', 'director', 'c_suite']);
 
-      // Assert — identity is per parent: the same members reached through a
-      // different parent are a distinct, equivalent descriptor.
-      expect(Upper.atMost('vp')).toBe(Rank.atLeast('director').atMost('vp'));
-      expect(Upper.atMost('vp')).not.toBe(Rank.range('director', 'vp'));
-      expect(Upper.atMost('vp').toArray()).toEqual(
-        Rank.range('director', 'vp').toArray(),
+      // Assert — the same members reached through a different parent are the
+      // same descriptor, for contiguous slices and gapped subsets alike.
+      expect(Upper.atMost('vp')).toBe(Rank.range('director', 'vp'));
+      expect(Rank.atLeast('manager').atMost('vp')).toBe(
+        Rank.range('manager', 'vp'),
       );
+      expect(Gapped.omit(['director'])).toBe(
+        Rank.pick(['team_lead', 'c_suite']),
+      );
+    });
+
+    describe('with many distinct gapped subsets', () => {
+      // Ten members give 1013 non-contiguous subsets — far more than the
+      // bounded cache keeps.
+      const Level = OrdinalUnion([
+        'l0',
+        'l1',
+        'l2',
+        'l3',
+        'l4',
+        'l5',
+        'l6',
+        'l7',
+        'l8',
+        'l9',
+      ]);
+      type Level = InferOrdinalUnion<typeof Level>;
+      const levels = Level.toArray();
+
+      function gappedSubsets(): NonEmptyReadonlyArray<Level>[] {
+        const result: NonEmptyReadonlyArray<Level>[] = [];
+        for (let mask = 1; mask < 1 << levels.length; mask++) {
+          const subset = levels.filter((_, index) => mask & (1 << index));
+          const first = levels.indexOf(subset[0]!);
+          const last = levels.indexOf(subset[subset.length - 1]!);
+          if (last - first !== subset.length - 1) {
+            result.push(subset as unknown as NonEmptyReadonlyArray<Level>);
+          }
+        }
+        return result;
+      }
+
+      it('should evict the least recently used gapped subset', () => {
+        // Arrange
+        const first = Level.pick(['l0', 'l9']);
+
+        // Act
+        for (const subset of gappedSubsets()) Level.pick(subset);
+        const again = Level.pick(['l0', 'l9']);
+
+        // Assert — rebuilt, but equal and fully working.
+        expect(again).not.toBe(first);
+        expect(again.toArray()).toEqual(first.toArray());
+        expect(again.lt('l0', 'l9')).toBe(true);
+      });
+
+      it('should keep a gapped subset that stays in use', () => {
+        // Arrange
+        const kept = Level.pick(['l1', 'l8']);
+
+        // Act
+        for (const subset of gappedSubsets()) {
+          Level.pick(subset);
+          Level.pick(['l1', 'l8']);
+        }
+
+        // Assert
+        expect(Level.pick(['l1', 'l8'])).toBe(kept);
+      });
+
+      it('should keep contiguous slices regardless of gapped traffic', () => {
+        // Arrange
+        const slice = Level.range('l2', 'l6');
+        const suffix = Level.atLeast('l7');
+
+        // Act
+        for (const subset of gappedSubsets()) Level.pick(subset);
+
+        // Assert
+        expect(Level.range('l2', 'l6')).toBe(slice);
+        expect(Level.atLeast('l7')).toBe(suffix);
+      });
     });
   });
 

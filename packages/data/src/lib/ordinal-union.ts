@@ -304,14 +304,20 @@ export type OrdinalComparison = -1 | 0 | 1;
  * the substitution.
  *
  * The derivations (`range`, `atLeast`, `atMost`, `pick`, `omit`) are
- * **memoized per descriptor**: asking for the same members again returns the
- * same descriptor, whichever method produced it, so
- * `Rank.atLeast('vp') === Rank.range('vp', 'c_suite')` holds and a derivation
- * is cheap in hot code and stable as a React dependency or `Map` key. A
- * derivation that keeps every member returns the descriptor itself. Identity
- * is per parent: `Rank.atLeast('manager').atMost('vp')` and
- * `Rank.range('manager', 'vp')` have the same members but are distinct
- * descriptors.
+ * **memoized across the whole derivation tree**: the members identify a
+ * derived ordinal, not the method or parent that produced it, so
+ * `Rank.atLeast('vp') === Rank.range('vp', 'c_suite')` and
+ * `Rank.atLeast('manager').atMost('vp') === Rank.range('manager', 'vp')`. A
+ * derivation that keeps every member returns the descriptor itself.
+ *
+ * A **contiguous** run of the root's members — everything `range`, `atLeast`
+ * and `atMost` produce — is kept for as long as the root lives; there are at
+ * most n(n+1)/2 of them, so it is cheap in hot code and stable as a React
+ * dependency or `Map` key. **Any other subset** (a gapped `pick` or `omit`) is
+ * kept in a bounded least-recently-used cache, since there can be 2ⁿ of them
+ * and their keys often come from runtime data. Identity holds while such an
+ * entry is cached; once evicted, the same members are rebuilt as an equal but
+ * new descriptor, so compare those by `toArray()`, not by reference.
  *
  * `next`, `prev` and `clamp` are typed with the **whole member union**, not
  * the exact member the call returns: `Rank.next('vp')` is `Rank | undefined`,
@@ -588,6 +594,41 @@ const ordinalReservedKeys = new Set(
 );
 
 /**
+ * How many non-contiguous derivations a {@link DerivationFamily} keeps. There
+ * are up to 2ⁿ of them, and `pick`/`omit` keys often come from runtime data, so
+ * an unbounded cache would grow with the variety of inputs for as long as the
+ * root lives — which, for a module-level union, is the process.
+ */
+const SUBSET_CACHE_LIMIT = 64;
+
+/**
+ * The derivation cache one root ordinal shares with every ordinal derived from
+ * it, however deep. Entries are keyed by the members' ranks **in the root**, so
+ * the same members map to the same key whichever parent or method asks —
+ * `Rank.atLeast('manager').atMost('vp')` finds `Rank.range('manager', 'vp')`.
+ *
+ * Split by shape, which is what bounds it:
+ *
+ * - `slices` holds contiguous runs of the root's members — everything `range`,
+ *   `atLeast` and `atMost` produce. There are at most n(n+1)/2 of them, so they
+ *   are kept for the family's lifetime.
+ * - `subsets` holds every other shape, as a least-recently-used cache capped at
+ *   {@link SUBSET_CACHE_LIMIT}. A `Map` iterates in insertion order, so a hit
+ *   is re-inserted to mark it recent and the first key is the one to evict.
+ *
+ * The value type is `unknown`: every entry is a descriptor over a *different*
+ * member tuple, so no parameterization describes them all — not even the
+ * widened `OrdinalUnionDescriptor<NonEmptyReadonlyArray<…>>`, which the
+ * contravariant method parameters (see {@link OrdinalUnionMethods}) reject each
+ * entry against. The one honest assertion is the cast in `derive`.
+ */
+type DerivationFamily = {
+  readonly rootRanks: ReadonlyMap<LiteralUnionMemberBase, number>;
+  readonly slices: Map<string, unknown>;
+  readonly subsets: Map<string, unknown>;
+};
+
+/**
  * Create an **ordinal union**: a closed set of string members whose
  * declaration order is meaningful, ascending from lowest to highest.
  *
@@ -652,8 +693,20 @@ export function OrdinalUnion<
   // argument is a non-empty array of members. The cast restores what the
   // constraint on `T` already guarantees; the runtime checks below and inside
   // `LiteralUnion` are unchanged.
-  const literalsIn = literals as unknown as Members<T>;
+  return createOrdinalUnion<T>(literals as unknown as Members<T>, undefined);
+}
 
+/**
+ * The {@link OrdinalUnion} factory, joined to an existing
+ * {@link DerivationFamily} when it builds a derivation, or starting a new one
+ * (`undefined`) when it builds a root.
+ */
+function createOrdinalUnion<
+  T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
+>(
+  literalsIn: Members<T>,
+  family: DerivationFamily | undefined,
+): OrdinalUnionDescriptor<Members<T>> {
   type M = Members<T>[number];
 
   // The ordinal is not composed from a finished `LiteralUnion` — it *is* one,
@@ -761,24 +814,15 @@ export function OrdinalUnion<
       // return type); the compiler cannot follow a runtime slice to that
       // tuple, so this cast is the one unchecked step in the derivations.
       //
-      // Derivations are memoized: a subset is built once and handed back on
-      // every later request for the same members, by whichever method asks —
-      // so `Rank.atLeast(x)` in per-request code costs a lookup, not a
-      // descriptor build, and is stable as a React dependency or `Map` key.
-      // The key is the subset's ranks, which identify it exactly (it is always
-      // in ascending order). The cache lives as long as this descriptor and
-      // holds at most one entry per distinct subset actually requested. The
-      // full member list is this descriptor itself.
-      //
-      // Its value type is `unknown`: every entry is a descriptor over a
-      // *different* member tuple, so no parameterization describes them all —
-      // not even the widened `OrdinalUnionDescriptor<NonEmptyReadonlyArray<…>>`,
-      // which the contravariant method parameters (see
-      // {@link OrdinalUnionMethods}) reject each entry against. Naming any of
-      // them would be a claim about the entries that is false for all of them;
-      // the one honest assertion is the `R` cast on the way out, which is the
-      // documented unchecked step above.
-      const derived = new Map<string, unknown>();
+      // Derivations are memoized in the family this ordinal belongs to (see
+      // {@link DerivationFamily}), so `Rank.atLeast(x)` in per-request code
+      // costs a lookup, not a descriptor build. The full member list is this
+      // descriptor itself.
+      const tree: DerivationFamily = family ?? {
+        rootRanks: ranks,
+        slices: new Map(),
+        subsets: new Map(),
+      };
 
       function derive<R extends NonEmptyReadonlyArray<LiteralUnionMemberBase>>(
         subset: readonly LiteralUnionMemberBase[],
@@ -795,14 +839,29 @@ export function OrdinalUnion<
           return self as unknown as OrdinalUnionDescriptor<R>;
         }
 
-        const key = subset.map((lit) => ranks.get(lit)).join(',');
-        let result = derived.get(key);
+        // Root ranks are ascending and distinct, so the subset is a contiguous
+        // run exactly when its first and last rank span its length. Every
+        // member of a family descriptor is a root member, so each has a rank.
+        const rootRanks = subset.map((lit) => tree.rootRanks.get(lit)!);
+        const key = rootRanks.join(',');
+        const contiguous =
+          rootRanks[rootRanks.length - 1]! - rootRanks[0]! ===
+          subset.length - 1;
+        const cache = contiguous ? tree.slices : tree.subsets;
+
+        let result = cache.get(key);
         if (result === undefined) {
-          result = OrdinalUnion(
+          result = createOrdinalUnion(
             subset as NonEmptyReadonlyArray<LiteralUnionMemberBase>,
+            tree,
           );
-          derived.set(key, result);
+          if (!contiguous && cache.size >= SUBSET_CACHE_LIMIT) {
+            cache.delete(cache.keys().next().value!);
+          }
+        } else if (!contiguous) {
+          cache.delete(key);
         }
+        cache.set(key, result);
         return result as OrdinalUnionDescriptor<R>;
       }
 
