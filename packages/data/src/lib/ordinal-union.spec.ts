@@ -106,6 +106,20 @@ describe('(unit) OrdinalUnion', () => {
       ).not.toThrow();
     });
 
+    it('should accept a pattern-typed member next to a matching literal', () => {
+      // Arrange — a pattern type stands for one unknown runtime value, exactly
+      // as a `string`-typed variable does, so it is let through rather than
+      // recorded as seen; a later literal matching the pattern is not its
+      // duplicate. (A runtime collision is still caught by the runtime guard.)
+      const prefixed = 'x-bar' as `x-${string}`;
+
+      // Act
+      const union = OrdinalUnion(['a', prefixed, 'x-foo']);
+
+      // Assert
+      expect(union.toArray()).toEqual(['a', 'x-bar', 'x-foo']);
+    });
+
     it('should reject a LiteralUnion reserved key at compile time', () => {
       // Act & Assert
       expect(() =>

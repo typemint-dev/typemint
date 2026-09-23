@@ -140,6 +140,19 @@ type IsUnion<U, C = U> = U extends unknown
   : never;
 
 /**
+ * `true` if `S` is a single string literal type; `false` for `string` itself
+ * and for a pattern type such as `` `x-${string}` ``.
+ *
+ * `string extends S` alone does not answer this: a pattern type is narrower
+ * than `string`, so it passes that test while still standing for infinitely
+ * many values. Mapping over the key instead separates the two — `Record<S, 1>`
+ * is a required property for a literal, which the empty object type does not
+ * satisfy, and an index signature for anything wider, which it does.
+ */
+type IsStringLiteral<S extends LiteralUnionMemberBase> =
+  {} extends Record<S, 1> ? false : true;
+
+/**
  * `T` with every member that is a {@link ReservedKey}, or that already
  * appeared earlier, replaced by a {@link ReservedMember} or
  * {@link DuplicateMember} message. A valid tuple maps to itself, so the
@@ -152,17 +165,21 @@ type IsUnion<U, C = U> = U extends unknown
  *
  * A union-typed member (a variable typed `'a' | 'b'`) is replaced by the
  * {@link AmbiguousMember} message: it has no single rank to hold. The check
- * runs first because `H` is an `infer` type parameter, so the conditionals
- * after it distribute over a union `H` — the walk would fork into one tuple
- * per branch, and the error would read as a mismatch against that union of
- * tuples. It is not added to `Seen`: which member it stands for is unknown,
+ * runs before the `extends` tests below because `H` is an `infer` type
+ * parameter, so those conditionals distribute over a union `H` — the walk
+ * would fork into one tuple per branch, and the error would read as a mismatch
+ * against that union of tuples. It is not added to `Seen`: which member it stands for is unknown,
  * so a later literal cannot be called its duplicate.
  *
  * `Seen` collects the members walked so far. It is kept separate from the
- * output accumulator `Acc` so a non-literal member (a `string`-typed variable,
- * skipped by the `string extends H` guard because nothing can be decided about
- * it) never lands in the set that later members are tested against — otherwise
- * every literal after it would match `string` and be reported as a duplicate.
+ * output accumulator `Acc` so a non-literal member never lands in the set that
+ * later members are tested against — otherwise every literal after it would
+ * match it and be reported as a duplicate. A member is non-literal when it is
+ * `string` itself or a pattern type such as `` `x-${string}` ``: both stand for
+ * a single runtime value whose identity is unknown, so nothing can be decided
+ * about it and it is let through untouched. {@link IsStringLiteral} covers both
+ * — testing only `string extends H` would let a pattern type into `Seen` and
+ * report every later literal matching the pattern as its duplicate.
  *
  * The terminal branch appends `T` rather than closing with `Acc` alone: when
  * the input is a non-tuple array (`derive` re-invoking the factory on a runtime
@@ -177,7 +194,7 @@ type CheckedTuple<
   infer H extends LiteralUnionMemberBase,
   ...infer R extends LiteralUnionMemberBase[],
 ]
-  ? string extends H
+  ? IsStringLiteral<H> extends false
     ? CheckedTuple<R, [...Acc, H], Seen>
     : IsUnion<H> extends true
       ? CheckedTuple<R, [...Acc, AmbiguousMember], Seen>
