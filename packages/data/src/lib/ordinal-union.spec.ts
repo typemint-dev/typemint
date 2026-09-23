@@ -3,6 +3,7 @@ import {
   OrdinalUnion,
   type InferOrdinalUnion,
   type OrdinalUnionDescriptor,
+  type OrdinalUnionMethods,
 } from './ordinal-union.js';
 import {
   LiteralUnion,
@@ -26,6 +27,14 @@ const Rank = OrdinalUnion([
   'c_suite',
 ]);
 type Rank = InferOrdinalUnion<typeof Rank>;
+type RankTuple = readonly [
+  'team_lead',
+  'manager',
+  'senior_manager',
+  'director',
+  'vp',
+  'c_suite',
+];
 
 describe('(unit) OrdinalUnion', () => {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -625,6 +634,27 @@ describe('(unit) OrdinalUnion', () => {
       // @ts-expect-error - an ordinal is a LiteralUnionLike, not a descriptor
       const union: LiteralUnionDescriptor<Rank> = Rank;
       expect(union).toBe(Rank);
+    });
+
+    it('should NOT accept a derived ordinal where the parent is expected', () => {
+      // The descriptor's members are declared as function-typed *properties*
+      // rather than with method shorthand, so their parameters are checked
+      // contravariantly. With method shorthand TypeScript would check them
+      // bivariantly, a sub-ordinal would assign to any partial shape of its
+      // parent — `Pick<…>`, a hand-written comparator interface — and the
+      // call below would panic instead of failing to compile.
+      type RankComparator = Pick<
+        OrdinalUnionMethods<RankTuple>,
+        'compare' | 'gte'
+      >;
+
+      // Arrange
+      const Executive = Rank.atLeast('director');
+
+      // Assert
+      // @ts-expect-error - Executive does not compare 'manager'
+      const comparator: RankComparator = Executive;
+      expect(() => comparator.gte('manager', 'vp')).toThrow(PanicException);
     });
   });
 });

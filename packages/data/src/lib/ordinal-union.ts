@@ -239,6 +239,15 @@ export type OrdinalComparison = -1 | 0 | 1;
  * Every method is a closure over the descriptor's own state (no `this`), so
  * they can be passed around unbound — `ranks.sort(Rank.compare)` works.
  *
+ * Every member is declared as a **property holding a function**, never with
+ * method shorthand: TypeScript checks method parameters bivariantly even under
+ * `strictFunctionTypes`, so `rank(value: T[number]): number` would let a
+ * derived ordinal stand in for its parent wherever a partial shape is expected
+ * (`Pick<OrdinalUnionMethods<Rank>, 'gte'>`, a hand-written `Comparator<Rank>`)
+ * — and the narrower descriptor then panics on a member it does not hold.
+ * Property syntax makes the parameters contravariant, so the compiler rejects
+ * the substitution.
+ *
  * The derivations (`range`, `atLeast`, `atMost`, `pick`, `omit`) are
  * **memoized per descriptor**: asking for the same members again returns the
  * same descriptor, whichever method produced it, so
@@ -263,7 +272,7 @@ export type OrdinalUnionMethods<
    * @throws {PanicException} If `value` is not a member (only reachable when
    *   the type system is bypassed).
    */
-  rank(value: T[number]): number;
+  rank: (value: T[number]) => number;
 
   /**
    * Compare two members by their declared position: `-1` if `a` is lower, `0`
@@ -276,33 +285,33 @@ export type OrdinalUnionMethods<
    * ranks.sort((a, b) => Rank.compare(b, a));
    * ```
    */
-  compare(a: T[number], b: T[number]): OrdinalComparison;
+  compare: (a: T[number], b: T[number]) => OrdinalComparison;
 
   /** `true` if `a` is strictly lower than `b`. */
-  lt(a: T[number], b: T[number]): boolean;
+  lt: (a: T[number], b: T[number]) => boolean;
   /** `true` if `a` is lower than or equal to `b`. */
-  lte(a: T[number], b: T[number]): boolean;
+  lte: (a: T[number], b: T[number]) => boolean;
   /** `true` if `a` is strictly higher than `b`. */
-  gt(a: T[number], b: T[number]): boolean;
+  gt: (a: T[number], b: T[number]) => boolean;
   /** `true` if `a` is higher than or equal to `b`. */
-  gte(a: T[number], b: T[number]): boolean;
+  gte: (a: T[number], b: T[number]) => boolean;
 
   /** The lowest of the given members. */
-  min<const V extends T[number]>(...values: NonEmptyReadonlyArray<V>): V;
+  min: <const V extends T[number]>(...values: NonEmptyReadonlyArray<V>) => V;
   /** The highest of the given members. */
-  max<const V extends T[number]>(...values: NonEmptyReadonlyArray<V>): V;
+  max: <const V extends T[number]>(...values: NonEmptyReadonlyArray<V>) => V;
 
   /**
    * Bound `value` to the inclusive range `[lo, hi]`.
    *
    * @throws {PanicException} If `lo` is higher than `hi`.
    */
-  clamp(value: T[number], lo: T[number], hi: T[number]): T[number];
+  clamp: (value: T[number], lo: T[number], hi: T[number]) => T[number];
 
   /** The member directly above `value`, or `undefined` if it is the highest. */
-  next(value: T[number]): T[number] | undefined;
+  next: (value: T[number]) => T[number] | undefined;
   /** The member directly below `value`, or `undefined` if it is the lowest. */
-  prev(value: T[number]): T[number] | undefined;
+  prev: (value: T[number]) => T[number] | undefined;
 
   /**
    * Derive an ordinal over the inclusive slice `[from, to]`. The result's
@@ -322,10 +331,10 @@ export type OrdinalUnionMethods<
    * // OrdinalUnionDescriptor<readonly ['manager', 'senior_manager', 'director']>
    * ```
    */
-  range<const From extends T[number], const To extends T[number]>(
+  range: <const From extends T[number], const To extends T[number]>(
     from: From,
     to: To,
-  ): OrdinalUnionDescriptor<AsNonEmpty<SliceRange<T, From, To>>>;
+  ) => OrdinalUnionDescriptor<AsNonEmpty<SliceRange<T, From, To>>>;
 
   /**
    * Derive an ordinal over `value` and every member above it.
@@ -342,9 +351,9 @@ export type OrdinalUnionMethods<
    * }
    * ```
    */
-  atLeast<const V extends T[number]>(
+  atLeast: <const V extends T[number]>(
     value: V,
-  ): OrdinalUnionDescriptor<AsNonEmpty<SliceFrom<T, V>>>;
+  ) => OrdinalUnionDescriptor<AsNonEmpty<SliceFrom<T, V>>>;
 
   /**
    * Derive an ordinal over `value` and every member below it.
@@ -352,9 +361,9 @@ export type OrdinalUnionMethods<
    * With a union-typed `value` (a variable), the type runs through the
    * union's highest member — the widest result the call can return.
    */
-  atMost<const V extends T[number]>(
+  atMost: <const V extends T[number]>(
     value: V,
-  ): OrdinalUnionDescriptor<AsNonEmpty<SliceThrough<T, V>>>;
+  ) => OrdinalUnionDescriptor<AsNonEmpty<SliceThrough<T, V>>>;
 
   /**
    * Derive an ordinal over a subset of members.
@@ -367,9 +376,9 @@ export type OrdinalUnionMethods<
    * @throws {PanicException} If `keys` contains a non-member (only reachable
    *   when the type system is bypassed).
    */
-  pick<const K extends T[number]>(
+  pick: <const K extends T[number]>(
     keys: NonEmptyReadonlyArray<K>,
-  ): OrdinalUnionDescriptor<AsNonEmpty<FilterTuple<T, K>>>;
+  ) => OrdinalUnionDescriptor<AsNonEmpty<FilterTuple<T, K>>>;
 
   /**
    * Derive an ordinal over every member except `keys`, keeping this ordinal's
@@ -377,9 +386,11 @@ export type OrdinalUnionMethods<
    *
    * @throws {PanicException} If removing `keys` would leave no members.
    */
-  omit<const K extends T[number]>(
+  omit: <const K extends T[number]>(
     keys: NonEmptyReadonlyArray<K>,
-  ): OrdinalUnionDescriptor<AsNonEmpty<FilterTuple<T, Exclude<T[number], K>>>>;
+  ) => OrdinalUnionDescriptor<
+    AsNonEmpty<FilterTuple<T, Exclude<T[number], K>>>
+  >;
 
   /** The string tag for the ordinal union. */
   [Symbol.toStringTag]: 'OrdinalUnion';
