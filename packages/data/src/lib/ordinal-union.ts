@@ -490,25 +490,43 @@ export type InferOrdinalUnion<T> =
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Descriptor keys an ordinal adds beyond {@link LiteralUnion}'s own reserved
- * keys (which `LiteralUnion` checks itself when it is delegated to).
+ * The descriptor keys a member cannot take, checked at runtime for the inputs
+ * {@link ReservedKey} cannot see: a widened array, or a JavaScript caller.
+ * `LiteralUnion`'s own keys are checked by `LiteralUnion` when it is delegated
+ * to, so the overlap here (`pick`, `omit`) is redundant but harmless.
+ *
+ * Spelled as an object literal checked against the method surface rather than
+ * as a free-standing list, so the two cannot drift: `satisfies` reports a
+ * missing key, and — the value being a literal — a stray one as well. A method
+ * added to {@link OrdinalUnionMethods} is a compile error here until it is
+ * listed, which is what {@link ReservedKey} already gives the type level.
  */
-const ordinalReservedKeys = new Set([
-  'rank',
-  'compare',
-  'lt',
-  'lte',
-  'gt',
-  'gte',
-  'min',
-  'max',
-  'clamp',
-  'next',
-  'prev',
-  'range',
-  'atLeast',
-  'atMost',
-]);
+const ordinalReservedKeys = new Set(
+  Object.keys({
+    rank: 1,
+    compare: 1,
+    lt: 1,
+    lte: 1,
+    gt: 1,
+    gte: 1,
+    min: 1,
+    max: 1,
+    clamp: 1,
+    next: 1,
+    prev: 1,
+    range: 1,
+    atLeast: 1,
+    atMost: 1,
+    pick: 1,
+    omit: 1,
+  } satisfies Record<
+    Exclude<
+      keyof OrdinalUnionMethods<NonEmptyReadonlyArray<LiteralUnionMemberBase>>,
+      symbol
+    >,
+    1
+  >),
+);
 
 /**
  * Create an **ordinal union**: a closed set of string members whose

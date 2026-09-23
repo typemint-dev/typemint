@@ -1296,21 +1296,35 @@ export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
  */
 const STRING_DESCRIPTOR = TypeDescriptor('string', witness<string>());
 
-const reservedKeys = new Set([
-  'isOfType',
-  'of',
-  'ofUnsafe',
-  'parse',
-  'parseUnsafe',
-  'parseOr',
-  'toArray',
-  'toSet',
-  'pick',
-  'omit',
-  'size',
-  'match',
-  'matchResult',
-]);
+/**
+ * The descriptor keys a member cannot take, since a member of that name would
+ * shadow the method it is named after.
+ *
+ * Spelled as an object literal checked against {@link LiteralUnionMethods}
+ * rather than as a free-standing list, so the two cannot drift: `satisfies`
+ * reports a missing key, and — the value being a literal — a stray one as well.
+ * A method added to the descriptor is a compile error here until it is listed.
+ */
+const reservedKeys = new Set(
+  Object.keys({
+    isOfType: 1,
+    of: 1,
+    ofUnsafe: 1,
+    parse: 1,
+    parseUnsafe: 1,
+    parseOr: 1,
+    toArray: 1,
+    toSet: 1,
+    pick: 1,
+    omit: 1,
+    size: 1,
+    match: 1,
+    matchResult: 1,
+  } satisfies Record<
+    Exclude<keyof LiteralUnionMethods<LiteralUnionMemberBase>, symbol>,
+    1
+  >),
+);
 
 export function LiteralUnion<
   const T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
