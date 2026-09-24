@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.13.0
+
+### Minor Changes
+
+- Add OrdinalUnion data type
+
 ## 0.12.0
 
 ### Minor Changes
