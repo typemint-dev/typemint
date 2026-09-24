@@ -140,7 +140,7 @@ type DuplicateMember<M extends LiteralUnionMemberBase> =
 /**
  * The member names the descriptor's own keys already occupy — every string key
  * of {@link LiteralUnionMethods} (`size`, `parse`, `pick`, …) and of
- * {@link OrdinalUnionMethods} (`rank`, `next`, `range`, …). Derived from the
+ * {@link OrdinalUnionMethods} (`indexOf`, `next`, `range`, …). Derived from the
  * method types rather than listed, so a method added to either surface is
  * reserved here without a second edit.
  */
@@ -296,7 +296,7 @@ export type OrdinalComparison = -1 | 0 | 1;
  *
  * Every member is declared as a **property holding a function**, never with
  * method shorthand: TypeScript checks method parameters bivariantly even under
- * `strictFunctionTypes`, so `rank(value: T[number]): number` would let a
+ * `strictFunctionTypes`, so `indexOf(value: T[number]): number` would let a
  * derived ordinal stand in for its parent wherever a partial shape is expected
  * (`Pick<OrdinalUnionMethods<Rank>, 'gte'>`, a hand-written `Comparator<Rank>`)
  * — and the narrower descriptor then panics on a member it does not hold.
@@ -322,7 +322,7 @@ export type OrdinalComparison = -1 | 0 | 1;
  * `next`, `prev` and `clamp` are typed with the **whole member union**, not
  * the exact member the call returns: `Rank.next('vp')` is `Rank | undefined`,
  * not `'c_suite' | undefined`. Naming the exact member means indexing the
- * member tuple at `rank(value) + 1` at the type level — a walk the compiler
+ * member tuple at `indexOf(value) + 1` at the type level — a walk the compiler
  * repeats at every call site, paid by every consumer of the union, for a value
  * that is nearly always assigned back to something of the member type anyway.
  * This is a deliberate trade, not an oversight; a call site that needs the
@@ -338,28 +338,32 @@ export type OrdinalUnionMethods<
   T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
 > = {
   /**
-   * The zero-based position of `value` in the declared order.
+   * The index of `value` in **this descriptor's** {@link LiteralUnion}
+   * `toArray()` — zero-based and dense, so `toArray()[indexOf(x)] === x`.
    *
-   * The rank is a **derived, in-memory** value. Persist and transmit the
-   * member string, never the rank: inserting a member mid-list (a new
-   * `principal` between `senior_manager` and `director`) shifts every rank
-   * after it, silently corrupting stored integers.
+   * It is a position, not a property of the member: a derived ordinal indexes
+   * its own members from `0`, so the same member has a different index in each
+   * descriptor that holds it, and an index means nothing without its
+   * descriptor. **To order members, use {@link compare} (or `lt`/`gte`)**,
+   * which take member strings and cannot be mixed up this way. Reach for the
+   * index only for positional work on this descriptor: indexing `toArray()`,
+   * bucketing, a progress bar.
    *
-   * Ranks are also relative to **this** descriptor: a derived ordinal
-   * renumbers its members from `0`, so a rank means nothing outside the
-   * descriptor that produced it. Two ranks are only comparable when they come
-   * from the same descriptor — order members with {@link compare} (or
-   * `lt`/`gte`), which take member strings and cannot be mixed up this way.
+   * Never persist or transmit it either — store the member string. Inserting a
+   * member mid-list shifts every index after it, silently corrupting stored
+   * integers.
+   *
+   * Unlike `Array.prototype.indexOf`, a non-member is not `-1`: it panics.
    *
    * ```ts
-   * Rank.rank('director'); // 3
-   * Rank.atLeast('director').rank('director'); // 0 — same member, new scale
+   * Rank.indexOf('director'); // 3
+   * Rank.atLeast('director').indexOf('director'); // 0 — same member, new index
    * ```
    *
    * @throws {PanicException} If `value` is not a member (only reachable when
    *   the type system is bypassed).
    */
-  rank: (value: T[number]) => number;
+  indexOf: (value: T[number]) => number;
 
   /**
    * Compare two members by their declared position: `-1` if `a` is lower, `0`
@@ -388,10 +392,10 @@ export type OrdinalUnionMethods<
    *
    * Ties keep the **earliest** argument: the scan replaces its candidate only
    * on a strictly lower member, never on an equal one. Nothing observable
-   * hangs on that today — equal rank means the identical member string, so
-   * both candidates are the same value — but the rule is fixed, so a caller
-   * reasoning about the scan (or a later implementation) cannot quietly flip
-   * it.
+   * hangs on that today — an equal position means the identical member
+   * string, so both candidates are the same value — but the rule is fixed,
+   * so a caller reasoning about the scan (or a later implementation) cannot
+   * quietly flip it.
    */
   min: <const V extends T[number]>(...values: NonEmptyReadonlyArray<V>) => V;
   /**
@@ -568,7 +572,7 @@ export type InferOrdinalUnion<T> =
  */
 const ordinalReservedKeys = new Set(
   Object.keys({
-    rank: 1,
+    indexOf: 1,
     compare: 1,
     lt: 1,
     lte: 1,
@@ -603,7 +607,7 @@ const SUBSET_CACHE_LIMIT = 64;
 
 /**
  * The derivation cache one root ordinal shares with every ordinal derived from
- * it, however deep. Entries are keyed by the members' ranks **in the root**, so
+ * it, however deep. Entries are keyed by the members' indices **in the root**, so
  * the same members map to the same key whichever parent or method asks —
  * `Rank.atLeast('manager').atMost('vp')` finds `Rank.range('manager', 'vp')`.
  *
@@ -623,7 +627,7 @@ const SUBSET_CACHE_LIMIT = 64;
  * entry against. The one honest assertion is the cast in `derive`.
  */
 type DerivationFamily = {
-  readonly rootRanks: ReadonlyMap<LiteralUnionMemberBase, number>;
+  readonly rootIndices: ReadonlyMap<LiteralUnionMemberBase, number>;
   readonly slices: Map<string, unknown>;
   readonly subsets: Map<string, unknown>;
 };
@@ -639,7 +643,7 @@ type DerivationFamily = {
  * The descriptor has everything a {@link LiteralUnion} has (`isOfType`,
  * `parse`, `match`, member access, …) plus comparison and slicing, derived from
  * each member's position. Serialization is unchanged: values are the member
- * strings, never their ranks.
+ * strings, never their indices.
  *
  * Members must be **distinct** — a member cannot hold two ranks. Unlike
  * {@link LiteralUnion}, which silently deduplicates, a repeat is rejected by
@@ -730,24 +734,24 @@ function createOrdinalUnion<
       // Walks the caller's input, not `members`: `LiteralUnion` deduplicates,
       // so a repeat would already be gone from `members` and pass unnoticed.
       // Once the walk finds none, the two agree position for position, so the
-      // index is the member's rank in `members` as well — and `size`, which
+      // index is the member's index in `members` as well — and `size`, which
       // counts `members`, is the ordinal's cardinality too.
-      const ranks = new Map<LiteralUnionMemberBase, number>();
+      const indices = new Map<LiteralUnionMemberBase, number>();
       for (const [index, lit] of literalsIn.entries()) {
-        if (ranks.has(lit)) {
+        if (indices.has(lit)) {
           throw new PanicException(
             `OrdinalUnion: duplicate member ${JSON.stringify(lit)}; each ` +
               `member must hold exactly one rank`,
           );
         }
-        ranks.set(lit, index);
+        indices.set(lit, index);
       }
 
-      function rank(value: M): number {
-        const index = ranks.get(value);
+      function indexOf(value: M): number {
+        const index = indices.get(value);
         if (index === undefined) {
           throw new PanicException(
-            `OrdinalUnion.rank: ${JSON.stringify(value)} is not a member of ` +
+            `OrdinalUnion.indexOf: ${JSON.stringify(value)} is not a member of ` +
               `the union`,
           );
         }
@@ -755,23 +759,23 @@ function createOrdinalUnion<
       }
 
       function compare(a: M, b: M): OrdinalComparison {
-        return Math.sign(rank(a) - rank(b)) as OrdinalComparison;
+        return Math.sign(indexOf(a) - indexOf(b)) as OrdinalComparison;
       }
 
       function lt(a: M, b: M): boolean {
-        return rank(a) < rank(b);
+        return indexOf(a) < indexOf(b);
       }
 
       function lte(a: M, b: M): boolean {
-        return rank(a) <= rank(b);
+        return indexOf(a) <= indexOf(b);
       }
 
       function gt(a: M, b: M): boolean {
-        return rank(a) > rank(b);
+        return indexOf(a) > indexOf(b);
       }
 
       function gte(a: M, b: M): boolean {
-        return rank(a) >= rank(b);
+        return indexOf(a) >= indexOf(b);
       }
 
       // Both scans compare strictly, so an equal member leaves the accumulator
@@ -799,11 +803,11 @@ function createOrdinalUnion<
       }
 
       function next(value: M): M | undefined {
-        return members[rank(value) + 1];
+        return members[indexOf(value) + 1];
       }
 
       function prev(value: M): M | undefined {
-        const index = rank(value);
+        const index = indexOf(value);
         return index === 0 ? undefined : members[index - 1];
       }
 
@@ -819,7 +823,7 @@ function createOrdinalUnion<
       // costs a lookup, not a descriptor build. The full member list is this
       // descriptor itself.
       const tree: DerivationFamily = family ?? {
-        rootRanks: ranks,
+        rootIndices: indices,
         slices: new Map(),
         subsets: new Map(),
       };
@@ -839,13 +843,13 @@ function createOrdinalUnion<
           return self as unknown as OrdinalUnionDescriptor<R>;
         }
 
-        // Root ranks are ascending and distinct, so the subset is a contiguous
-        // run exactly when its first and last rank span its length. Every
-        // member of a family descriptor is a root member, so each has a rank.
-        const rootRanks = subset.map((lit) => tree.rootRanks.get(lit)!);
-        const key = rootRanks.join(',');
+        // Root indices are ascending and distinct, so the subset is a
+        // contiguous run exactly when its first and last index span its length.
+        // Every member of a family descriptor is a root member, so each has one.
+        const rootIndices = subset.map((lit) => tree.rootIndices.get(lit)!);
+        const key = rootIndices.join(',');
         const contiguous =
-          rootRanks[rootRanks.length - 1]! - rootRanks[0]! ===
+          rootIndices[rootIndices.length - 1]! - rootIndices[0]! ===
           subset.length - 1;
         const cache = contiguous ? tree.slices : tree.subsets;
 
@@ -875,25 +879,25 @@ function createOrdinalUnion<
               `${JSON.stringify(to)}`,
           );
         }
-        return derive(members.slice(rank(from), rank(to) + 1), 'range');
+        return derive(members.slice(indexOf(from), indexOf(to) + 1), 'range');
       }
 
       function atLeast<const V extends M>(
         value: V,
       ): OrdinalUnionDescriptor<AsNonEmpty<SliceFrom<Members<T>, V>>> {
-        return derive(members.slice(rank(value)), 'atLeast');
+        return derive(members.slice(indexOf(value)), 'atLeast');
       }
 
       function atMost<const V extends M>(
         value: V,
       ): OrdinalUnionDescriptor<AsNonEmpty<SliceThrough<Members<T>, V>>> {
-        return derive(members.slice(0, rank(value) + 1), 'atMost');
+        return derive(members.slice(0, indexOf(value) + 1), 'atMost');
       }
 
       function pick<const K extends M>(
         keys: NonEmptyReadonlyArray<K>,
       ): OrdinalUnionDescriptor<AsNonEmpty<FilterTuple<Members<T>, K>>> {
-        for (const key of keys) rank(key); // panics on a non-member
+        for (const key of keys) indexOf(key); // panics on a non-member
         const picked = new Set<LiteralUnionMemberBase>(keys);
         return derive(
           members.filter((lit) => picked.has(lit)),
@@ -920,7 +924,7 @@ function createOrdinalUnion<
       // is checked on the way in here as well as on the way out.
       return {
         [Symbol.toStringTag]: 'OrdinalUnion',
-        rank,
+        indexOf,
         compare,
         lt,
         lte,

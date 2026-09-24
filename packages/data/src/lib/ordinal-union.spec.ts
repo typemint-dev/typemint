@@ -275,7 +275,7 @@ describe('(unit) OrdinalUnion', () => {
     ]);
 
     const ordinalMethodKeys: readonly (keyof typeof Rank)[] = [
-      'rank',
+      'indexOf',
       'compare',
       'lt',
       'lte',
@@ -401,15 +401,28 @@ describe('(unit) OrdinalUnion', () => {
   // MARK: Comparison
   // ─────────────────────────────────────────────────────────────────────────────
   describe('Comparison', () => {
-    it('should rank members by declaration position', () => {
+    it('should index members by declaration position', () => {
       // Assert
-      expect(Rank.rank('team_lead')).toBe(0);
-      expect(Rank.rank('c_suite')).toBe(5);
+      expect(Rank.indexOf('team_lead')).toBe(0);
+      expect(Rank.indexOf('c_suite')).toBe(5);
     });
 
-    it('should throw a PanicException when ranking a non-member', () => {
+    it('should throw a PanicException when indexing a non-member', () => {
       // Act & Assert
-      expect(() => Rank.rank('intern' as Rank)).toThrow(PanicException);
+      expect(() => Rank.indexOf('intern' as Rank)).toThrow(PanicException);
+    });
+
+    it('should index a derived ordinal from zero, densely', () => {
+      // Arrange
+      const Gapped = Rank.pick(['manager', 'vp', 'c_suite']);
+
+      // Assert — the index is local to the descriptor, not a property of the
+      // member, and always addresses that descriptor's own toArray().
+      expect(Rank.indexOf('vp')).toBe(4);
+      expect(Gapped.indexOf('vp')).toBe(1);
+      for (const member of Gapped.toArray()) {
+        expect(Gapped.toArray()[Gapped.indexOf(member)]).toBe(member);
+      }
     });
 
     it('should compare members', () => {
@@ -718,9 +731,9 @@ describe('(unit) OrdinalUnion', () => {
       // every one of these calls, which is what `pick` did while the filter
       // dropped the rest element instead of carrying it through.
       expect(below.toArray()).toEqual(['low', 'mid']);
-      expect(above.rank('high')).toBe(1);
+      expect(above.indexOf('high')).toBe(1);
       expect(ranged).toBe(Wide);
-      expect(picked.rank('low')).toBe(0);
+      expect(picked.indexOf('low')).toBe(0);
       expect(omitted.gt('high', 'mid')).toBe(true);
     });
 
