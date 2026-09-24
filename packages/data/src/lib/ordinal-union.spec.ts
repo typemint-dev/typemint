@@ -321,6 +321,9 @@ describe('(unit) OrdinalUnion', () => {
       'lte',
       'gt',
       'gte',
+      'between',
+      'lowest',
+      'highest',
       'min',
       'max',
       'clamp',
@@ -467,6 +470,9 @@ describe('(unit) OrdinalUnion', () => {
       expect(() => Rank.gte('vp', 'intern' as Rank)).toThrow(
         /^OrdinalUnion\.gte: /,
       );
+      expect(() => Rank.between('intern' as Rank, 'manager', 'vp')).toThrow(
+        /^OrdinalUnion\.between: /,
+      );
       expect(() => Rank.min('intern' as Rank, 'vp')).toThrow(
         /^OrdinalUnion\.min: /,
       );
@@ -536,6 +542,80 @@ describe('(unit) OrdinalUnion', () => {
       expect(Rank.gt('director', 'director')).toBe(false);
       expect(Rank.gte('director', 'director')).toBe(true);
       expect(Rank.gte('manager', 'director')).toBe(false);
+    });
+
+    it('should answer between on an inclusive range', () => {
+      // Assert — both bounds are inside the range.
+      expect(Rank.between('director', 'manager', 'vp')).toBe(true);
+      expect(Rank.between('manager', 'manager', 'vp')).toBe(true);
+      expect(Rank.between('vp', 'manager', 'vp')).toBe(true);
+      expect(Rank.between('team_lead', 'manager', 'vp')).toBe(false);
+      expect(Rank.between('c_suite', 'manager', 'vp')).toBe(false);
+    });
+
+    it('should agree with the range derivation it shortens', () => {
+      // Assert — `between` is the direct form of `range(lo, hi).isOfType(v)`,
+      // so the two must not drift apart.
+      for (const member of Rank) {
+        expect(Rank.between(member, 'manager', 'vp')).toBe(
+          Rank.range('manager', 'vp').isOfType(member),
+        );
+      }
+    });
+
+    it('should throw a PanicException when between bounds are inverted', () => {
+      // Act & Assert
+      expect(() => Rank.between('director', 'vp', 'manager')).toThrow(
+        PanicException,
+      );
+      expect(() => Rank.between('director', 'vp', 'manager')).toThrow(
+        /^OrdinalUnion\.between: lower bound "vp" is above upper bound/,
+      );
+    });
+
+    it('should return the lowest and highest members, exactly typed', () => {
+      // Assert — the endpoints are read at a fixed position, so unlike the
+      // stepping methods they are typed as the member they return.
+      expect(Rank.lowest()).toBe('team_lead');
+      expect(Rank.highest()).toBe('c_suite');
+      expectTypeOf(Rank.lowest()).toEqualTypeOf<'team_lead'>();
+      expectTypeOf(Rank.highest()).toEqualTypeOf<'c_suite'>();
+    });
+
+    it('should give a derived ordinal its own lowest and highest', () => {
+      // Arrange
+      const Executive = Rank.atLeast('director');
+      const Gapped = Rank.pick(['manager', 'vp']);
+
+      // Act & Assert — the endpoints are local to the descriptor, as the
+      // index is.
+      expect(Executive.lowest()).toBe('director');
+      expect(Executive.highest()).toBe('c_suite');
+      expectTypeOf(Executive.lowest()).toEqualTypeOf<'director'>();
+      expectTypeOf(Executive.highest()).toEqualTypeOf<'c_suite'>();
+      expect(Gapped.lowest()).toBe('manager');
+      expect(Gapped.highest()).toBe('vp');
+    });
+
+    it('should hold the endpoints of a single-member ordinal', () => {
+      // Arrange
+      const One = OrdinalUnion(['only']);
+
+      // Assert — one member is both ends at once.
+      expect(One.lowest()).toBe('only');
+      expect(One.highest()).toBe('only');
+      expectTypeOf(One.highest()).toEqualTypeOf<'only'>();
+    });
+
+    it('should work unbound, as every other method does', () => {
+      // Arrange — the methods are closures over the descriptor's state, so
+      // they survive being pulled off it.
+      const { lowest, highest, between } = Rank;
+
+      // Assert
+      expect(lowest()).toBe('team_lead');
+      expect(highest()).toBe('c_suite');
+      expect(between('vp', 'director', 'c_suite')).toBe(true);
     });
 
     it('should return min and max narrowed to the arguments', () => {
@@ -808,6 +888,7 @@ describe('(unit) OrdinalUnion', () => {
       const ranged = Wide.range('low', 'high');
       const picked = Wide.pick(['low']);
       const omitted = Wide.omit(['low']);
+      const top = Wide.highest();
 
       // Assert
       // The member arguments below are the type assertion: a derived tuple
@@ -819,6 +900,12 @@ describe('(unit) OrdinalUnion', () => {
       expect(ranged).toBe(Wide);
       expect(picked.indexOf('low')).toBe(0);
       expect(omitted.gt('high', 'mid')).toBe(true);
+
+      // The last position belongs to the rest element, so `highest` is typed
+      // as the whole member union rather than as a member the walk invented.
+      expect(top).toBe('high');
+      expectTypeOf(top).toEqualTypeOf<string>();
+      expectTypeOf(Wide.lowest()).toEqualTypeOf<string>();
     });
 
     it('should return the same descriptor for a repeated derivation', () => {

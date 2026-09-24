@@ -33,6 +33,35 @@ type IsWidened<T extends readonly LiteralUnionMemberBase[]> =
   number extends T['length'] ? true : false;
 
 /**
+ * The first member of `T` — the lowest rank. Exact even for a widened `T`:
+ * position `0` is the one position a rest element cannot take away, and the
+ * constraint guarantees it is filled.
+ */
+type FirstMember<T extends readonly LiteralUnionMemberBase[]> = T[0];
+
+/**
+ * The last member of `T` — the highest rank.
+ *
+ * Exact only while `T` has a fixed length. On a widened `T` the final position
+ * is whatever the rest element stands for, so the whole member union is
+ * returned: the widest value the call can produce, never a narrower one than
+ * the runtime does; see {@link IsWidened}.
+ *
+ * The rest element is matched as `LiteralUnionMemberBase[]` rather than
+ * inferred into a name it would never use — the prefix is not needed, only the
+ * position after it.
+ */
+type LastMember<T extends readonly LiteralUnionMemberBase[]> =
+  IsWidened<T> extends true
+    ? T[number]
+    : T extends readonly [
+          ...LiteralUnionMemberBase[],
+          infer L extends LiteralUnionMemberBase,
+        ]
+      ? L
+      : T[number];
+
+/**
  * Keep the members of `T` that extend `K`, preserving `T`'s order. Written
  * tail-recursively (accumulator) so long rank lists stay within the compiler's
  * recursion budget.
@@ -338,7 +367,9 @@ export type OrdinalComparison = -1 | 0 | 1;
  *
  * The derivations are the exception: there the member tuple *is* the result,
  * so the walk earns its cost and `range`, `atLeast`, `atMost`, `pick` and
- * `omit` all carry exact slices.
+ * `omit` all carry exact slices. `lowest` and `highest` are exact for the
+ * opposite reason — a fixed position is an index into the tuple, not a walk
+ * over it.
  */
 export type OrdinalUnionMethods<
   T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
@@ -392,6 +423,38 @@ export type OrdinalUnionMethods<
   gt: (a: T[number], b: T[number]) => boolean;
   /** `true` if `a` is higher than or equal to `b`. */
   gte: (a: T[number], b: T[number]) => boolean;
+
+  /**
+   * `true` if `value` lies within the inclusive range `[lo, hi]`.
+   *
+   * The direct form of `range(lo, hi).isOfType(value)`. The derivation narrows
+   * `value` to the slice where this only answers the question, so reach for it
+   * when the branch needs the narrower type and for this when it needs the
+   * boolean — a filter predicate, a guard clause, a validation rule.
+   *
+   * @throws {PanicException} If `lo` is higher than `hi`, as {@link clamp}
+   *   does: an inverted range is a bug in the caller, not an empty one.
+   */
+  between: (value: T[number], lo: T[number], hi: T[number]) => boolean;
+
+  /**
+   * The lowest member of **this descriptor** — the first one it declares.
+   *
+   * Exactly typed: `Rank.lowest()` is `'team_lead'`, not `Rank`. Unlike the
+   * stepping methods, this costs the compiler nothing to name — the member is
+   * read at a fixed position, not searched for — so the exception to the note
+   * on stepping and bounding types above is not an inconsistency.
+   *
+   * On a derived ordinal it is that ordinal's own lowest member:
+   * `Rank.atLeast('director').lowest()` is `'director'`.
+   */
+  lowest: () => FirstMember<T>;
+
+  /**
+   * The highest member of this descriptor — the last one it declares. Exactly
+   * typed, and local to the descriptor, as {@link lowest} is.
+   */
+  highest: () => LastMember<T>;
 
   /**
    * The lowest of the given members.
@@ -584,6 +647,9 @@ const ordinalReservedKeys = new Set(
     lte: 1,
     gt: 1,
     gte: 1,
+    between: 1,
+    lowest: 1,
+    highest: 1,
     min: 1,
     max: 1,
     clamp: 1,
@@ -674,9 +740,9 @@ type DerivationFamily = {
  *
  * The reserved set is the ordinal's method surface *and* the literal union's,
  * so it claims names a scale might plausibly want (`min`, `max`, `next`,
- * `range`, `clamp`, `compare`). That surface is **frozen for the major
- * version**: adding a method reserves a name an existing union may already
- * hold, so it is a breaking change and is released as one. `Rank.members` —
+ * `range`, `clamp`, `compare`, `between`, `lowest`, `highest`). That surface is
+ * **frozen for the major version**: adding a method reserves a name an existing
+ * union may already hold, so it is a breaking change and is released as one. `Rank.members` —
  * inherited from {@link LiteralUnion} — is the access path that does not
  * depend on the namespace.
  *
@@ -700,6 +766,8 @@ type DerivationFamily = {
  * Rank.gte('director', Rank.manager); // true
  * Rank.max('manager', 'vp', 'team_lead'); // 'vp'
  * Rank.next('vp'); // 'c_suite'
+ * Rank.lowest(); // 'team_lead' — typed as that literal
+ * Rank.between('director', 'manager', 'vp'); // true
  * Rank.atLeast('director').toArray(); // ['director', 'vp', 'c_suite']
  * ```
  */
@@ -812,6 +880,31 @@ function createOrdinalUnion<
 
       function gte(a: M, b: M): boolean {
         return compareIn(a, b, 'gte') >= 0;
+      }
+
+      function between(value: M, lo: M, hi: M): boolean {
+        if (compareIn(lo, hi, 'between') > 0) {
+          throw new PanicException(
+            `OrdinalUnion.between: lower bound ${JSON.stringify(lo)} is ` +
+              `above upper bound ${JSON.stringify(hi)}`,
+          );
+        }
+        return (
+          compareIn(value, lo, 'between') >= 0 &&
+          compareIn(value, hi, 'between') <= 0
+        );
+      }
+
+      // Both read a fixed position of a list the factory has already proved
+      // non-empty, so neither can be `undefined`. The casts restore that, and
+      // the position's type, which the compiler cannot compute while `T` is
+      // still generic — the same step every derivation takes.
+      function lowest(): FirstMember<Members<T>> {
+        return members[0] as FirstMember<Members<T>>;
+      }
+
+      function highest(): LastMember<Members<T>> {
+        return members[members.length - 1] as LastMember<Members<T>>;
       }
 
       // Both scans compare strictly, so an equal member leaves the accumulator
@@ -973,6 +1066,9 @@ function createOrdinalUnion<
         lte,
         gt,
         gte,
+        between,
+        lowest,
+        highest,
         min,
         max,
         clamp,
