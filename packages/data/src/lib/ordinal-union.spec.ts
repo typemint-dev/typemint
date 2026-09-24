@@ -450,6 +450,50 @@ describe('(unit) OrdinalUnion', () => {
     it('should throw a PanicException when indexing a non-member', () => {
       // Act & Assert
       expect(() => Rank.indexOf('intern' as Rank)).toThrow(PanicException);
+      expect(() => Rank.indexOf('intern' as Rank)).toThrow(
+        /^OrdinalUnion\.indexOf: "intern" is not a member/,
+      );
+    });
+
+    it('should name the called method in a non-member panic', () => {
+      // Act & Assert — the panic is only reachable once the type system is
+      // bypassed, so the message, not the stack, has to name the operation.
+      expect(() => Rank.lt('intern' as Rank, 'vp')).toThrow(
+        /^OrdinalUnion\.lt: "intern" is not a member/,
+      );
+      expect(() => Rank.compare('intern' as Rank, 'vp')).toThrow(
+        /^OrdinalUnion\.compare: /,
+      );
+      expect(() => Rank.gte('vp', 'intern' as Rank)).toThrow(
+        /^OrdinalUnion\.gte: /,
+      );
+      expect(() => Rank.min('intern' as Rank, 'vp')).toThrow(
+        /^OrdinalUnion\.min: /,
+      );
+      expect(() => Rank.max('intern' as Rank, 'vp')).toThrow(
+        /^OrdinalUnion\.max: /,
+      );
+      expect(() => Rank.clamp('intern' as Rank, 'manager', 'vp')).toThrow(
+        /^OrdinalUnion\.clamp: /,
+      );
+      expect(() => Rank.next('intern' as Rank)).toThrow(
+        /^OrdinalUnion\.next: /,
+      );
+      expect(() => Rank.prev('intern' as Rank)).toThrow(
+        /^OrdinalUnion\.prev: /,
+      );
+      expect(() => Rank.range('intern' as Rank, 'vp')).toThrow(
+        /^OrdinalUnion\.range: /,
+      );
+      expect(() => Rank.atLeast('intern' as Rank)).toThrow(
+        /^OrdinalUnion\.atLeast: /,
+      );
+      expect(() => Rank.atMost('intern' as Rank)).toThrow(
+        /^OrdinalUnion\.atMost: /,
+      );
+      expect(() => Rank.pick(['intern' as Rank])).toThrow(
+        /^OrdinalUnion\.pick: /,
+      );
     });
 
     it('should index a derived ordinal from zero, densely', () => {

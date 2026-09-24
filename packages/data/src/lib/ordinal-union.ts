@@ -294,6 +294,12 @@ export type OrdinalComparison = -1 | 0 | 1;
  * Every method is a closure over the descriptor's own state (no `this`), so
  * they can be passed around unbound — `ranks.sort(Rank.compare)` works.
  *
+ * Passing a non-member panics with the **name of the method that was called**
+ * — `OrdinalUnion.pick: "intern" is not a member of the union` — not the name
+ * of the internal lookup it went through. Only reachable once the type system
+ * is bypassed, which is when the stack trace helps least, so the message
+ * carries the operation.
+ *
  * Every member is declared as a **property holding a function**, never with
  * method shorthand: TypeScript checks method parameters bivariantly even under
  * `strictFunctionTypes`, so `indexOf(value: T[number]): number` would let a
@@ -755,35 +761,57 @@ function createOrdinalUnion<
         indices.set(lit, index);
       }
 
-      function indexOf(value: M): number {
+      // Every method that resolves a member goes through `rankOf`, which is
+      // told the method the caller actually used, so a non-member is reported
+      // against that name — `OrdinalUnion.pick: "zz" is not a member of the
+      // union`, not `OrdinalUnion.indexOf`. These panics are only reachable
+      // once the type system has been bypassed, which is exactly when the
+      // wrong name costs the reader the most: the stack is whatever indirect
+      // call got there, so the message is the only thing naming the operation.
+      function rankOf(value: M, method: string): number {
         const index = indices.get(value);
         if (index === undefined) {
           throw new PanicException(
-            `OrdinalUnion.indexOf: ${JSON.stringify(value)} is not a member of ` +
-              `the union`,
+            `OrdinalUnion.${method}: ${JSON.stringify(value)} is not a member ` +
+              `of the union`,
           );
         }
         return index;
       }
 
+      // The shared ordering primitive, attributed to `method` as `rankOf` is.
+      // The comparison methods and every method built on one of them (`min`,
+      // `clamp`, `range`, …) call this rather than each other, so the panic
+      // names the method the caller reached for instead of the internal
+      // comparison it happens to be implemented with.
+      function compareIn(a: M, b: M, method: string): OrdinalComparison {
+        return Math.sign(
+          rankOf(a, method) - rankOf(b, method),
+        ) as OrdinalComparison;
+      }
+
+      function indexOf(value: M): number {
+        return rankOf(value, 'indexOf');
+      }
+
       function compare(a: M, b: M): OrdinalComparison {
-        return Math.sign(indexOf(a) - indexOf(b)) as OrdinalComparison;
+        return compareIn(a, b, 'compare');
       }
 
       function lt(a: M, b: M): boolean {
-        return indexOf(a) < indexOf(b);
+        return compareIn(a, b, 'lt') < 0;
       }
 
       function lte(a: M, b: M): boolean {
-        return indexOf(a) <= indexOf(b);
+        return compareIn(a, b, 'lte') <= 0;
       }
 
       function gt(a: M, b: M): boolean {
-        return indexOf(a) > indexOf(b);
+        return compareIn(a, b, 'gt') > 0;
       }
 
       function gte(a: M, b: M): boolean {
-        return indexOf(a) >= indexOf(b);
+        return compareIn(a, b, 'gte') >= 0;
       }
 
       // Both scans compare strictly, so an equal member leaves the accumulator
@@ -791,31 +819,35 @@ function createOrdinalUnion<
       // state. `reduce` without a seed starts from the first argument, which
       // the non-empty parameter type guarantees exists.
       function min<const V extends M>(...values: NonEmptyReadonlyArray<V>): V {
-        return values.reduce((acc, value) => (lt(value, acc) ? value : acc));
+        return values.reduce((acc, value) =>
+          compareIn(value, acc, 'min') < 0 ? value : acc,
+        );
       }
 
       function max<const V extends M>(...values: NonEmptyReadonlyArray<V>): V {
-        return values.reduce((acc, value) => (gt(value, acc) ? value : acc));
+        return values.reduce((acc, value) =>
+          compareIn(value, acc, 'max') > 0 ? value : acc,
+        );
       }
 
       function clamp(value: M, lo: M, hi: M): M {
-        if (gt(lo, hi)) {
+        if (compareIn(lo, hi, 'clamp') > 0) {
           throw new PanicException(
             `OrdinalUnion.clamp: lower bound ${JSON.stringify(lo)} is above ` +
               `upper bound ${JSON.stringify(hi)}`,
           );
         }
-        if (lt(value, lo)) return lo;
-        if (gt(value, hi)) return hi;
+        if (compareIn(value, lo, 'clamp') < 0) return lo;
+        if (compareIn(value, hi, 'clamp') > 0) return hi;
         return value;
       }
 
       function next(value: M): M | undefined {
-        return members[indexOf(value) + 1];
+        return members[rankOf(value, 'next') + 1];
       }
 
       function prev(value: M): M | undefined {
-        const index = indexOf(value);
+        const index = rankOf(value, 'prev');
         return index === 0 ? undefined : members[index - 1];
       }
 
@@ -881,31 +913,34 @@ function createOrdinalUnion<
         from: From,
         to: To,
       ): OrdinalUnionDescriptor<AsNonEmpty<SliceRange<Members<T>, From, To>>> {
-        if (gt(from, to)) {
+        if (compareIn(from, to, 'range') > 0) {
           throw new PanicException(
             `OrdinalUnion.range: ${JSON.stringify(from)} is above ` +
               `${JSON.stringify(to)}`,
           );
         }
-        return derive(members.slice(indexOf(from), indexOf(to) + 1), 'range');
+        return derive(
+          members.slice(rankOf(from, 'range'), rankOf(to, 'range') + 1),
+          'range',
+        );
       }
 
       function atLeast<const V extends M>(
         value: V,
       ): OrdinalUnionDescriptor<AsNonEmpty<SliceFrom<Members<T>, V>>> {
-        return derive(members.slice(indexOf(value)), 'atLeast');
+        return derive(members.slice(rankOf(value, 'atLeast')), 'atLeast');
       }
 
       function atMost<const V extends M>(
         value: V,
       ): OrdinalUnionDescriptor<AsNonEmpty<SliceThrough<Members<T>, V>>> {
-        return derive(members.slice(0, indexOf(value) + 1), 'atMost');
+        return derive(members.slice(0, rankOf(value, 'atMost') + 1), 'atMost');
       }
 
       function pick<const K extends M>(
         keys: NonEmptyReadonlyArray<K>,
       ): OrdinalUnionDescriptor<AsNonEmpty<FilterTuple<Members<T>, K>>> {
-        for (const key of keys) indexOf(key); // panics on a non-member
+        for (const key of keys) rankOf(key, 'pick'); // panics on a non-member
         const picked = new Set<LiteralUnionMemberBase>(keys);
         return derive(
           members.filter((lit) => picked.has(lit)),
