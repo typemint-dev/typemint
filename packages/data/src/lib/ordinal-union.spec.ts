@@ -373,6 +373,35 @@ describe('(unit) OrdinalUnion', () => {
       }
     });
 
+    it('should inherit Symbol.toPrimitive and report its own kind', () => {
+      // The ordinal defines no `Symbol.toPrimitive` of its own — the factory
+      // builds one from the descriptor name it was given, so an interpolated
+      // ordinal reads `OrdinalUnion(…)` without the extension overriding
+      // anything. Without it, the null-prototype descriptor would throw
+      // `Cannot convert object to primitive value` in any log line.
+
+      // Assert
+      expect(
+        Object.prototype.hasOwnProperty.call(Rank, Symbol.toPrimitive),
+      ).toBe(true);
+      expect(`${Rank}`).toBe(
+        'OrdinalUnion(team_lead, manager, senior_manager, …+3 more)',
+      );
+      expect(`${base}`).toBe(
+        'LiteralUnion(team_lead, manager, senior_manager, …+3 more)',
+      );
+    });
+
+    it('should describe a derived ordinal by its own members', () => {
+      // Each derivation is a descriptor in its own right, built by the same
+      // factory over the slice it holds.
+
+      // Assert
+      expect(String(Rank.atLeast('director'))).toBe(
+        'OrdinalUnion(director, vp, c_suite)',
+      );
+    });
+
     it('should inherit Symbol.iterator, so the ordinal is iterable', () => {
       // The ordinal defines no iterator of its own — `[...Rank]` works
       // because the descriptor it extends installed one.

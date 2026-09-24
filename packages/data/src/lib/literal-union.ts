@@ -916,6 +916,37 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   [Symbol.toStringTag]: 'LiteralUnion';
 
   /**
+   * The descriptor's own primitive form: its kind and its members, as
+   * `LiteralUnion(germany, france, usa)`.
+   *
+   * The descriptor has a **null prototype**, so it inherits no `toString` and
+   * no `Object.prototype[Symbol.toPrimitive]`. Without this method, every
+   * implicit conversion — a template literal in a log line, `String(union)`,
+   * a `+` against a string — throws `TypeError: Cannot convert object to
+   * primitive value`, which turns a diagnostic into a second failure.
+   * `Symbol.toStringTag` does not cover it: nothing reads the tag
+   * unless a `toString` runs, and there is none to run.
+   *
+   * The same string answers every hint. There is no meaningful number for a
+   * set of names, so a `'number'` hint converts this to `NaN` rather than
+   * throwing — `union * 2` is a bug either way, and `NaN` is the ordinary way
+   * JavaScript reports it.
+   *
+   * A long union is **elided**: the first few members, then how many are left.
+   * An accidental interpolation should cost a log line, not a screen;
+   * {@link toArray} is how to see every member.
+   *
+   * Being a symbol key, it takes no member name — a union may still declare a
+   * member called `toPrimitive`.
+   *
+   * ```ts
+   * `${Country}`; // 'LiteralUnion(germany, france, usa)'
+   * `${Rank}`; // 'OrdinalUnion(team_lead, manager, senior_manager, …+3 more)'
+   * ```
+   */
+  [Symbol.toPrimitive]: (hint: 'default' | 'number' | 'string') => string;
+
+  /**
    * Exhaustively dispatch on a member of this literal union, returning the
    * result produced by the matching handler.
    *
@@ -1332,6 +1363,14 @@ export type LiteralUnionDescriptor<T extends LiteralUnionMemberBase> =
 const STRING_DESCRIPTOR = TypeDescriptor('string', witness<string>());
 
 /**
+ * How many members a descriptor's primitive form — its `Symbol.toPrimitive`,
+ * declared on {@link LiteralUnionMethods} — prints before eliding the rest as
+ * a count. Small on purpose: the string exists so an interpolated
+ * descriptor reads as a label in a log line, not so it reproduces the union.
+ */
+const PRIMITIVE_PREVIEW_LIMIT = 3;
+
+/**
  * The descriptor keys a member cannot take, since a member of that name would
  * shadow the method it is named after.
  *
@@ -1700,6 +1739,23 @@ export function createLiteralUnion<
     ] as NonEmptyReadonlyArray<Exclude<T[number], K>>);
   }
 
+  // The descriptor has a null prototype, so it inherits neither `toString` nor
+  // `Object.prototype[Symbol.toPrimitive]`, and any implicit conversion —
+  // `String(union)`, a template literal in a log line — would otherwise throw
+  // `TypeError: Cannot convert object to primitive value`. `Symbol.toStringTag`
+  // does not help: nothing reads the tag unless a `toString` runs.
+  //
+  // Built from `name`, so an extending descriptor reports its own kind without
+  // overriding anything — the same reason the panic messages take it.
+  //
+  // The hint is ignored: a set of names has no numeric form, so a `'number'`
+  // hint yields `NaN` from the string rather than a throw.
+  function toPrimitive(): string {
+    const shown = literalsCopy.slice(0, PRIMITIVE_PREVIEW_LIMIT).join(', ');
+    const hidden = literalsCopy.length - PRIMITIVE_PREVIEW_LIMIT;
+    return `${name}(${hidden > 0 ? `${shown}, …+${hidden} more` : shown})`;
+  }
+
   // `satisfies` checks every method against its declared signature (a
   // misspelled or mistyped method is a compile error), while keeping the
   // literal type of the string tag.
@@ -1712,6 +1768,7 @@ export function createLiteralUnion<
       return literalsCopy[Symbol.iterator]();
     },
     [Symbol.toStringTag]: 'LiteralUnion',
+    [Symbol.toPrimitive]: toPrimitive,
     isOfType,
     of,
     ofUnsafe,

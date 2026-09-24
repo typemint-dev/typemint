@@ -504,6 +504,87 @@ describe('(unit) LiteralUnion', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: Symbol.toPrimitive
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Symbol.toPrimitive', () => {
+    it('should name the kind and the members when interpolated into a string', () => {
+      // The descriptor has a null prototype, so without this method every
+      // conversion below throws `Cannot convert object to primitive value` —
+      // a log line turning into a second failure.
+
+      // Arrange
+      const union = LiteralUnion(['germany', 'france', 'usa'] as const);
+
+      // Act
+      const result = `${union}`;
+
+      // Assert
+      expect(result).toBe('LiteralUnion(germany, france, usa)');
+      expect(String(union)).toBe(result);
+      expect(union + '').toBe(result);
+    });
+
+    it('should elide the members past the third as a count', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c', 'd', 'e'] as const);
+
+      // Act
+      const result = String(union);
+
+      // Assert
+      expect(result).toBe('LiteralUnion(a, b, c, …+2 more)');
+    });
+
+    it('should count the deduplicated members, as size does', () => {
+      // A repeat is gone from the member list before the preview reads it, so
+      // the elision counts what the union holds, not what the caller wrote.
+
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c', 'a', 'd'] as const);
+
+      // Act
+      const result = String(union);
+
+      // Assert
+      expect(result).toBe('LiteralUnion(a, b, c, …+1 more)');
+    });
+
+    it('should yield NaN rather than throwing under a number hint', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b'] as const);
+
+      // Act
+      const result = Number(union);
+
+      // Assert
+      expect(result).toBeNaN();
+    });
+
+    it('should not reserve the member name "toPrimitive"', () => {
+      // The key is a symbol, so it costs the member namespace nothing.
+
+      // Act
+      const union = LiteralUnion(['toPrimitive'] as const);
+
+      // Assert
+      expect(union.toPrimitive).toBe('toPrimitive');
+      expect(String(union)).toBe('LiteralUnion(toPrimitive)');
+    });
+
+    it('should stay out of JSON, spreads and Object.keys', () => {
+      // A symbol key is invisible to all three, so the members remain the
+      // union's serialized shape.
+
+      // Arrange
+      const union = LiteralUnion(['a', 'b'] as const);
+
+      // Act & Assert
+      expect(JSON.stringify(union)).toBe('{"a":"a","b":"b"}');
+      expect(Object.keys({ ...union })).not.toContain('toPrimitive');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // MARK: members
   // ─────────────────────────────────────────────────────────────────────────────
   describe('members', () => {
