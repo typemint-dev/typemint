@@ -31,6 +31,7 @@ import { LiteralUnion, Dictionary } from '@typemint/data';
 - [`LiteralUnion`](#literalunion)
   - [Creating a union](#creating-a-union)
   - [Member access](#member-access)
+  - [`members`](#members)
   - [`isOfType`](#isoftypevalue-unknown-value-is-t)
   - [`of`](#ofvalue-string)
   - [`ofUnsafe`](#ofunsafevalue-string)
@@ -159,8 +160,11 @@ Some rules enforced at construction time:
   is thrown.
 - Member names must not collide with the reserved descriptor keys (`isOfType`,
   `of`, `ofUnsafe`, `parse`, `parseUnsafe`, `parseOr`, `toArray`, `toSet`,
-  `pick`, `omit`, `size`, `match`, `matchResult`). A collision throws a
-  `PanicException`.
+  `members`, `pick`, `omit`, `size`, `match`, `matchResult`). A collision
+  throws a `PanicException`. Members and methods share one namespace, so a
+  member of that name would shadow the method it is named after — see
+  [`members`](#members) for the access path that does not depend on the
+  namespace, and for what the shared namespace means for versioning.
 - Only `string` members are allowed by design — see the rationale in
   [How they work together](#how-literalunion-and-dictionary-work-together).
 
@@ -178,6 +182,58 @@ if (value === Country.usa) {
   // ...
 }
 ```
+
+### `members`
+
+Every declared member, keyed by its own name. `Country.members.germany` and
+`Country.germany` are the same string, and the direct property is the one to
+reach for in ordinary code:
+
+```ts
+const Country = LiteralUnion(['germany', 'france', 'usa']);
+
+Country.members.germany; // 'germany'
+Country.members;         // { germany: 'germany', france: 'france', usa: 'usa' }
+```
+
+It exists for the case direct access cannot serve: **generic code**, which has
+no member names to write. A helper typed against `LiteralUnionLike<T>` cannot
+write `union.germany`, but it can read `union.members`:
+
+```ts
+function options<T extends string>(union: LiteralUnionLike<T>) {
+  return Object.values(union.members).map((m) => ({ value: m, label: m }));
+}
+
+options(Country);                       // works
+options(OrdinalUnion(['low', 'high'])); // an ordinal inherits it too
+```
+
+The map is frozen and has a `null` prototype, so it carries the members and
+nothing else — `members.toString` is `undefined`, not
+`Object.prototype.toString`, and a lookup of a name the union does not hold
+cannot land on something inherited. On the descriptor the property is
+**non-enumerable**, for the same reason [`size`](#size) is: the members are the
+union's serialized shape, and an enumerable `members` would repeat the whole map
+inside `JSON.stringify(Country)`.
+
+#### The shared namespace, and what it means for versioning
+
+Members are properties on the descriptor, beside the methods. One namespace
+holds both, which is what makes `Country.germany` read the way it does — and it
+has a price worth stating plainly:
+
+- **Every descriptor key is a name your members cannot use.** `OrdinalUnion`
+  inherits these and adds its own (`min`, `max`, `next`, `prev`, `range`,
+  `clamp`, `compare`, …), which are exactly the names an ordered scale might
+  want: `OrdinalUnion(['min', 'small', 'max'])` is rejected, while the same
+  members as a plain `LiteralUnion` are fine.
+- **The method surface is frozen for the major version.** Adding a method
+  reserves a name some existing union may already hold, so it is a breaking
+  change and is released as one — never slipped into a minor.
+
+`members` is the access path that does not depend on the namespace, which is
+also what would let the collision rule be relaxed later without a new API.
 
 ### `isOfType(value: unknown): value is T`
 

@@ -666,6 +666,14 @@ type DerivationFamily = {
  * // name is taken by a method of the ordinal union descriptor'.
  * ```
  *
+ * The reserved set is the ordinal's method surface *and* the literal union's,
+ * so it claims names a scale might plausibly want (`min`, `max`, `next`,
+ * `range`, `clamp`, `compare`). That surface is **frozen for the major
+ * version**: adding a method reserves a name an existing union may already
+ * hold, so it is a breaking change and is released as one. `Rank.members` —
+ * inherited from {@link LiteralUnion} — is the access path that does not
+ * depend on the namespace.
+ *
  * @throws {PanicException} If `literals` is empty, contains a duplicate, or
  *   contains a reserved descriptor key (the last two only reachable when the
  *   members are not literal types — a widened array, or a JavaScript caller).

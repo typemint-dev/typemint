@@ -752,6 +752,41 @@ export type LiteralUnionMethods<T extends LiteralUnionMemberBase> = {
   toSet: () => ReadonlySet<T>;
 
   /**
+   * Every declared member, keyed by its own name — the collision-proof form of
+   * member access.
+   *
+   * `Country.members.germany` and `Country.germany` are the same string, and
+   * the direct property is the one to reach for. This map exists for the two
+   * cases it cannot serve:
+   *
+   * - **Generic code.** A helper written against {@link LiteralUnionLike} has
+   *   no member names to write, so `union.germany` is not available to it;
+   *   `union.members` is.
+   * - **Names the descriptor owns.** Members and methods share one namespace,
+   *   so a member may not be called `parse`, `size`, `match`, … — the factory
+   *   rejects the collision at construction. This map is where such a member
+   *   *would* live, which is what lets that rule be relaxed later as an
+   *   additive change rather than a new API. See the note on the method
+   *   surface in {@link LiteralUnion}.
+   *
+   * The object is frozen and has a `null` prototype, so it carries the members
+   * and nothing else: `members.toString` is `undefined`, not
+   * `Object.prototype.toString`. On the descriptor the property itself is
+   * **non-enumerable**, for the reason {@link size} is — the members are the
+   * union's serialized shape, and an enumerable `members` would repeat the
+   * whole map inside `JSON.stringify(Country)`.
+   *
+   * @example Member access that does not depend on the member names
+   *
+   * ```ts
+   * function options<T extends LiteralUnionMemberBase>(union: LiteralUnionLike<T>) {
+   *   return Object.values(union.members).map((m) => ({ value: m, label: m }));
+   * }
+   * ```
+   */
+  readonly members: LiteralUnionMembers<T>;
+
+  /**
    * Derive a **new** literal union from a subset of this union's members,
    * selected by name. The result is an independent
    * {@link LiteralUnionDescriptor} over exactly the picked members.
@@ -1315,6 +1350,7 @@ const reservedKeys = new Set(
     parseOr: 1,
     toArray: 1,
     toSet: 1,
+    members: 1,
     pick: 1,
     omit: 1,
     size: 1,
@@ -1326,6 +1362,36 @@ const reservedKeys = new Set(
   >),
 );
 
+/**
+ * Create a **literal union**: a closed set of string members, each exposed as
+ * a property on the returned descriptor beside the methods that operate on
+ * them.
+ *
+ * Members and methods **share one namespace**, so a member may not be named
+ * after a descriptor key (`parse`, `size`, `match`, …): the factory rejects
+ * the collision at construction rather than let the method be shadowed. Two
+ * consequences, both deliberate:
+ *
+ * - The method surface is **frozen for the major version**. Adding a method
+ *   reserves a name some existing union may already hold, so it is a breaking
+ *   change and is released as one.
+ * - {@link LiteralUnionMethods.members} is the access path that does not
+ *   depend on the namespace, for generic code and for whatever the descriptor
+ *   goes on to claim.
+ *
+ * @throws {PanicException} If `literals` is empty, or a member name collides
+ *   with a descriptor key.
+ *
+ * @example
+ *
+ * ```ts
+ * const Country = LiteralUnion(['germany', 'france', 'usa']);
+ * type Country = InferLiteralUnion<typeof Country>;
+ *
+ * Country.germany;         // 'germany'
+ * Country.members.germany; // 'germany' — same string, namespace-proof
+ * ```
+ */
 export function LiteralUnion<
   const T extends NonEmptyReadonlyArray<LiteralUnionMemberBase>,
 >(literals: T): LiteralUnionDescriptor<LiteralUnionFrom<T>> {
@@ -1372,9 +1438,9 @@ export function createLiteralUnion<
      * ordinal substitutes its own order-preserving `pick`/`omit`) and the
      * string tag.
      *
-     * `size` is the one key it cannot contribute: this factory defines it
-     * non-enumerably afterwards, which is what keeps the union's cardinality
-     * out of `JSON.stringify`.
+     * `size` and `members` are the two keys it cannot contribute: this factory
+     * defines them non-enumerably afterwards, which is what keeps the union's
+     * cardinality and its member map out of `JSON.stringify`.
      *
      * `self` is the descriptor being built — the same object this call
      * returns, so a method may close over it and hand it back later. It is not
@@ -1638,8 +1704,9 @@ export function createLiteralUnion<
   // misspelled or mistyped method is a compile error), while keeping the
   // literal type of the string tag.
   //
-  // `size` is deliberately absent: it is installed with `Object.defineProperty`
-  // below rather than assigned, so it is excluded from the checked shape here.
+  // `size` and `members` are deliberately absent: both are installed with
+  // `Object.defineProperty` below rather than assigned, so they are excluded
+  // from the checked shape here.
   const methods = {
     [Symbol.iterator](): IterableIterator<T[number]> {
       return literalsCopy[Symbol.iterator]();
@@ -1657,7 +1724,10 @@ export function createLiteralUnion<
     omit,
     match,
     matchResult,
-  } satisfies Omit<LiteralUnionMethods<LiteralUnionFrom<T>>, 'size'>;
+  } satisfies Omit<
+    LiteralUnionMethods<LiteralUnionFrom<T>>,
+    'size' | 'members'
+  >;
 
   // Use Object.assign to create the descriptor object to avoid
   // prototype pollution. (No __proto__ or constructor pollution.) The
@@ -1673,9 +1743,9 @@ export function createLiteralUnion<
   // of it: an extending descriptor replaces what it overrides in place and
   // inherits everything else — including keys no copy would reach.
   //
-  // It runs before `size` is defined below, so the definition always wins and
-  // an extension cannot turn the cardinality back into an enumerable data
-  // property. The methods it returns close over `descriptor`, which is the
+  // It runs before `members` and `size` are defined below, so the definitions
+  // always win and an extension cannot turn either back into an enumerable
+  // data property. The methods it returns close over `descriptor`, which is the
   // object frozen and returned at the end of this function; they are only
   // called afterwards.
   if (options?.extend) {
@@ -1687,6 +1757,18 @@ export function createLiteralUnion<
       }),
     );
   }
+
+  // The member map is *defined*, not assigned, for the reason `size` is: an
+  // enumerable `members` would be carried into `JSON.stringify(descriptor)`
+  // beside the members it repeats. The record built above is handed over as it
+  // is rather than copied — nothing else holds a reference to it, and
+  // `Object.assign` above read it by value.
+  Object.defineProperty(descriptor, 'members', {
+    value: Object.freeze(members),
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
 
   // `size` is *defined*, not assigned. Carried on the `methods` literal it
   // would be a getter that `Object.assign` evaluates into a plain enumerable

@@ -128,6 +128,14 @@ describe('(unit) OrdinalUnion', () => {
       ).toThrow(PanicException);
     });
 
+    it('should reject the members map key at compile time', () => {
+      // Act & Assert
+      expect(() =>
+        // @ts-expect-error - 'members' is a descriptor property
+        OrdinalUnion(['low', 'members']),
+      ).toThrow(PanicException);
+    });
+
     it('should reject an ordinal reserved key at compile time', () => {
       // Act & Assert
       expect(() =>
@@ -213,6 +221,38 @@ describe('(unit) OrdinalUnion', () => {
         c_suite: 'c_suite',
       });
       expect(Object.keys(Rank)).not.toContain('size');
+    });
+
+    it('should expose the members map, in declaration order', () => {
+      // Assert — inherited from the LiteralUnion half; the ordinal adds no
+      // member map of its own.
+      expect(Object.keys(Rank.members)).toEqual(Rank.toArray());
+      expect(Rank.members.vp).toBe('vp');
+      expectTypeOf(Rank.members.vp).toEqualTypeOf<'vp'>();
+    });
+
+    it('should give a derived ordinal its own members map', () => {
+      // Act
+      const Executive = Rank.atLeast('director');
+
+      // Assert
+      expect(Object.keys(Executive.members)).toEqual([
+        'director',
+        'vp',
+        'c_suite',
+      ]);
+      expectTypeOf(Executive.members).toEqualTypeOf<{
+        readonly director: 'director';
+        readonly vp: 'vp';
+        readonly c_suite: 'c_suite';
+      }>();
+    });
+
+    it('should keep the members map out of the serialized shape', () => {
+      // Assert — non-enumerable on a LiteralUnion descriptor, and still so
+      // once the ordinal has extended that descriptor.
+      expect(Object.keys(Rank)).not.toContain('members');
+      expect(Object.isFrozen(Rank.members)).toBe(true);
     });
 
     it('should freeze the descriptor', () => {

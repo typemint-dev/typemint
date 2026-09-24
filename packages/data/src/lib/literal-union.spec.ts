@@ -7,6 +7,7 @@ import {
   type InferLiteralUnionMismatchError,
   type LiteralUnionDescriptor,
   type LiteralUnionFrom,
+  type LiteralUnionLike,
   type LiteralUnionMembers,
 } from './literal-union.js';
 import {
@@ -150,6 +151,15 @@ describe('(unit) LiteralUnion', () => {
     it('should throw a PanicException if the member name collides with a reserved descriptor key "size"', () => {
       // Arrange
       const literals = ['a', 'b', 'c', 'size'] as const;
+      // Act
+      const act = () => LiteralUnion(literals);
+      // Assert
+      expect(act).toThrow(PanicException);
+    });
+
+    it('should throw a PanicException if the member name collides with a reserved descriptor key "members"', () => {
+      // Arrange
+      const literals = ['a', 'b', 'c', 'members'] as const;
       // Act
       const act = () => LiteralUnion(literals);
       // Assert
@@ -490,6 +500,92 @@ describe('(unit) LiteralUnion', () => {
       const result = Object.prototype.toString.call(union);
       // Assert
       expect(result).toBe('[object LiteralUnion]');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MARK: members
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('members', () => {
+    it('should expose every member under its own name', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+
+      // Act
+      const result = union.members;
+
+      // Assert
+      expect(result).toEqual({ a: 'a', b: 'b', c: 'c' });
+      expectTypeOf(result).toEqualTypeOf<
+        LiteralUnionMembers<'a' | 'b' | 'c'>
+      >();
+    });
+
+    it('should agree with direct member access', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+
+      // Act & Assert — the same string, reached two ways.
+      expect(union.members.a).toBe(union.a);
+      expectTypeOf(union.members.a).toEqualTypeOf<'a'>();
+    });
+
+    it('should carry a repeated member once, in its first position', () => {
+      // Arrange & Act — the member type collapses repeats, so this must too.
+      const union = LiteralUnion(['b', 'a', 'b'] as const);
+
+      // Assert
+      expect(Object.keys(union.members)).toEqual(['b', 'a']);
+    });
+
+    it('should be reachable from generic code, which has no member names', () => {
+      // Arrange — a helper written against the structural supertype cannot
+      // write `union.a`; this is the access path it has.
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      const names = <T extends string>(u: LiteralUnionLike<T>): T[] =>
+        Object.values(u.members);
+
+      // Act & Assert
+      expect(names(union)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('should not be enumerable, so JSON carries the members alone', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+
+      // Act & Assert — an enumerable `members` would repeat the whole map
+      // inside the descriptor's serialized shape.
+      expect(JSON.parse(JSON.stringify(union))).toEqual({
+        a: 'a',
+        b: 'b',
+        c: 'c',
+      });
+      expect(Object.keys(union)).not.toContain('members');
+    });
+
+    it('should be frozen', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      const mutable = union.members as unknown as Record<string, string>;
+
+      // Act & Assert — ESM is always strict mode, so the write throws.
+      expect(Object.isFrozen(union.members)).toBe(true);
+      expect(() => {
+        mutable['a'] = 'hacked';
+      }).toThrow(TypeError);
+      expect(union.members.a).toBe('a');
+    });
+
+    it('should carry the members and nothing else', () => {
+      // Arrange
+      const union = LiteralUnion(['a', 'b', 'c'] as const);
+      const inherited = union.members as unknown as Record<string, unknown>;
+
+      // Act & Assert — a `null` prototype, so a lookup of a name the union
+      // does not hold cannot land on `Object.prototype`.
+      expect(Object.getPrototypeOf(union.members)).toBeNull();
+      expect(inherited['toString']).toBeUndefined();
+      expect(inherited['constructor']).toBeUndefined();
     });
   });
 
