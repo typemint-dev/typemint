@@ -2,12 +2,15 @@
 
 Type-safe data structures for TypeScript.
 
-This package ships two complementary primitives for modelling closed sets of
-named values:
+This package ships complementary primitives for modelling closed sets of named
+values:
 
 - **`LiteralUnion`** — a runtime descriptor for a closed set of string literals.
   It *names* things: countries, statuses, roles, currencies, log levels. It
   provides type guards, exhaustive matching, and iteration.
+- **`OrdinalUnion`** — a `LiteralUnion` whose declaration order is a rank
+  (career levels, severities, tiers). It adds comparison, bounding, stepping,
+  and slicing by that rank.
 - **`Dictionary`** — a frozen, read-only projection that maps each name to a
   fixed value (an HTTP status number, an ISO code, an emoji, a label). It
   *encodes* the names that a `LiteralUnion` declares.
@@ -23,7 +26,7 @@ pnpm add @typemint/data
 ```
 
 ```ts
-import { LiteralUnion, Dictionary } from '@typemint/data';
+import { LiteralUnion, OrdinalUnion, Dictionary } from '@typemint/data';
 ```
 
 ## Table of contents
@@ -49,6 +52,16 @@ import { LiteralUnion, Dictionary } from '@typemint/data';
   - [`matchResult`](#matchresultresult-handlers--matchresulthandlers)
   - [`assertLiteralUnionMember`](#assertliteralunionmember)
   - [Type helpers](#literalunion-type-helpers)
+- [`OrdinalUnion`](#ordinalunion)
+  - [The rank is a position, not a value](#the-rank-is-a-position-not-a-value)
+  - [Creating an ordinal union](#creating-an-ordinal-union)
+  - [Inherited `LiteralUnion` behavior](#inherited-literalunion-behavior)
+  - [Comparing members](#comparing-members)
+  - [Bounding and stepping](#bounding-and-stepping)
+  - [`indexOf`](#indexofvalue)
+  - [Deriving ordinals](#deriving-ordinals)
+  - [Using an ordinal where a literal union is expected](#using-an-ordinal-where-a-literal-union-is-expected)
+  - [Type helpers](#ordinalunion-type-helpers)
 - [`Dictionary`](#dictionary)
   - [Creating a dictionary](#creating-a-dictionary)
   - [`Dictionary.fromLiteralUnion`](#dictionaryfromliteralunion)
@@ -719,6 +732,316 @@ the members.
 const Status = LiteralUnion(['active', 'pending', 'archived']);
 type Status = InferLiteralUnion<typeof Status>;
 // type Status = 'active' | 'pending' | 'archived'
+```
+
+---
+
+## `OrdinalUnion`
+
+`OrdinalUnion` is a [`LiteralUnion`](#literalunion) whose **declaration order
+is meaningful**: members are ranked ascending, the first one lowest and the last
+one highest. On top of everything a literal union does, it can compare, bound,
+step through, and slice its members by that rank.
+
+Reach for it when members are nominal identities that also rank against each
+other: career levels, log severities, priorities, subscription tiers. When the
+order is incidental (countries, payment methods), stay with a `LiteralUnion`.
+
+```ts
+import { OrdinalUnion, type InferOrdinalUnion } from '@typemint/data';
+
+const Rank = OrdinalUnion([
+  'team_lead',
+  'manager',
+  'senior_manager',
+  'director',
+  'vp',
+  'c_suite',
+]);
+type Rank = InferOrdinalUnion<typeof Rank>;
+// 'team_lead' | 'manager' | 'senior_manager' | 'director' | 'vp' | 'c_suite'
+
+Rank.gte('director', Rank.manager);        // true
+Rank.max('manager', 'vp', 'team_lead');    // 'vp'
+Rank.next('vp');                           // 'c_suite'
+Rank.atLeast('director').toArray();        // ['director', 'vp', 'c_suite']
+```
+
+### The rank is a position, not a value
+
+An ordinal union still holds **names**, exactly as a `LiteralUnion` does (see
+[nominal states, not values](#a-literalunion-represents-nominal-states-not-values)).
+The rank is derived from each member's position in the declaration and never
+leaves the descriptor. Values are always the member strings: they serialize,
+persist, and travel as `'director'`, never as `3`.
+
+This keeps the stored data stable when the scale changes. Inserting
+`'senior_director'` between `'director'` and `'vp'` re-ranks every member above
+it, but every stored `'vp'` still means VP. If you need a numeric encoding for
+an external system, project it with a [`Dictionary`](#dictionary), just as you
+would for a literal union.
+
+### Creating an ordinal union
+
+Call `OrdinalUnion` with a tuple of strings, lowest first. The same `as const`
+rule as [`LiteralUnion`](#creating-a-union) applies: an array literal passed
+directly is inferred as a tuple, and a value declared elsewhere needs `as const`.
+
+An ordinal is stricter about its members than a literal union, and it reports
+the problem **at compile time, on the offending element**:
+
+- **Members must be distinct.** A member cannot hold two ranks. A
+  `LiteralUnion` silently deduplicates; an `OrdinalUnion` rejects the repeat:
+
+  ```ts
+  OrdinalUnion(['low', 'high', 'low']);
+  //                           ~~~~~
+  // Type '"low"' is not assignable to type 'duplicate member "low": each
+  // member of an ordinal union holds exactly one rank'.
+  ```
+
+- **Members must not be descriptor keys.** Members and methods share one
+  namespace (see
+  [the shared namespace](#the-shared-namespace-and-what-it-means-for-versioning)),
+  and the ordinal adds its own methods to the reserved set: `indexOf`,
+  `compare`, `lt`, `lte`, `gt`, `gte`, `between`, `lowest`, `highest`, `min`,
+  `max`, `clamp`, `next`, `prev`, `range`, `atLeast`, `atMost`. Several are
+  names a scale might want, so check them before choosing member names:
+
+  ```ts
+  OrdinalUnion(['low', 'next']);
+  //                   ~~~~~~
+  // Type '"next"' is not assignable to type 'reserved member "next": the
+  // name is taken by a method of the ordinal union descriptor'.
+  ```
+
+- **Each element must be a single literal.** An element typed as a union (a
+  variable of type `'a' | 'b'`) has no single rank, so it is rejected with an
+  `ambiguous member` message. Pass each member as its own literal.
+
+When the compiler cannot see the literals (a widened `string[]`, or a JavaScript
+caller), the same rules are enforced at runtime: an empty tuple, a duplicate, or
+a reserved name throws a `PanicException`.
+
+### Inherited `LiteralUnion` behavior
+
+The ordinal **is** a literal union, extended in place. Member access, `members`,
+`isOfType`, `of`, `ofUnsafe`, `parse`, `parseUnsafe`, `parseOr`, `toArray`,
+`toSet`, `size`, iteration, `match`, and `matchResult` all behave exactly as
+documented for [`LiteralUnion`](#literalunion). `toArray()` and iteration yield
+the members in rank order.
+
+Two methods are overridden: [`pick` and `omit`](#pick-and-omit-keep-the-order)
+return ordinals and never reorder. The descriptor reports
+`Object.prototype.toString.call(Rank)` as `'[object OrdinalUnion]'`, and panics
+raised by inherited methods name `OrdinalUnion`.
+
+Every ordering method is a closure over the descriptor, with no `this`, so it
+can be passed around unbound: `ranks.sort(Rank.compare)` works.
+
+### Comparing members
+
+| Method | Returns |
+| --- | --- |
+| `compare(a, b)` | `-1` if `a` is lower, `0` if equal, `1` if higher. Shaped as a sort comparator. |
+| `lt(a, b)` / `lte(a, b)` | `true` if `a` is lower than (or equal to) `b`. |
+| `gt(a, b)` / `gte(a, b)` | `true` if `a` is higher than (or equal to) `b`. |
+| `between(value, lo, hi)` | `true` if `value` lies in the inclusive range `[lo, hi]`. |
+
+```ts
+Rank.compare('manager', 'vp'); // -1
+Rank.lt('vp', 'c_suite');      // true
+
+ranks.sort(Rank.compare);                  // ascending
+ranks.sort((a, b) => Rank.compare(b, a));  // descending
+
+Rank.between('director', 'manager', 'vp'); // true
+```
+
+`between` is the boolean form of `Rank.range(lo, hi).isOfType(value)`. Use it
+for a filter predicate or a guard clause. Use the [derivation](#deriving-ordinals)
+when the branch needs `value` narrowed to the slice. An inverted range
+(`lo` above `hi`) is a bug in the caller, so `between` throws a
+`PanicException` rather than answering `false`.
+
+### Bounding and stepping
+
+| Method | Returns | Typed as |
+| --- | --- | --- |
+| `lowest()` | The first declared member. | That exact literal. |
+| `highest()` | The last declared member. | That exact literal. |
+| `min(...values)` | The lowest of the arguments. | The union of the arguments. |
+| `max(...values)` | The highest of the arguments. | The union of the arguments. |
+| `clamp(value, lo, hi)` | `value` bounded to `[lo, hi]`. | The member union. |
+| `next(value)` | The member directly above, or `undefined` at the top. | The member union \| `undefined`. |
+| `prev(value)` | The member directly below, or `undefined` at the bottom. | The member union \| `undefined`. |
+
+```ts
+Rank.lowest();                              // 'team_lead' (typed as 'team_lead')
+Rank.highest();                             // 'c_suite'   (typed as 'c_suite')
+
+Rank.min('vp', 'manager');                  // 'manager'   (typed as 'vp' | 'manager')
+Rank.clamp('c_suite', 'manager', 'director'); // 'director'
+
+Rank.next('vp');                            // 'c_suite'
+Rank.next('c_suite');                       // undefined
+Rank.prev('team_lead');                     // undefined
+```
+
+`next`, `prev`, and `clamp` are deliberately typed as the whole member union:
+`Rank.next('vp')` is `Rank | undefined`, not `'c_suite' | undefined`. Naming the
+exact successor would make the compiler walk the member tuple at every call
+site, for a value that is almost always assigned back to a `Rank` anyway. If a
+call site needs the literal, narrow it with a comparison or a derived ordinal's
+`isOfType`. `lowest` and `highest` are exact because reading a fixed position
+costs the compiler nothing.
+
+`min` and `max` take at least one argument. On a tie, the earliest argument
+wins. `clamp`, like `between`, throws a `PanicException` when `lo` is above
+`hi`.
+
+### `indexOf(value)`
+
+The zero-based position of `value` in **this descriptor's** `toArray()`, so
+`Rank.toArray()[Rank.indexOf(x)] === x`. Unlike `Array.prototype.indexOf`, a
+non-member does not return `-1`; it throws a `PanicException` (reachable only
+by bypassing the type system).
+
+```ts
+Rank.indexOf('director');                     // 3
+Rank.atLeast('director').indexOf('director'); // 0: same member, new index
+```
+
+An index is a position, not a property of the member: each derived ordinal
+numbers its own members from `0`, so an index means nothing without its
+descriptor. **To order members, use `compare` or `lt`/`gte`**, which take member
+strings and cannot be mixed up this way. Use `indexOf` only for positional work
+on one descriptor, such as indexing `toArray()` or drawing a progress bar.
+**Never persist or transmit an index**: store the member string.
+
+### Deriving ordinals
+
+Five methods derive a **new ordinal** over part of the scale. The result is a
+full `OrdinalUnion` descriptor, with its own guards, comparisons, and further
+derivations, and its member type is computed exactly from the parent's tuple.
+
+| Method | Keeps |
+| --- | --- |
+| `range(from, to)` | The inclusive slice `[from, to]`. |
+| `atLeast(value)` | `value` and every member above it. |
+| `atMost(value)` | `value` and every member below it. |
+| `pick(keys)` | The named members, in this ordinal's order. |
+| `omit(keys)` | Every member except the named ones, in this ordinal's order. |
+
+```ts
+const Management = Rank.range('manager', 'director');
+// OrdinalUnionDescriptor<readonly ['manager', 'senior_manager', 'director']>
+
+const Executive = Rank.atLeast('director');
+if (Executive.isOfType(user.rank)) {
+  // user.rank: 'director' | 'vp' | 'c_suite'
+}
+```
+
+This is the ordinal counterpart to "derive, don't redeclare": a gate such as
+"director and above" stays tied to the scale it came from, so inserting a new
+rank above `'director'` extends `Executive` automatically.
+
+**Bounds held in variables.** With literal arguments the result type is exact.
+With a union-typed argument, the type is the widest slice the call can return:
+`atLeast(r: Rank)` starts at the union's lowest member and `atMost(r: Rank)`
+runs through its highest. The type never claims fewer members than the runtime
+returns.
+
+**Inverted ranges.** `range('vp', 'manager')` throws a `PanicException`. With
+literal bounds it is also typed as `never`, so the mistake shows up at the call
+site.
+
+#### `pick` and `omit` keep the order
+
+**Unlike [`LiteralUnion.pick`](#pickkeys), an ordinal's `pick` never
+reorders.** The picked members keep the parent's order whatever the order of
+`keys`, because order is what an ordinal means: a pick that reordered would
+produce a scale where `vp < manager`, contradicting its parent.
+
+```ts
+Rank.pick(['vp', 'manager']).toArray(); // ['manager', 'vp']
+Rank.omit(['vp', 'c_suite']).toArray(); // ['team_lead', 'manager', 'senior_manager', 'director']
+```
+
+As with the literal union, `keys` is constrained to members of this ordinal, so
+a typo is a compile error. At runtime, `pick` throws a `PanicException` on a
+non-member; `omit` is a set difference and ignores one. Any derivation that
+would leave no members throws a `PanicException`.
+
+#### Derived ordinals are shared
+
+Derivations are memoized across the whole family of a root ordinal. A derived
+ordinal is identified by its members, not by the method or parent that produced
+it:
+
+```ts
+Rank.atLeast('vp') === Rank.range('vp', 'c_suite');                // true
+Rank.atLeast('manager').atMost('vp') === Rank.range('manager', 'vp'); // true
+Rank.omit(['team_lead']) === Rank.atLeast('manager');               // true
+Rank.atLeast('team_lead') === Rank;                                 // true: every member kept
+```
+
+So calling `Rank.atLeast(x)` in per-request code costs a lookup, not a
+descriptor build, and the result is a stable React dependency or `Map` key.
+
+- **Contiguous slices** (everything `range`, `atLeast`, and `atMost` produce)
+  are kept for as long as the root lives. There are at most n(n+1)/2 of them.
+- **Gapped subsets** from `pick` or `omit` are kept in a bounded
+  least-recently-used cache, because there can be 2ⁿ of them and their keys
+  often come from runtime data. Once an entry is evicted, the same members are
+  rebuilt as an equal but new descriptor. Compare gapped subsets by
+  `toArray()`, not by reference.
+
+### Using an ordinal where a literal union is expected
+
+An ordinal satisfies `LiteralUnionLike<T>`, the common supertype of both
+descriptors, so every helper written against it accepts an ordinal unchanged:
+`assertLiteralUnionMember`, `Dictionary.fromLiteralUnion`, `InferLiteralUnion`,
+`InferLiteralUnionMismatchError`, and your own generic code.
+
+```ts
+const salaryBand = Dictionary.fromLiteralUnion(Rank, {
+  team_lead: 'B3',
+  manager: 'B4',
+  senior_manager: 'B5',
+  director: 'B6',
+  vp: 'B7',
+  c_suite: 'B8',
+});
+
+assertLiteralUnionMember(Rank, input); // input: Rank
+```
+
+Two substitutions are intentionally rejected by the compiler:
+
+- **An ordinal is not a `LiteralUnionDescriptor<T>`.** Its `pick` and `omit`
+  return ordinals, and its tag reads `'OrdinalUnion'`. Type helpers as
+  `LiteralUnionLike<T>` when they should accept both.
+- **A derived ordinal cannot stand in for its parent.** `Rank.atLeast('director')`
+  cannot compare `'manager'`, so it is not assignable to the parent's methods,
+  not even to a partial shape like `Pick<OrdinalUnionMethods<…>, 'compare'>`.
+  Without this check, the call would panic at runtime.
+
+### `OrdinalUnion` type helpers
+
+| Type | Description |
+| --- | --- |
+| `InferOrdinalUnion<typeof U>` | Extract the member union from an ordinal descriptor. A plain `LiteralUnion` yields `never`. |
+| `OrdinalUnionDescriptor<T>` | The full descriptor type. Parameterized by the member **tuple** (not the union), which is what lets derivations compute exact slices. |
+| `OrdinalUnionMethods<T>` | The ordering half of the descriptor, added on top of `LiteralUnionLike`. |
+| `OrdinalComparison` | The result of `compare`: `-1 \| 0 \| 1`. |
+
+```ts
+type Rank = InferOrdinalUnion<typeof Rank>;
+
+// `InferLiteralUnion` works too, since an ordinal is a literal union.
+type SameRank = InferLiteralUnion<typeof Rank>;
 ```
 
 ---
