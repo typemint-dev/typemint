@@ -1,5 +1,11 @@
 # @typemint/data
 
+## 0.13.1
+
+### Patch Changes
+
+- Document OrdinalUnion data type
+
 ## 0.13.0
 
 ### Minor Changes
